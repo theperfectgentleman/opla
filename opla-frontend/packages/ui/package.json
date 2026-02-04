@@ -1,0 +1,21 @@
+{
+    "name": "@opla/ui",
+    "version": "0.0.0",
+    "private": true,
+    "main": "./src/index.tsx",
+    "types": "./src/index.tsx",
+    "scripts": {
+        "type-check": "tsc --noEmit"
+    },
+    "peerDependencies": {
+        "react": "*",
+        "react-native": "*"
+    },
+    "devDependencies": {
+        "typescript": "^5.3.3",
+        "tailwindcss": "3.3.2",
+        "nativewind": "^2.0.11",
+        "@types/react": "^18.2.0",
+        "@types/react-native": "^0.73.0"
+    }
+}

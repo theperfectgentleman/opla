@@ -1,38 +1,37 @@
-import { useState } from 'react'
-import { OplaButton, OplaCard } from '@opla/ui'
-import './App.css'
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <div className="min-h-screen bg-background bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-background to-background flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl text-primary mb-4">
-            Project Opla
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Studio Environment
-          </p>
-        </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        <OplaCard title="Shared Component Demo">
-          <div className="space-y-4">
-            <p className="text-foreground">
-              This card and button are shared from <code>packages/ui</code>.
-            </p>
-            <div className="flex justify-center">
-              <OplaButton
-                title={`Count is ${count}`}
-                onPress={() => setCount((count) => count + 1)}
-              />
-            </div>
-          </div>
-        </OplaCard>
-      </div>
-    </div>
-  )
+          {/* Protected routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Default redirect */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;

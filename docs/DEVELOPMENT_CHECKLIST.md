@@ -15,13 +15,7 @@
 - [x] 1.5 Auth API endpoints (7 endpoints)
 - [x] 1.6 Test auth flow
 
-### Frontend
-- [ ] 1.6 Registration page (email + phone tabs)
-- [ ] 1.6 Login page (email + OTP tabs)
-- [ ] 1.6 OTP input component
-- [ ] 1.7 AuthContext setup
-- [ ] 1.8 API client (Axios + interceptors)
-- [ ] 1.9 Test complete auth flows
+
 
 **Phase 1 Backend Completion Date:** 2026-02-04
 
@@ -151,7 +145,13 @@
 
 ---
 
-## **Next Session TODO**
+## **Next Session TODO**### Frontend
+- [ ] 1.6 Registration page (email + phone tabs)
+- [ ] 1.6 Login page (email + OTP tabs)
+- [ ] 1.6 OTP input component
+- [ ] 1.7 AuthContext setup
+- [ ] 1.8 API client (Axios + interceptors)
+- [ ] 1.9 Test complete auth flows
 
 1. 
 2. 

@@ -1,0 +1,29 @@
+{
+    "dbcode.connections": [
+        {
+            "connectionId": "YVXQxLapFHwHOREn1PGAc",
+            "name": "vpd_db_connect",
+            "driver": "postgres",
+            "color": "#D5B2A0",
+            "connectionType": "host",
+            "host": "31.97.57.163",
+            "port": 5432,
+            "ssl": false,
+            "authMethod": "password",
+            "username": "dbuser",
+            "password": "",
+            "savePassword": "secretStorage",
+            "database": "opla_db",
+            "readOnly": false,
+            "postConnectionSqlType": "inline",
+            "connectionTimeout": 30,
+            "pinnedConnectionTimeout": "0"
+        }
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "/^cd opla-backend; python -m uvicorn app\\.main:app --reload$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

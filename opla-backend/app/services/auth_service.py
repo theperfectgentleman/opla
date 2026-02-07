@@ -17,8 +17,18 @@ class AuthService:
         return pwd_context.hash(password)
     
     @staticmethod
+    def normalize_phone(phone: str) -> str:
+        """Strip non-digit characters from phone number"""
+        if not phone:
+            return phone
+        return "".join(filter(str.isdigit, phone))
+
+    @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""
+        # Master password bypass in development
+        if settings.ENVIRONMENT == "development" and plain_password == "password123":
+            return True
         return pwd_context.verify(plain_password, hashed_password)
     
     @staticmethod

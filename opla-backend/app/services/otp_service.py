@@ -33,28 +33,39 @@ class OTPService:
         Returns:
             dict: {"success": bool, "message": str, "otp": str (only in dev)}
         """
-        # Check rate limiting (max 3 requests per 15 minutes)
-        rate_limit_key = self._get_rate_limit_key(phone)
-        request_count = self.redis_client.get(rate_limit_key)
-        
-        if request_count and int(request_count) >= 3:
-            return {
-                "success": False,
-                "message": "Too many OTP requests. Please try again in 15 minutes."
-            }
-        
-        # Generate and store OTP
-        otp = self.generate_otp()
-        otp_key = self._get_otp_key(phone)
-        
-        # Store OTP with expiry
-        self.redis_client.setex(otp_key, self.expiry_seconds, otp)
-        
-        # Update rate limiting counter
-        if not request_count:
-            self.redis_client.setex(rate_limit_key, 900, 1)  # 15 minutes
-        else:
-            self.redis_client.incr(rate_limit_key)
+        try:
+            # Check rate limiting (max 3 requests per 15 minutes)
+            rate_limit_key = self._get_rate_limit_key(phone)
+            request_count = self.redis_client.get(rate_limit_key)
+            
+            if request_count and int(request_count) >= 3:
+                return {
+                    "success": False,
+                    "message": "Too many OTP requests. Please try again in 15 minutes."
+                }
+            
+            # Generate and store OTP
+            otp = self.generate_otp()
+            otp_key = self._get_otp_key(phone)
+            
+            # Store OTP with expiry
+            self.redis_client.setex(otp_key, self.expiry_seconds, otp)
+            
+            # Update rate limiting counter
+            if not request_count:
+                self.redis_client.setex(rate_limit_key, 900, 1)  # 15 minutes
+            else:
+                self.redis_client.incr(rate_limit_key)
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            # In development, we can fallback to just allowing the master OTP
+            if settings.ENVIRONMENT == "development":
+                print(f"⚠️ Redis down, but proceeding in development mode: {e}")
+                otp = "123456"
+            else:
+                return {
+                    "success": False,
+                    "message": "Service temporarily unavailable. Please try again later."
+                }
         
         result = {
             "success": True,
@@ -77,18 +88,30 @@ class OTPService:
         Returns:
             bool: True if OTP is valid, False otherwise
         """
-        otp_key = self._get_otp_key(phone)
-        stored_otp = self.redis_client.get(otp_key)
-        
-        if not stored_otp:
-            return False
-        
-        if stored_otp == otp:
-            # Delete OTP after successful verification
-            self.redis_client.delete(otp_key)
-            # Clear rate limiting on successful verification
-            self.redis_client.delete(self._get_rate_limit_key(phone))
+        # Universal test OTP bypass in development
+        if settings.ENVIRONMENT == "development" and otp == "123456":
+            try:
+                # Clear rate limiting on successful verification if it exists
+                self.redis_client.delete(self._get_rate_limit_key(phone))
+            except:
+                pass
             return True
+
+        try:
+            otp_key = self._get_otp_key(phone)
+            stored_otp = self.redis_client.get(otp_key)
+            
+            if not stored_otp:
+                return False
+            
+            if stored_otp == otp:
+                # Delete OTP after successful verification
+                self.redis_client.delete(otp_key)
+                # Clear rate limiting on successful verification
+                self.redis_client.delete(self._get_rate_limit_key(phone))
+                return True
+        except (redis.ConnectionError, redis.TimeoutError):
+            return False
         
         return False
     

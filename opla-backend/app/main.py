@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.routes import auth
+from app.api.routes import auth, organizations, projects, forms, submissions, roles, teams
 
 # Create FastAPI app
 app = FastAPI(
@@ -23,6 +23,13 @@ app.add_middleware(
 
 # Register routers
 app.include_router(auth.router, prefix=settings.API_V1_STR)
+app.include_router(organizations.router, prefix=settings.API_V1_STR)
+app.include_router(projects.router, prefix=settings.API_V1_STR)
+app.include_router(forms.router, prefix=settings.API_V1_STR)
+app.include_router(forms.project_router, prefix=settings.API_V1_STR)
+app.include_router(submissions.router, prefix=settings.API_V1_STR)
+app.include_router(roles.router, prefix=settings.API_V1_STR)
+app.include_router(teams.router, prefix=settings.API_V1_STR)
 
 # Root endpoint
 @app.get("/")
@@ -41,4 +48,3 @@ def health_check():
         "status": "healthy",
         "environment": settings.ENVIRONMENT
     }
-

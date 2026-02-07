@@ -34,7 +34,7 @@ const OTPInput: React.FC<OTPInputProps> = ({
         }
 
         // Check if OTP is complete
-        if (otpString.length === length && !otpString.includes('')) {
+        if (newOtp.filter(Boolean).length === length) {
             onComplete(otpString);
         }
     };

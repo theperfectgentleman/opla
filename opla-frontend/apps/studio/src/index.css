@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,34 +6,68 @@
 
 :root {
   /* Brand Colors */
-  --primary: 250 84% 60%;
-  --primary-hover: 250 84% 55%;
-  --primary-dark: 250 84% 50%;
+  --primary: 162 62% 34%;
+  --primary-hover: 162 62% 30%;
+  --primary-dark: 162 62% 25%;
+
+  /* Accent Gradient */
+  --accent-1: 154 62% 55%;
+  --accent-2: 186 74% 60%;
+  --accent-3: 40 92% 70%;
 
   /* Neutral Colors */
+  --background: 150 30% 96%;
+  --surface: 0 0% 100%;
+  --surface-elevated: 150 30% 98%;
+  --border: 150 12% 85%;
+  --border-hover: 150 12% 78%;
+
+  /* Text Colors */
+  --text-primary: 210 18% 18%;
+  --text-secondary: 210 12% 38%;
+  --text-tertiary: 210 10% 55%;
+
+  /* Status Colors */
+  --success: 152 60% 35%;
+  --error: 0 84% 60%;
+  --warning: 36 90% 50%;
+  --info: 197 80% 40%;
+
+  /* Functional */
+  --input-bg: 0 0% 100%;
+  --input-border: 150 12% 82%;
+  --input-focus: var(--primary);
+
+  /* Glassmorphism */
+  --glass-bg: 0 0% 100% / 0.75;
+  --glass-border: 150 18% 80% / 0.7;
+}
+
+[data-theme="dark"] {
+  --primary: 162 62% 45%;
+  --primary-hover: 162 62% 40%;
+  --primary-dark: 162 62% 36%;
+  --accent-1: 162 62% 45%;
+  --accent-2: 186 74% 55%;
+  --accent-3: 40 92% 60%;
+
   --background: 220 20% 8%;
   --surface: 220 18% 12%;
   --surface-elevated: 220 16% 16%;
   --border: 220 14% 24%;
   --border-hover: 220 14% 32%;
 
-  /* Text Colors */
   --text-primary: 0 0% 98%;
   --text-secondary: 0 0% 70%;
   --text-tertiary: 0 0% 50%;
 
-  /* Status Colors */
   --success: 142 72% 50%;
   --error: 0 84% 60%;
   --warning: 38 92% 50%;
   --info: 199 89% 48%;
 
-  /* Functional */
   --input-bg: 220 18% 10%;
   --input-border: 220 14% 20%;
-  --input-focus: var(--primary);
-
-  /* Glassmorphism */
   --glass-bg: 220 18% 12% / 0.8;
   --glass-border: 220 14% 24% / 0.6;
 }
@@ -45,8 +79,14 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: hsl(var(--background));
+  font-family: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  background: radial-gradient(1200px 600px at 15% 0%,
+      hsl(var(--accent-1) / 0.12),
+      transparent 60%),
+    radial-gradient(1000px 500px at 85% 10%,
+      hsl(var(--accent-2) / 0.12),
+      transparent 55%),
+    hsl(var(--background));
   color: hsl(var(--text-primary));
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -141,11 +181,11 @@ body {
 
   /* Card Styles */
   .card {
-    @apply bg-[hsl(var(--surface))] rounded-2xl border border-[hsl(var(--border))] p-6 shadow-xl;
+    @apply bg-[hsl(var(--surface))] rounded-2xl border border-[hsl(var(--border))] p-6 shadow-xl shadow-black/5;
   }
 
   .card-glass {
-    @apply backdrop-blur-xl bg-[hsl(var(--glass-bg))] border border-[hsl(var(--glass-border))] rounded-2xl p-6 shadow-2xl;
+    @apply backdrop-blur-xl bg-[hsl(var(--glass-bg))] border border-[hsl(var(--glass-border))] rounded-2xl p-6 shadow-2xl shadow-black/10;
   }
 
   /* Label Styles */
@@ -186,11 +226,11 @@ body {
 @layer utilities {
   .animated-gradient {
     background: linear-gradient(135deg,
-        hsl(var(--primary)),
-        hsl(250 90% 65%),
-        hsl(280 90% 70%));
-    background-size: 200% 200%;
-    animation: gradient 15s ease infinite;
+        hsl(var(--accent-1)),
+        hsl(var(--accent-2)),
+        hsl(var(--accent-3)));
+    background-size: 220% 220%;
+    animation: gradient 18s ease infinite;
   }
 
   @keyframes gradient {

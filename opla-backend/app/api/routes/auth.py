@@ -79,8 +79,11 @@ def register_with_phone(
     
     Note: This creates the user account but requires OTP verification to activate
     """
+    # Normalize phone
+    phone = auth_service.normalize_phone(request.phone)
+    
     # Check if phone already exists
-    existing_user = db.query(User).filter(User.phone == request.phone).first()
+    existing_user = db.query(User).filter(User.phone == phone).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -89,8 +92,8 @@ def register_with_phone(
     
     # Create user (inactive until OTP verified)
     new_user = User(
-        phone=request.phone,
-        full_name=request.full_name,
+        phone=phone,
+        full_name=request.fullName if hasattr(request, 'fullName') else request.full_name, # Handle both schema versions
         is_active=True  # We'll activate immediately on OTP verification
     )
     
@@ -98,7 +101,7 @@ def register_with_phone(
     db.commit()
     
     # Request OTP
-    otp_result = otp_service.request_otp(request.phone)
+    otp_result = otp_service.request_otp(phone)
     
     if not otp_result["success"]:
         raise HTTPException(
@@ -168,8 +171,11 @@ def request_otp(
     
     Note: Rate limited to 3 requests per 15 minutes
     """
+    # Normalize phone
+    phone = auth_service.normalize_phone(request.phone)
+    
     # Check if phone exists
-    user = db.query(User).filter(User.phone == request.phone).first()
+    user = db.query(User).filter(User.phone == phone).first()
     
     if not user:
         raise HTTPException(
@@ -178,7 +184,7 @@ def request_otp(
         )
     
     # Request OTP
-    otp_result = otp_service.request_otp(request.phone)
+    otp_result = otp_service.request_otp(phone)
     
     if not otp_result["success"]:
         raise HTTPException(
@@ -203,8 +209,11 @@ def verify_otp(
     - **phone**: Phone number
     - **otp**: 6-digit OTP code
     """
+    # Normalize phone
+    phone = auth_service.normalize_phone(request.phone)
+    
     # Verify OTP
-    is_valid = otp_service.verify_otp(request.phone, request.otp)
+    is_valid = otp_service.verify_otp(phone, request.otp)
     
     if not is_valid:
         raise HTTPException(
@@ -213,7 +222,7 @@ def verify_otp(
         )
     
     # Find user
-    user = db.query(User).filter(User.phone == request.phone).first()
+    user = db.query(User).filter(User.phone == phone).first()
     
     if not user:
         raise HTTPException(

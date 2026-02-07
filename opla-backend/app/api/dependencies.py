@@ -4,6 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.user import User
+from app.models.org_member import OrgMember
 from app.services.auth_service import auth_service
 
 # HTTP Bearer token security scheme
@@ -108,3 +109,75 @@ def get_optional_user(
     user = db.query(User).filter(User.id == user_id).first()
     
     return user if user and user.is_active else None
+
+
+async def get_user_org_role(
+    org_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> OrgMember:
+    """
+    Dependency to get the user's membership and role in a specific organization
+    
+    Args:
+        org_id: Organization ID from path parameter
+        current_user: Authenticated user
+        db: Database session
+    
+    Returns:
+        OrgMember: The user's membership record with role
+        
+    Raises:
+        HTTPException: 403 if user is not a member of the organization
+    """
+    membership = db.query(OrgMember).filter(
+        OrgMember.org_id == org_id,
+        OrgMember.user_id == current_user.id
+    ).first()
+    
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this organization"
+        )
+    
+    return membership
+
+
+async def require_org_admin(
+    org_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Dependency to ensure user is an admin of the specified organization
+    
+    Args:
+        org_id: Organization ID from path parameter
+        current_user: Authenticated user
+        db: Database session
+    
+    Returns:
+        User: The authenticated user (if admin)
+        
+    Raises:
+        HTTPException: 403 if user is not an admin of the organization
+    """
+    membership = db.query(OrgMember).filter(
+        OrgMember.org_id == org_id,
+        OrgMember.user_id == current_user.id
+    ).first()
+    
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not a member of this organization"
+        )
+    
+    if membership.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization admin permissions required"
+        )
+    
+    return current_user

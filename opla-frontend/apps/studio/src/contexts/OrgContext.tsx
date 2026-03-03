@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { orgAPI, projectAPI } from '../lib/api';
 import { useAuth } from './AuthContext';
 
@@ -16,6 +16,7 @@ interface Project {
     name: string;
     description?: string;
     org_id: string;
+    created_at: string;
 }
 
 interface OrgContextType {
@@ -36,7 +37,7 @@ interface OrgContextType {
 const OrgContext = createContext<OrgContextType | undefined>(undefined);
 
 export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user, isAuthenticated } = useAuth();
+    const { isAuthenticated } = useAuth();
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [currentOrg, setCurrentOrg] = useState<Organization | null>(null);
     const [projects, setProjects] = useState<Project[]>([]);

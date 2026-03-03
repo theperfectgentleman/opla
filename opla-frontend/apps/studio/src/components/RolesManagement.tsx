@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Plus, Edit2, Trash2, Lock } from 'lucide-react';
+import { Shield, Plus, Trash2, Lock } from 'lucide-react';
 import { roleAPI } from '../lib/api';
 
 interface OrgRole {

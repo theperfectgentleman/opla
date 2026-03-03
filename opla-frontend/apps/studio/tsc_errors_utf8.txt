@@ -1,0 +1,18 @@
+﻿src/components/OTPInput.tsx(1,35): error TS1484: 'KeyboardEvent' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/OTPInput.tsx(1,50): error TS1484: 'ClipboardEvent' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/OTPInput.tsx(88,21): error TS2322: Type '(ref: HTMLInputElement | null) => HTMLInputElement | null' is not assignable to type 'Ref<HTMLInputElement> | undefined'.
+  Type '(ref: HTMLInputElement | null) => HTMLInputElement | null' is not assignable to type '(instance: HTMLInputElement | null) => void | (() => VoidOrUndefinedOnly)'.
+    Type 'HTMLInputElement | null' is not assignable to type 'void | (() => VoidOrUndefinedOnly)'.
+      Type 'null' is not assignable to type 'void | (() => VoidOrUndefinedOnly)'.
+src/components/RolesManagement.tsx(2,24): error TS6133: 'Edit2' is declared but its value is never read.
+src/components/RolesManagement.tsx(68,17): error TS2353: Object literal may only specify known properties, and 'description' does not exist in type '{ name: string; slug?: string | undefined; permissions: string[]; priority?: number | undefined; }'.
+src/components/TeamsManagement.tsx(3,19): error TS6133: 'roleAPI' is declared but its value is never read.
+src/components/TeamsManagement.tsx(13,11): error TS6196: 'TeamMember' is declared but never used.
+src/contexts/AuthContext.tsx(1,65): error TS1484: 'ReactNode' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/contexts/OrgContext.tsx(1,65): error TS1484: 'ReactNode' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/contexts/OrgContext.tsx(39,13): error TS6133: 'user' is declared but its value is never read.
+src/pages/Dashboard.tsx(317,77): error TS2339: Property 'created_at' does not exist on type 'Project'.
+src/pages/Login.tsx(97,24): error TS2339: Property 'data' does not exist on type '{ message: string; otp?: string | undefined; }'.
+src/pages/Login.tsx(98,34): error TS2339: Property 'data' does not exist on type '{ message: string; otp?: string | undefined; }'.
+src/pages/Register.tsx(113,24): error TS2339: Property 'data' does not exist on type 'void'.
+src/pages/Register.tsx(114,34): error TS2339: Property 'data' does not exist on type 'void'.

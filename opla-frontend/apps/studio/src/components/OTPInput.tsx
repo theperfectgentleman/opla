@@ -1,4 +1,4 @@
-import React, { useRef, useState, KeyboardEvent, ClipboardEvent } from 'react';
+import React, { useRef, useState, type KeyboardEvent, type ClipboardEvent } from 'react';
 
 interface OTPInputProps {
     length?: number;
@@ -85,7 +85,7 @@ const OTPInput: React.FC<OTPInputProps> = ({
             {otp.map((digit, index) => (
                 <input
                     key={index}
-                    ref={(ref) => (inputRefs.current[index] = ref)}
+                    ref={(ref) => { inputRefs.current[index] = ref; }}
                     type="text"
                     inputMode="numeric"
                     maxLength={1}

@@ -94,8 +94,8 @@ const Login: React.FC = () => {
             const result = await requestOTP(formData.phone);
 
             // Check if OTP is returned (dev mode)
-            if (result.data?.otp) {
-                setDevOtp(result.data.otp);
+            if (result.otp) {
+                setDevOtp(result.otp);
             }
 
             setOtpSent(true);

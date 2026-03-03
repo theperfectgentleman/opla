@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Edit2, Trash2, UserPlus, X } from 'lucide-react';
-import { teamAPI, roleAPI } from '../lib/api';
+import { teamAPI } from '../lib/api';
 
 interface Team {
     id: string;
@@ -8,12 +8,6 @@ interface Team {
     description: string;
     member_count: number;
     created_at: string;
-}
-
-interface TeamMember {
-    id: string;
-    user_id: string;
-    team_id: string;
 }
 
 interface TeamsManagementProps {

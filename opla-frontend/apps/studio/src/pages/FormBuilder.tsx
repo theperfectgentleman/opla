@@ -7,7 +7,7 @@ import {
     Save, Play, Trash2, Settings, Smartphone, Layout,
     MapPin, Camera, Type, Hash, CheckSquare, List, Mail,
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
-    ChevronDown, ChevronRight, ArrowLeft
+    ChevronDown, ChevronRight, ArrowLeft, Zap, GitBranch, Terminal
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -40,6 +40,33 @@ interface FormField {
     placeholder?: string;
     options?: string[];
     platforms?: Platform[];
+    min?: number;
+    max?: number;
+    minLength?: number;
+    maxLength?: number;
+    pattern?: string;
+}
+
+interface FormSection {
+    id: string;
+    title: string;
+    fields: FormField[];
+}
+
+interface LogicCondition {
+    field: string;
+    operator: 'eq' | 'neq' | 'contains' | 'gt' | 'lt';
+    value: any;
+}
+
+interface LogicRule {
+    id: string;
+    type: 'section_jump' | 'field_visibility';
+    action: 'jump_to' | 'show' | 'hide';
+    target_id: string; // The section_id to jump to, or field_id to show/hide
+    source_id?: string; // Optional: The field or section this rule is originally "attached" to for UI grouping
+    conditions: LogicCondition[];
+    logic_operator: 'AND' | 'OR';
 }
 
 interface FormBlueprint {
@@ -88,10 +115,17 @@ const FormBuilder: React.FC = () => {
     const { showToast } = useToast();
     const [formMeta, setFormMeta] = useState<{ id: string; project_id: string; slug: string; version: number; is_public: boolean } | null>(null);
     const [title, setTitle] = useState('Untitled Form');
-    const [fields, setFields] = useState<FormField[]>([]);
+    const [sections, setSections] = useState<FormSection[]>([{ id: 'screen_1', title: 'Section 1', fields: [] }]);
+    const [currentSectionId, setCurrentSectionId] = useState<string>('screen_1');
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+    const [logic, setLogic] = useState<LogicRule[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [openSection, setOpenSection] = useState<'basic' | 'advanced' | 'templates' | null>('basic');
+    const [propertyTab, setPropertyTab] = useState<'content' | 'logic'>('content');
+
+    const currentSectionIndex = sections.findIndex(p => p.id === currentSectionId) !== -1 ? sections.findIndex(p => p.id === currentSectionId) : 0;
+    const fields = sections[currentSectionIndex]?.fields || [];
+    const selectedField = sections.flatMap(p => p.fields).find(f => f.id === selectedFieldId) || null;
 
     const basicTypes: FieldType[] = [
         'input_text',
@@ -117,7 +151,6 @@ const FormBuilder: React.FC = () => {
     ];
 
     const getWidget = (type: FieldType) => widgetLibrary.find((w) => w.type === type);
-    const selectedField = fields.find((f) => f.id === selectedFieldId) || null;
 
     useEffect(() => {
         const loadForm = async () => {
@@ -134,17 +167,27 @@ const FormBuilder: React.FC = () => {
                 setTitle(data.title || 'Untitled Form');
 
                 const blueprint = data.blueprint_draft || data.blueprint_live;
-                if (blueprint?.ui?.[0]?.children?.length) {
-                    const loadedFields: FormField[] = blueprint.ui[0].children.map((child: any) => ({
-                        id: child.bind,
-                        type: child.type as FieldType,
-                        label: child.label || 'Untitled Field',
-                        required: !!child.required,
-                        placeholder: child.placeholder,
-                        options: child.options,
-                        platforms: child.platforms
+                if (blueprint?.ui?.length) {
+                    const loadedSections: FormSection[] = blueprint.ui.map((screen: any, idx: number) => ({
+                        id: screen.id || `screen_${idx + 1}`,
+                        title: screen.title || `Section ${idx + 1}`,
+                        fields: screen.children ? screen.children.map((child: any) => ({
+                            id: child.bind,
+                            type: child.type as FieldType,
+                            label: child.label || 'Untitled Field',
+                            required: !!child.required,
+                            placeholder: child.placeholder,
+                            options: child.options,
+                            platforms: child.platforms
+                        })) : []
                     }));
-                    setFields(loadedFields);
+                    setSections(loadedSections);
+                    setCurrentSectionId(loadedSections[0].id);
+                    setLogic(blueprint.logic || []);
+                } else {
+                    setSections([{ id: 'screen_1', title: 'Section 1', fields: [] }]);
+                    setCurrentSectionId('screen_1');
+                    setLogic([]);
                 }
             } catch (err) {
                 console.error('Failed to load form', err);
@@ -164,28 +207,68 @@ const FormBuilder: React.FC = () => {
             platforms: ['mobile', 'web'],
             ...defaults
         };
-        setFields((prev) => [...prev, newField]);
+        setSections(prev => prev.map(p => p.id === currentSectionId ? { ...p, fields: [...p.fields, newField] } : p));
         setSelectedFieldId(newField.id);
     };
 
     const removeField = (id: string) => {
-        setFields((prev) => prev.filter(f => f.id !== id));
-        if (selectedFieldId === id) {
-            setSelectedFieldId(null);
-        }
+        setSections(prev => prev.map(p => ({ ...p, fields: p.fields.filter(f => f.id !== id) })));
+        if (selectedFieldId === id) setSelectedFieldId(null);
     };
 
     const updateFieldLabel = (id: string, label: string) => {
-        setFields((prev) => prev.map(f => f.id === id ? { ...f, label } : f));
+        setSections(prev => prev.map(p => ({ ...p, fields: p.fields.map(f => f.id === id ? { ...f, label } : f) })));
     };
 
     const updateField = (id: string, patch: Partial<FormField>) => {
-        setFields((prev) => prev.map(f => f.id === id ? { ...f, ...patch } : f));
+        setSections(prev => prev.map(p => ({ ...p, fields: p.fields.map(f => f.id === id ? { ...f, ...patch } : f) })));
     };
 
     const updateFieldId = (oldId: string, newId: string) => {
-        setFields((prev) => prev.map((f) => f.id === oldId ? { ...f, id: newId } : f));
+        setSections(prev => prev.map(p => ({ ...p, fields: p.fields.map(f => f.id === oldId ? { ...f, id: newId } : f) })));
         setSelectedFieldId(newId);
+    };
+
+    const addSection = () => {
+        const newId = `screen_${Date.now()}`;
+        setSections(prev => [...prev, { id: newId, title: `Section ${prev.length + 1}`, fields: [] }]);
+        setCurrentSectionId(newId);
+    };
+
+    const removeCurrentSection = () => {
+        if (sections.length <= 1) {
+            showToast('Cannot delete', 'You must have at least one section', 'error');
+            return;
+        }
+        const newSections = sections.filter(p => p.id !== currentSectionId);
+        setSections(newSections);
+        setCurrentSectionId(newSections[0].id);
+    };
+
+    const updateCurrentSectionTitle = (title: string) => {
+        setSections(prev => prev.map(p => p.id === currentSectionId ? { ...p, title } : p));
+    };
+
+    const addLogicRule = (rule: Partial<LogicRule>) => {
+        const newRule: LogicRule = {
+            id: `rule_${Date.now()}`,
+            type: 'field_visibility',
+            action: 'show',
+            target_id: '',
+            conditions: [],
+            logic_operator: 'AND',
+            ...rule
+        };
+        setLogic(prev => [...prev, newRule]);
+        return newRule;
+    };
+
+    const removeLogicRule = (id: string) => {
+        setLogic(prev => prev.filter(r => r.id !== id));
+    };
+
+    const updateLogicRule = (id: string, patch: Partial<LogicRule>) => {
+        setLogic(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
     };
 
     const mapSchemaType = (type: FieldType) => {
@@ -219,7 +302,7 @@ const FormBuilder: React.FC = () => {
                         mode: themeMode
                     }
                 },
-                schema: fields.map((f) => {
+                schema: sections.flatMap(p => p.fields).map((f) => {
                     const entry: Record<string, any> = {
                         key: f.id,
                         type: mapSchemaType(f.type),
@@ -230,23 +313,25 @@ const FormBuilder: React.FC = () => {
                     }
                     return entry;
                 }),
-                ui: [
-                    {
-                        id: 'screen_1',
-                        type: 'screen',
-                        title: 'Page 1',
-                        children: fields.map(f => ({
-                            type: f.type,
-                            bind: f.id,
-                            label: f.label,
-                            required: f.required,
-                            placeholder: f.placeholder,
-                            options: f.options,
-                            platforms: f.platforms
-                        }))
-                    }
-                ],
-                logic: []
+                ui: sections.map((p) => ({
+                    id: p.id,
+                    type: 'screen',
+                    title: p.title,
+                    children: p.fields.map(f => ({
+                        type: f.type,
+                        bind: f.id,
+                        label: f.label,
+                        required: f.required,
+                        placeholder: f.placeholder,
+                        options: f.options,
+                        platforms: f.platforms,
+                        min: f.min,
+                        max: f.max,
+                        minLength: f.minLength,
+                        maxLength: f.maxLength,
+                    }))
+                })),
+                logic: logic
             };
             await formAPI.updateBlueprint(formId, blueprint);
             showToast('Successfully saved!', 'Anyone with a link can now view this file.', 'success');
@@ -376,6 +461,45 @@ const FormBuilder: React.FC = () => {
                 {/* Main Canvas */}
                 <main className="flex-1 bg-[hsl(var(--background))] p-12 overflow-y-auto hide-scrollbar">
                     <div className="max-w-2xl mx-auto space-y-6">
+
+                        {/* Section Tabs */}
+                        <div className="flex items-center justify-between bg-[hsl(var(--surface))] p-2 rounded-2xl border border-[hsl(var(--border))]">
+                            <div className="flex overflow-x-auto hide-scrollbar space-x-2 p-1">
+                                {sections.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setCurrentSectionId(p.id)}
+                                        className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${currentSectionId === p.id
+                                            ? 'bg-[hsl(var(--primary))] text-white shadow-md shadow-[hsl(var(--primary))]/20'
+                                            : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--text-primary))]'
+                                            }`}
+                                    >
+                                        {p.title}
+                                    </button>
+                                ))}
+                                <button
+                                    onClick={addSection}
+                                    className="px-3 py-2 rounded-xl text-sm font-medium text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--text-primary))] transition-all flex items-center"
+                                >
+                                    + Add Section
+                                </button>
+                            </div>
+                            <div className="flex items-center space-x-2 px-2 border-l border-[hsl(var(--border))]">
+                                <input
+                                    value={sections.find(p => p.id === currentSectionId)?.title || ''}
+                                    onChange={(e) => updateCurrentSectionTitle(e.target.value)}
+                                    className="bg-transparent border-none text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2 w-32"
+                                    placeholder="Section Title"
+                                />
+                                <button
+                                    onClick={removeCurrentSection}
+                                    className="p-2 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg hover:bg-[hsl(var(--surface-elevated))] transition-all"
+                                    title="Delete Section"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
                         {fields.length === 0 ? (
                             <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-3xl p-20 text-center text-[hsl(var(--text-tertiary))]">
                                 <p className="text-lg">Select a widget to start building</p>
@@ -422,90 +546,409 @@ const FormBuilder: React.FC = () => {
                 </main>
 
                 {/* Right Panel: Properties */}
-                <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 overflow-y-auto hide-scrollbar">
-                    <h3 className="text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-6 flex items-center">
-                        <Settings className="w-4 h-4 mr-2" />
-                        Properties
-                    </h3>
-                    {!selectedField && (
-                        <p className="text-[hsl(var(--text-secondary))] text-sm">Select a field to edit its properties.</p>
-                    )}
+                <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
+                    <div className="p-6 border-b border-[hsl(var(--border))]">
+                        <div className="flex bg-[hsl(var(--surface-elevated))] p-1 rounded-xl">
+                            <button
+                                onClick={() => setPropertyTab('content')}
+                                className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${propertyTab === 'content'
+                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm'
+                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                    }`}
+                            >
+                                <Settings className="w-3 h-3" />
+                                <span>Properties</span>
+                            </button>
+                            <button
+                                onClick={() => setPropertyTab('logic')}
+                                className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${propertyTab === 'logic'
+                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm'
+                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                    }`}
+                            >
+                                <Zap className="w-3 h-3" />
+                                <span>Logic</span>
+                            </button>
+                        </div>
+                    </div>
 
-                    {selectedField && (
-                        <div className="space-y-5">
-                            <div>
-                                <label className="label">Label</label>
-                                <input
-                                    value={selectedField.label}
-                                    onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
-                                    className="input"
-                                />
-                            </div>
+                    <div className="flex-1 overflow-y-auto p-6 hide-scrollbar">
+                        {propertyTab === 'content' ? (
+                            <>
+                                {!selectedField ? (
+                                    <div className="space-y-6">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-[hsl(var(--text-primary))] mb-4 flex items-center">
+                                                <Layout className="w-4 h-4 mr-2" />
+                                                Section Settings
+                                            </h3>
+                                            <label className="label">Section Title</label>
+                                            <input
+                                                value={sections.find(p => p.id === currentSectionId)?.title || ''}
+                                                onChange={(e) => updateCurrentSectionTitle(e.target.value)}
+                                                className="input"
+                                                placeholder="Section Title"
+                                            />
+                                        </div>
+                                        <p className="text-[hsl(var(--text-tertiary))] text-xs italic">Select a field in the canvas to see its individual properties.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
+                                        <div>
+                                            <label className="label">Label</label>
+                                            <input
+                                                value={selectedField.label}
+                                                onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+                                                className="input"
+                                            />
+                                        </div>
 
-                            <div>
-                                <label className="label">Bind Key</label>
-                                <input
-                                    value={selectedField.id}
-                                    onChange={(e) => updateFieldId(selectedField.id, e.target.value)}
-                                    className="input"
-                                />
-                            </div>
+                                        <div>
+                                            <label className="label">Bind Key</label>
+                                            <div className="flex space-x-2">
+                                                <div className="relative flex-1">
+                                                    <Terminal className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-[hsl(var(--text-tertiary))]" />
+                                                    <input
+                                                        value={selectedField.id}
+                                                        onChange={(e) => updateFieldId(selectedField.id, e.target.value)}
+                                                        className="input pl-8 font-mono text-xs"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
 
-                            <div className="flex items-center justify-between">
-                                <label className="label !mb-0">Required</label>
-                                <input
-                                    type="checkbox"
-                                    checked={selectedField.required}
-                                    onChange={(e) => updateField(selectedField.id, { required: e.target.checked })}
-                                    className="h-4 w-4"
-                                />
-                            </div>
-
-                            {['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
-                                <div>
-                                    <label className="label">Placeholder</label>
-                                    <input
-                                        value={selectedField.placeholder || ''}
-                                        onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })}
-                                        className="input"
-                                    />
-                                </div>
-                            )}
-
-                            {['dropdown', 'radio_group', 'checkbox_group'].includes(selectedField.type) && (
-                                <div>
-                                    <label className="label">Options (comma separated)</label>
-                                    <input
-                                        value={(selectedField.options || []).join(', ')}
-                                        onChange={(e) => updateField(selectedField.id, { options: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) })}
-                                        className="input"
-                                    />
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="label">Platforms</label>
-                                <div className="flex flex-wrap gap-2">
-                                    {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => (
-                                        <label key={platform} className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
+                                        <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-xl border border-[hsl(var(--border))]">
+                                            <label className="text-sm font-semibold !mb-0">Required Field</label>
                                             <input
                                                 type="checkbox"
-                                                checked={selectedField.platforms?.includes(platform) || false}
-                                                onChange={(e) => {
-                                                    const next = new Set(selectedField.platforms || []);
-                                                    if (e.target.checked) next.add(platform);
-                                                    else next.delete(platform);
-                                                    updateField(selectedField.id, { platforms: Array.from(next) });
-                                                }}
+                                                checked={selectedField.required}
+                                                onChange={(e) => updateField(selectedField.id, { required: e.target.checked })}
+                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
                                             />
-                                            {platform}
-                                        </label>
-                                    ))}
-                                </div>
+                                        </div>
+
+                                        {['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
+                                            <div>
+                                                <label className="label">Placeholder</label>
+                                                <input
+                                                    value={selectedField.placeholder || ''}
+                                                    onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })}
+                                                    className="input"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {['dropdown', 'radio_group', 'checkbox_group'].includes(selectedField.type) && (
+                                            <div>
+                                                <label className="label">Choices</label>
+                                                <div className="space-y-2">
+                                                    {(selectedField.options || []).map((opt, idx) => (
+                                                        <div key={idx} className="flex items-center space-x-2">
+                                                            <input
+                                                                value={opt}
+                                                                onChange={(e) => {
+                                                                    const newOpts = [...(selectedField.options || [])];
+                                                                    newOpts[idx] = e.target.value;
+                                                                    updateField(selectedField.id, { options: newOpts });
+                                                                }}
+                                                                className="input text-sm py-1.5"
+                                                            />
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newOpts = (selectedField.options || []).filter((_, i) => i !== idx);
+                                                                    updateField(selectedField.id, { options: newOpts });
+                                                                }}
+                                                                className="p-1.5 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg transition-all"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                    <button
+                                                        onClick={() => updateField(selectedField.id, { options: [...(selectedField.options || []), `Option ${(selectedField.options?.length || 0) + 1}`] })}
+                                                        className="w-full py-2 border-2 border-dashed border-[hsl(var(--border))] rounded-xl text-xs font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                    >
+                                                        + Add Option
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="label">Min Length</label>
+                                                    <input
+                                                        type="number"
+                                                        value={selectedField.minLength || ''}
+                                                        onChange={(e) => updateField(selectedField.id, { minLength: parseInt(e.target.value) || undefined })}
+                                                        className="input"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="label">Max Length</label>
+                                                    <input
+                                                        type="number"
+                                                        value={selectedField.maxLength || ''}
+                                                        onChange={(e) => updateField(selectedField.id, { maxLength: parseInt(e.target.value) || undefined })}
+                                                        className="input"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {selectedField.type === 'input_number' && (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="label">Min Value</label>
+                                                    <input
+                                                        type="number"
+                                                        value={selectedField.min || ''}
+                                                        onChange={(e) => updateField(selectedField.id, { min: parseInt(e.target.value) || undefined })}
+                                                        className="input"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="label">Max Value</label>
+                                                    <input
+                                                        type="number"
+                                                        value={selectedField.max || ''}
+                                                        onChange={(e) => updateField(selectedField.id, { max: parseInt(e.target.value) || undefined })}
+                                                        className="input"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label className="label">Platforms</label>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => (
+                                                    <label key={platform} className="flex items-center space-x-3 p-2 bg-[hsl(var(--surface-elevated))] rounded-xl border border-[hsl(var(--border))] cursor-pointer hover:border-[hsl(var(--border-hover))] transition-all">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedField.platforms?.includes(platform) || false}
+                                                            onChange={(e) => {
+                                                                const next = new Set(selectedField.platforms || []);
+                                                                if (e.target.checked) next.add(platform);
+                                                                else next.delete(platform);
+                                                                updateField(selectedField.id, { platforms: Array.from(next) });
+                                                            }}
+                                                            className="h-4 w-4 text-[hsl(var(--primary))] rounded border-[hsl(var(--border))]"
+                                                        />
+                                                        <span className="text-sm font-medium capitalize">{platform}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-200">
+                                {selectedField ? (
+                                    <>
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-bold flex items-center">
+                                                <Zap className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
+                                                Field Logic
+                                            </h3>
+                                        </div>
+                                        <p className="text-[hsl(var(--text-secondary))] text-xs">Define rules for when this field should be visible.</p>
+
+                                        <div className="space-y-4">
+                                            {logic.filter(r => r.type === 'field_visibility' && r.target_id === selectedField.id).map(rule => (
+                                                <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))] rounded-2xl border border-[hsl(var(--border))] space-y-4 relative group">
+                                                    <button
+                                                        onClick={() => removeLogicRule(rule.id)}
+                                                        className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+
+                                                    <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+                                                        <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">IF</span>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        {rule.conditions.map((cond, cIdx) => (
+                                                            <div key={cIdx} className="space-y-2">
+                                                                <select
+                                                                    value={cond.field}
+                                                                    onChange={(e) => {
+                                                                        const newConds = [...rule.conditions];
+                                                                        newConds[cIdx].field = e.target.value;
+                                                                        updateLogicRule(rule.id, { conditions: newConds });
+                                                                    }}
+                                                                    className="input-sm w-full py-1.5"
+                                                                >
+                                                                    <option value="">Select Field...</option>
+                                                                    {sections.flatMap(p => p.fields).filter(f => f.id !== selectedField.id).map(f => (
+                                                                        <option key={f.id} value={f.id}>{f.label}</option>
+                                                                    ))}
+                                                                </select>
+
+                                                                <div className="flex space-x-2">
+                                                                    <select
+                                                                        value={cond.operator}
+                                                                        onChange={(e) => {
+                                                                            const newConds = [...rule.conditions];
+                                                                            newConds[cIdx].operator = e.target.value as any;
+                                                                            updateLogicRule(rule.id, { conditions: newConds });
+                                                                        }}
+                                                                        className="input-sm w-1/2 py-1.5"
+                                                                    >
+                                                                        <option value="eq">Equals</option>
+                                                                        <option value="neq">Not Equal</option>
+                                                                        <option value="contains">Contains</option>
+                                                                        <option value="gt">Greater Than</option>
+                                                                        <option value="lt">Less Than</option>
+                                                                    </select>
+                                                                    <input
+                                                                        value={cond.value}
+                                                                        onChange={(e) => {
+                                                                            const newConds = [...rule.conditions];
+                                                                            newConds[cIdx].value = e.target.value;
+                                                                            updateLogicRule(rule.id, { conditions: newConds });
+                                                                        }}
+                                                                        placeholder="Value"
+                                                                        className="input-sm w-1/2 py-1.5"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+                                                        <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">THEN</span>
+                                                        <span>SHOW FIELD</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            <button
+                                                onClick={() => addLogicRule({
+                                                    type: 'field_visibility',
+                                                    target_id: selectedField.id,
+                                                    action: 'show',
+                                                    conditions: [{ field: '', operator: 'eq', value: '' }]
+                                                })}
+                                                className="w-full py-3 border-2 border-dashed border-[hsl(var(--border))] rounded-2xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                            >
+                                                + Add Visibility Rule
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-bold flex items-center">
+                                                <GitBranch className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
+                                                Section Logic (Skip Rule)
+                                            </h3>
+                                        </div>
+                                        <p className="text-[hsl(var(--text-secondary))] text-xs">Determine what section happens after this one.</p>
+
+                                        <div className="space-y-4">
+                                            {logic.filter(r => r.type === 'section_jump' && r.source_id === currentSectionId).map(rule => (
+                                                <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))] rounded-2xl border border-[hsl(var(--border))] space-y-4 relative group">
+                                                    <button
+                                                        onClick={() => removeLogicRule(rule.id)}
+                                                        className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+
+                                                    <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+                                                        <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">IF</span>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        {rule.conditions.map((cond, cIdx) => (
+                                                            <div key={cIdx} className="space-y-2">
+                                                                <select
+                                                                    value={cond.field}
+                                                                    onChange={(e) => {
+                                                                        const newConds = [...rule.conditions];
+                                                                        newConds[cIdx].field = e.target.value;
+                                                                        updateLogicRule(rule.id, { conditions: newConds });
+                                                                    }}
+                                                                    className="input-sm w-full py-1.5"
+                                                                >
+                                                                    <option value="">Select Field...</option>
+                                                                    {sections.find(p => p.id === currentSectionId)?.fields.map(f => (
+                                                                        <option key={f.id} value={f.id}>{f.label}</option>
+                                                                    ))}
+                                                                </select>
+
+                                                                <div className="flex space-x-2">
+                                                                    <select
+                                                                        value={cond.operator}
+                                                                        onChange={(e) => {
+                                                                            const newConds = [...rule.conditions];
+                                                                            newConds[cIdx].operator = e.target.value as any;
+                                                                            updateLogicRule(rule.id, { conditions: newConds });
+                                                                        }}
+                                                                        className="input-sm w-1/2 py-1.5"
+                                                                    >
+                                                                        <option value="eq">Equals</option>
+                                                                        <option value="neq">Not Equal</option>
+                                                                        <option value="contains">Contains</option>
+                                                                        <option value="gt">Greater Than</option>
+                                                                        <option value="lt">Less Than</option>
+                                                                    </select>
+                                                                    <input
+                                                                        value={cond.value}
+                                                                        onChange={(e) => {
+                                                                            const newConds = [...rule.conditions];
+                                                                            newConds[cIdx].value = e.target.value;
+                                                                            updateLogicRule(rule.id, { conditions: newConds });
+                                                                        }}
+                                                                        placeholder="Value"
+                                                                        className="input-sm w-1/2 py-1.5"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+
+                                                    <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+                                                        <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">GOTO</span>
+                                                        <select
+                                                            value={rule.target_id}
+                                                            onChange={(e) => updateLogicRule(rule.id, { target_id: e.target.value })}
+                                                            className="bg-transparent border-none text-[hsl(var(--primary))] font-bold p-0 focus:ring-0 cursor-pointer"
+                                                        >
+                                                            <option value="">Next Section (Default)</option>
+                                                            {sections.filter(p => p.id !== currentSectionId).map(p => (
+                                                                <option key={p.id} value={p.id}>{p.title}</option>
+                                                            ))}
+                                                            <option value="end">End Survey</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            <button
+                                                onClick={() => addLogicRule({
+                                                    type: 'section_jump',
+                                                    source_id: currentSectionId,
+                                                    action: 'jump_to',
+                                                    target_id: '',
+                                                    conditions: [{ field: '', operator: 'eq', value: '' }]
+                                                })}
+                                                className="w-full py-3 border-2 border-dashed border-[hsl(var(--border))] rounded-2xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                            >
+                                                + Add Skip Rule
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </aside>
+
             </div>
 
             <style>{`
@@ -541,6 +984,21 @@ const FormBuilder: React.FC = () => {
                     align-items: center;
                     justify-content: center;
                     transition: all 0.2s;
+                }
+                .input-sm {
+                    background: hsl(var(--surface));
+                    border: 1px solid hsl(var(--border));
+                    border-radius: 10px;
+                    padding: 8px 12px;
+                    font-size: 13px;
+                    color: hsl(var(--text-primary));
+                    width: 100%;
+                    transition: all 0.2s;
+                }
+                .input-sm:focus {
+                    outline: none;
+                    border-color: hsl(var(--primary));
+                    background: hsl(var(--surface-elevated));
                 }
             `}</style>
         </div>

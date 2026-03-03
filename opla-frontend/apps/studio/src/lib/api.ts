@@ -197,7 +197,7 @@ export const roleAPI = {
         const response = await apiClient.get(`/organizations/${orgId}/roles`);
         return response.data;
     },
-    create: async (orgId: string, data: { name: string; slug?: string; permissions: string[]; priority?: number }) => {
+    create: async (orgId: string, data: { name: string; slug?: string; description?: string; permissions: string[]; priority?: number }) => {
         const response = await apiClient.post(`/organizations/${orgId}/roles`, data);
         return response.data;
     },

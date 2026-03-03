@@ -21,7 +21,6 @@ const Register: React.FC = () => {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [otpSent, setOtpSent] = useState(false);
-    const [devOtp, setDevOtp] = useState<string | null>(null);
 
     const { registerEmail, registerPhone, loginWithOTP, error, clearError } = useAuth();
     const navigate = useNavigate();
@@ -107,13 +106,9 @@ const Register: React.FC = () => {
 
         try {
             setIsLoading(true);
-            const result = await registerPhone(formData.phone, formData.fullName);
+            await registerPhone(formData.phone, formData.fullName);
 
-            // Check if OTP is returned (dev mode)
-            if (result.data?.otp) {
-                setDevOtp(result.data.otp);
-            }
-
+            // Note: Dev OTP is no longer returned directly from registerPhone
             setOtpSent(true);
         } catch (err) {
             // Error handled by context
@@ -386,13 +381,6 @@ const Register: React.FC = () => {
                                     Enter the 6-digit code sent to <br />
                                     <span className="font-medium text-[hsl(var(--text-primary))]">{formData.phone}</span>
                                 </p>
-                                {devOtp && (
-                                    <div className="bg-[hsl(var(--warning))]/10 border border-[hsl(var(--warning))]/30 rounded-xl p-3 mb-4">
-                                        <p className="text-sm text-[hsl(var(--warning))]">
-                                            Dev Mode: Your OTP is <strong>{devOtp}</strong>
-                                        </p>
-                                    </div>
-                                )}
                             </div>
 
                             <OTPInput onComplete={handleOTPComplete} />

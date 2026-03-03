@@ -218,8 +218,8 @@ export const roleAPI = {
         const response = await apiClient.post(`/organizations/${orgId}/roles/assignments`, data);
         return response.data;
     },
-    removeAssignment: async (orgId: string, assignmentId: string) => {
-        const response = await apiClient.delete(`/organizations/${orgId}/roles/assignments/${assignmentId}`);
+    removeAssignment: async (orgId: string, accessorType: 'user' | 'team', accessorId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/roles/assignments/${accessorType}/${accessorId}`);
         return response.data;
     },
 };

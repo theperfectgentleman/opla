@@ -98,14 +98,8 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
     const handleRemoveAssignment = async (userId: string) => {
         if (!isAdmin) return;
 
-        const assignment = assignments.find(
-            a => a.accessor_type === 'user' && a.accessor_id === userId
-        );
-        
-        if (!assignment) return;
-
         try {
-            await roleAPI.removeAssignment(orgId, assignment.id);
+            await roleAPI.removeAssignment(orgId, 'user', userId);
             await loadData();
         } catch (err) {
             console.error('Failed to remove assignment:', err);

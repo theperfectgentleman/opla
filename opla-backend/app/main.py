@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.routes import auth, organizations, projects, forms, submissions, roles, teams
+import app.models  # Ensure all models are loaded
 
 # Create FastAPI app
 app = FastAPI(

@@ -6,8 +6,10 @@ import ThemeToggle from '../components/ThemeToggle';
 import {
     Save, Play, Trash2, Settings, Smartphone, Layout,
     MapPin, Camera, Type, Hash, CheckSquare, List, Mail,
-    Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode
+    Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
+    ChevronDown, ChevronRight, ArrowLeft
 } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
 
 type Platform = 'mobile' | 'web' | 'ussd';
 
@@ -83,11 +85,13 @@ const FormBuilder: React.FC = () => {
     const { formId } = useParams<{ formId: string }>();
     const navigate = useNavigate();
     const { currentOrg } = useOrg();
+    const { showToast } = useToast();
     const [formMeta, setFormMeta] = useState<{ id: string; project_id: string; slug: string; version: number; is_public: boolean } | null>(null);
     const [title, setTitle] = useState('Untitled Form');
     const [fields, setFields] = useState<FormField[]>([]);
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [openSection, setOpenSection] = useState<'basic' | 'advanced' | 'templates' | null>('basic');
 
     const basicTypes: FieldType[] = [
         'input_text',
@@ -245,9 +249,10 @@ const FormBuilder: React.FC = () => {
                 logic: []
             };
             await formAPI.updateBlueprint(formId, blueprint);
-            alert('Form saved successfully!');
+            showToast('Successfully saved!', 'Anyone with a link can now view this file.', 'success');
         } catch (err) {
             console.error('Save failed', err);
+            showToast('Save failed', 'There was an error saving your form.', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -258,6 +263,13 @@ const FormBuilder: React.FC = () => {
             {/* Header */}
             <header className="h-16 border-b border-[hsl(var(--border))] flex items-center justify-between px-6 bg-[hsl(var(--surface))]/70 backdrop-blur-md">
                 <div className="flex items-center space-x-4">
+                    <button
+                        onClick={() => navigate('/dashboard')}
+                        className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-xl transition-all text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
+                        title="Back to Dashboard"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
                     <div className="w-10 h-10 bg-[hsl(var(--primary))] rounded-xl flex items-center justify-center shadow-lg shadow-black/10">
                         <Layout className="w-6 h-6 text-white" />
                     </div>
@@ -289,34 +301,80 @@ const FormBuilder: React.FC = () => {
 
             <div className="flex flex-1 overflow-hidden">
                 {/* Left Panel: Widgets */}
-                <aside className="w-72 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 flex flex-col space-y-2">
-                    <h3 className="text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-4">Basic Widgets</h3>
-                    {basicTypes.map((type) => {
-                        const widget = getWidget(type);
-                        if (!widget) return null;
-                        return (
-                            <button key={type} onClick={() => addField(widget.type, widget.defaults)} className="sidebar-btn group">
-                                <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">{widget.icon}</div>
-                                <span>{widget.label}</span>
+                <aside className="w-72 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
+                    <div className="flex-1 overflow-y-auto hide-scrollbar p-6 space-y-6">
+                        {/* Basic Widgets */}
+                        <div>
+                            <button
+                                onClick={() => setOpenSection(openSection === 'basic' ? null : 'basic')}
+                                className="w-full flex items-center justify-between text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-2 hover:text-[hsl(var(--text-primary))] transition-colors"
+                            >
+                                <span>Basic Widgets</span>
+                                {openSection === 'basic' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                             </button>
-                        );
-                    })}
+                            {openSection === 'basic' && (
+                                <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                                    {basicTypes.map((type) => {
+                                        const widget = getWidget(type);
+                                        if (!widget) return null;
+                                        return (
+                                            <button key={type} onClick={() => addField(widget.type, widget.defaults)} className="sidebar-btn group">
+                                                <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">{widget.icon}</div>
+                                                <span>{widget.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
 
-                    <h3 className="text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mt-6 mb-4">Advanced Widgets</h3>
-                    {advancedTypes.map((type) => {
-                        const widget = getWidget(type);
-                        if (!widget) return null;
-                        return (
-                            <button key={type} onClick={() => addField(widget.type, widget.defaults)} className="sidebar-btn group">
-                                <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">{widget.icon}</div>
-                                <span>{widget.label}</span>
+                        {/* Advanced Widgets */}
+                        <div>
+                            <button
+                                onClick={() => setOpenSection(openSection === 'advanced' ? null : 'advanced')}
+                                className="w-full flex items-center justify-between text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-2 hover:text-[hsl(var(--text-primary))] transition-colors"
+                            >
+                                <span>Advanced Widgets</span>
+                                {openSection === 'advanced' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                             </button>
-                        );
-                    })}
+                            {openSection === 'advanced' && (
+                                <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                                    {advancedTypes.map((type) => {
+                                        const widget = getWidget(type);
+                                        if (!widget) return null;
+                                        return (
+                                            <button key={type} onClick={() => addField(widget.type, widget.defaults)} className="sidebar-btn group">
+                                                <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">{widget.icon}</div>
+                                                <span>{widget.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Templates */}
+                        <div>
+                            <button
+                                onClick={() => setOpenSection(openSection === 'templates' ? null : 'templates')}
+                                className="w-full flex items-center justify-between text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-2 hover:text-[hsl(var(--text-primary))] transition-colors"
+                            >
+                                <span>Templates</span>
+                                {openSection === 'templates' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                            {openSection === 'templates' && (
+                                <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200 text-center p-6 border-2 border-dashed border-[hsl(var(--border))] rounded-xl">
+                                    <List className="w-8 h-8 text-[hsl(var(--border-hover))] mx-auto mb-2" />
+                                    <p className="text-sm font-medium text-[hsl(var(--text-secondary))]">Pre-built Templates</p>
+                                    <p className="text-xs text-[hsl(var(--text-tertiary))]">Coming soon...</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </aside>
 
                 {/* Main Canvas */}
-                <main className="flex-1 bg-[hsl(var(--background))] p-12 overflow-y-auto">
+                <main className="flex-1 bg-[hsl(var(--background))] p-12 overflow-y-auto hide-scrollbar">
                     <div className="max-w-2xl mx-auto space-y-6">
                         {fields.length === 0 ? (
                             <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-3xl p-20 text-center text-[hsl(var(--text-tertiary))]">
@@ -327,11 +385,10 @@ const FormBuilder: React.FC = () => {
                                 <div
                                     key={field.id}
                                     onClick={() => setSelectedFieldId(field.id)}
-                                    className={`bg-[hsl(var(--surface))] border p-6 rounded-2xl group relative transition-all shadow-sm cursor-pointer ${
-                                        selectedFieldId === field.id
-                                            ? 'border-[hsl(var(--primary))] shadow-lg shadow-[hsl(var(--primary))]/10'
-                                            : 'border-[hsl(var(--border))] hover:border-[hsl(var(--border-hover))]'
-                                    }`}
+                                    className={`p-6 rounded-2xl group relative transition-all shadow-sm cursor-pointer border ${selectedFieldId === field.id
+                                        ? 'border-[hsl(var(--primary))] border-2 bg-[hsl(var(--primary))]/5 shadow-lg shadow-[hsl(var(--primary))]/5'
+                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] hover:border-[hsl(var(--border-hover))]'
+                                        }`}
                                 >
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex items-center space-x-3 w-full">
@@ -345,13 +402,17 @@ const FormBuilder: React.FC = () => {
                                             />
                                         </div>
                                         <button
-                                            onClick={() => removeField(field.id)}
-                                            className="text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] p-2 opacity-0 group-hover:opacity-100 transition-all"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeField(field.id);
+                                            }}
+                                            className={`text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] p-2 transition-all ${selectedFieldId === field.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                                }`}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
-                                    <div className="h-12 bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-xl px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
+                                    <div className="h-12 bg-white/50 dark:bg-black/20 border border-[hsl(var(--border))] rounded-xl px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
                                         {field.type.replace('input_', '').replace('_', ' ')} placeholder...
                                     </div>
                                 </div>
@@ -361,7 +422,7 @@ const FormBuilder: React.FC = () => {
                 </main>
 
                 {/* Right Panel: Properties */}
-                <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6">
+                <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 overflow-y-auto hide-scrollbar">
                     <h3 className="text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-6 flex items-center">
                         <Settings className="w-4 h-4 mr-2" />
                         Properties
@@ -448,6 +509,13 @@ const FormBuilder: React.FC = () => {
             </div>
 
             <style>{`
+                .hide-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .hide-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
                 .sidebar-btn {
                     width: 100%;
                     display: flex;

@@ -1,0 +1,123 @@
+Traceback (most recent call last):
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\base.py", line 2125, in _exec_insertmany_context
+    dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.UndefinedTable: relation "org_roles" does not exist
+LINE 1: INSERT INTO org_roles (id, org_id, name, slug, description, ...
+                    ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\kings\Dev Projects\opla\opla-backend\test_org.py", line 11, in <module>
+    org = OrganizationService.create_organization(db=db, name="Test Org", owner_id=user.id)
+  File "C:\Users\kings\Dev Projects\opla\opla-backend\app\services\organization_service.py", line 49, in create_organization
+    OrganizationService.seed_default_roles(db, org.id, owner_id)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kings\Dev Projects\opla\opla-backend\app\services\organization_service.py", line 103, in seed_default_roles
+    db.flush()
+    ~~~~~~~~^^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\orm\session.py", line 4331, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\orm\session.py", line 4466, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\orm\session.py", line 4427, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 466, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\orm\unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\orm\persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        insert,
+        ^^^^^^^
+    )
+    ^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\orm\persistence.py", line 1143, in _emit_insert_statements
+    result = connection.execute(
+        statement, multiparams, execution_options=execution_options
+    )
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\base.py", line 1844, in _execute_context
+    return self._exec_insertmany_context(dialect, context)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\base.py", line 2133, in _exec_insertmany_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e,
+        ^^
+    ...<4 lines>...
+        is_sub_exec=True,
+        ^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\base.py", line 2125, in _exec_insertmany_context
+    dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+  File "C:\Users\kings\AppData\Local\pypoetry\Cache\virtualenvs\opla-backend-sKMwM517-py3.14\Lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedTable) relation "org_roles" does not exist
+LINE 1: INSERT INTO org_roles (id, org_id, name, slug, description, ...
+                    ^
+
+[SQL: INSERT INTO org_roles (id, org_id, name, slug, description, permissions, priority, is_system, created_at, updated_at) VALUES (%(id__0)s::UUID, %(org_id__0)s::UUID, %(name__0)s, %(slug__0)s, %(description__0)s, %(permissions__0)s::JSONB, %(priority__0 ... 517 characters truncated ...  %(permissions__3)s::JSONB, %(priority__3)s, %(is_system__3)s, %(created_at__3)s, %(updated_at__3)s)]
+[parameters: {'org_id__0': UUID('ed17f59b-101f-4ef9-97aa-acae2a2d1545'), 'id__0': UUID('2068355f-8db4-4cbf-ba00-fd00bb5d54d2'), 'permissions__0': '["*"]', 'priority__0': 100, 'description__0': 'Full access to org settings and projects', 'is_system__0': True, 'name__0': 'Admin', 'slug__0': 'admin', 'updated_at__0': datetime.datetime(2026, 3, 3, 18, 28, 16, 213624), 'created_at__0': datetime.datetime(2026, 3, 3, 18, 28, 16, 213621), 'org_id__1': UUID('ed17f59b-101f-4ef9-97aa-acae2a2d1545'), 'id__1': UUID('b4cd3824-0dc8-4d85-a59d-64198f30a6fb'), 'permissions__1': '["projects:edit", "forms:edit", "forms:publish", "data:view"]', 'priority__1': 80, 'description__1': 'Create and edit projects and forms', 'is_system__1': True, 'name__1': 'Editor', 'slug__1': 'editor', 'updated_at__1': datetime.datetime(2026, 3, 3, 18, 28, 16, 213627), 'created_at__1': datetime.datetime(2026, 3, 3, 18, 28, 16, 213626), 'org_id__2': UUID('ed17f59b-101f-4ef9-97aa-acae2a2d1545'), 'id__2': UUID('caa07e87-4c53-4251-aec7-a4b6378ba892'), 'permissions__2': '["forms:view", "data:view", "teams:view"]', 'priority__2': 60, 'description__2': 'Review data and manage team workflows', 'is_system__2': True, 'name__2': 'Supervisor', 'slug__2': 'supervisor', 'updated_at__2': datetime.datetime(2026, 3, 3, 18, 28, 16, 213631), 'created_at__2': datetime.datetime(2026, 3, 3, 18, 28, 16, 213630), 'org_id__3': UUID('ed17f59b-101f-4ef9-97aa-acae2a2d1545'), 'id__3': UUID('870fb6a1-f8a3-43ca-b206-02ce763d203b'), 'permissions__3': '["forms:submit", "data:collect"]', 'priority__3': 40, 'description__3': 'Collect data and submit forms', 'is_system__3': True, 'name__3': 'Agent', 'slug__3': 'agent', 'updated_at__3': datetime.datetime(2026, 3, 3, 18, 28, 16, 213633), 'created_at__3': datetime.datetime(2026, 3, 3, 18, 28, 16, 213632)}]
+(Background on this error at: https://sqlalche.me/e/20/f405)

@@ -1,0 +1,16 @@
+[
+  "Found 11 tables:",
+  "\u2705 users                     (Rows: 2)",
+  "\u2705 organizations             (Rows: 2)",
+  "\u2705 org_members               (Rows: 2)",
+  "\u2705 teams                     (Rows: 0)",
+  "\u2705 team_members              (Rows: 0)",
+  "\u2705 projects                  (Rows: 0)",
+  "\u2705 project_access            (Rows: 0)",
+  "\u2705 forms                     (Rows: 0)",
+  "\u2705 submissions               (Rows: 0)",
+  "\u2705 org_roles                 (Rows: 8)",
+  "\u2705 org_role_assignments      (Rows: 2)",
+  "\nRole Assignments Enums Check:",
+  "OrgMember global_roles in use: ['admin']"
+]

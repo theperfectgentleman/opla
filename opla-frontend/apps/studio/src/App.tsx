@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { OrgProvider } from './contexts/OrgContext';
+import { ToastProvider } from './contexts/ToastContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -23,50 +24,52 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <OrgProvider>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/s/:slug" element={<PublicForm />} />
+          <ToastProvider>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/s/:slug" element={<PublicForm />} />
 
-            {/* Protected routes */}
-            <Route
-              path="/welcome"
-              element={
-                <ProtectedRoute>
-                  <Welcome />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/builder/:formId"
-              element={
-                <ProtectedRoute>
-                  <FormBuilder />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/simulator/:formId"
-              element={
-                <ProtectedRoute>
-                  <FormSimulator />
-                </ProtectedRoute>
-              }
-            />
+              {/* Protected routes */}
+              <Route
+                path="/welcome"
+                element={
+                  <ProtectedRoute>
+                    <Welcome />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/builder/:formId"
+                element={
+                  <ProtectedRoute>
+                    <FormBuilder />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/simulator/:formId"
+                element={
+                  <ProtectedRoute>
+                    <FormSimulator />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+              {/* Default redirect */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </ToastProvider>
         </OrgProvider>
       </AuthProvider>
     </BrowserRouter>

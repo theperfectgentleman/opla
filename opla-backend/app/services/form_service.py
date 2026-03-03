@@ -54,6 +54,8 @@ class FormService:
         form = db.query(Form).filter(Form.id == form_id).first()
         if form:
             form.blueprint_draft = blueprint
+            if blueprint and "meta" in blueprint and "title" in blueprint["meta"]:
+                form.title = blueprint["meta"]["title"]
             db.commit()
             db.refresh(form)
         return form

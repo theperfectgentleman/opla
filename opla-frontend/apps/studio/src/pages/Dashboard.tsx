@@ -7,14 +7,14 @@ import ThemeToggle from '../components/ThemeToggle';
 import MembersManagement from '../components/MembersManagement';
 import TeamsManagement from '../components/TeamsManagement';
 import RolesManagement from '../components/RolesManagement';
-import { 
-    Plus, Layout, Folder, Users, Settings, LogOut, ChevronRight, 
-    Search, Bell, PlusCircle, FileText, Activity
+import {
+    Plus, Layout, Folder, Users, Settings, LogOut, ChevronRight,
+    Search, Bell, PlusCircle, FileText, Activity, Play
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
     const { user, logout } = useAuth();
-    const { currentOrg, organizations, projects, createProject, setCurrentOrg, isLoading } = useOrg();
+    const { currentOrg, organizations, projects, members, createProject, setCurrentOrg, isLoading } = useOrg();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('forms');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
         e.preventDefault();
         if (!projectName.trim()) return;
         try {
-            await createProject(projectName);
+            await createProject(projectName, ""); // Using empty string explicitly instead of undefined
             setProjectName('');
             setShowCreateProject(false);
         } catch (err) {
@@ -86,7 +86,7 @@ const Dashboard: React.FC = () => {
                     {/* Org Switcher */}
                     <div className="mb-8">
                         <label className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-widest mb-3 block">Organization</label>
-                        <select 
+                        <select
                             value={currentOrg?.id}
                             onChange={(e) => {
                                 const org = organizations.find(o => o.id === e.target.value);
@@ -101,32 +101,53 @@ const Dashboard: React.FC = () => {
                     </div>
 
                     <nav className="space-y-1">
-                        <button 
+                        <button
                             onClick={() => setActiveTab('forms')}
-                            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'forms' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === 'forms' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
                         >
-                            <Layout className="w-5 h-5" />
-                            <span className="font-medium">All Forms</span>
+                            <div className="flex items-center space-x-3">
+                                <Layout className="w-5 h-5" />
+                                <span className="font-medium">All Forms</span>
+                            </div>
+                            {forms.length > 0 && (
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'forms' ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
+                                    {forms.length}
+                                </span>
+                            )}
                         </button>
-                        <button 
+                        <button
                             onClick={() => setActiveTab('projects')}
-                            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'projects' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === 'projects' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
                         >
-                            <Folder className="w-5 h-5" />
-                            <span className="font-medium">Projects</span>
+                            <div className="flex items-center space-x-3">
+                                <Folder className="w-5 h-5" />
+                                <span className="font-medium">Projects</span>
+                            </div>
+                            {projects.length > 0 && (
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'projects' ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
+                                    {projects.length}
+                                </span>
+                            )}
                         </button>
-                        <button 
+                        <button
                             onClick={() => setActiveTab('members')}
-                            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'members' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === 'members' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
                         >
-                            <Users className="w-5 h-5" />
-                            <span className="font-medium">Team Members</span>
+                            <div className="flex items-center space-x-3">
+                                <Users className="w-5 h-5" />
+                                <span className="font-medium">Team Members</span>
+                            </div>
+                            {members?.length > 0 && (
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'members' ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
+                                    {members.length}
+                                </span>
+                            )}
                         </button>
                     </nav>
                 </div>
 
                 <div className="mt-auto p-6 border-t border-[hsl(var(--border))]">
-                    <button 
+                    <button
                         onClick={() => { logout(); navigate('/login'); }}
                         className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--error))] transition-all"
                     >
@@ -142,7 +163,7 @@ const Dashboard: React.FC = () => {
                 <header className="h-16 border-b border-[hsl(var(--border))] flex items-center justify-between px-8 bg-[hsl(var(--surface))]/70 backdrop-blur-md">
                     <div className="flex items-center bg-[hsl(var(--surface-elevated))] rounded-xl px-4 py-2 w-96 border border-[hsl(var(--border))] focus-within:ring-2 focus-within:ring-[hsl(var(--primary))]/50 transition-all">
                         <Search className="w-4 h-4 text-[hsl(var(--text-tertiary))] mr-2" />
-                        <input border-none bg-transparent text-sm focus:outline-none placeholder="Search forms, projects..." className="bg-transparent border-none w-full text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))]" />
+                        <input className="bg-transparent border-none w-full text-sm text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:outline-none" placeholder="Search forms, projects..." />
                     </div>
                     <div className="flex items-center space-x-4">
                         <ThemeToggle />
@@ -185,7 +206,7 @@ const Dashboard: React.FC = () => {
                                     <p className="text-[hsl(var(--text-secondary))]">Manage and publish your forms to collect data.</p>
                                 </div>
                                 <div className="flex space-x-3">
-                                    <button 
+                                    <button
                                         onClick={() => setShowCreateProject(true)}
                                         className="flex items-center space-x-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface))] text-[hsl(var(--text-primary))] font-semibold px-4 py-2.5 rounded-xl border border-[hsl(var(--border))] transition-all"
                                     >
@@ -227,12 +248,12 @@ const Dashboard: React.FC = () => {
 
                     {activeTab === 'projects' && (
                         <div className="space-y-8">
-                             <div className="flex justify-between items-end">
+                            <div className="flex justify-between items-end">
                                 <div>
                                     <h2 className="text-3xl font-bold mb-2">Projects</h2>
                                     <p className="text-[hsl(var(--text-secondary))]">Organize your forms by project workspace.</p>
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => setShowCreateProject(true)}
                                     className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-black/10 transition-all"
                                 >
@@ -243,28 +264,63 @@ const Dashboard: React.FC = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {projects.map(project => (
-                                    <div key={project.id} className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-3xl overflow-hidden hover:border-[hsl(var(--border-hover))] transition-all shadow-sm">
-                                        <div className="p-8">
+                                    <div key={project.id} className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-3xl overflow-hidden hover:border-[hsl(var(--border-hover))] transition-all shadow-sm flex flex-col">
+                                        <div className="p-8 flex-1 flex flex-col">
                                             <div className="flex justify-between items-start mb-4">
                                                 <h3 className="text-xl font-bold">{project.name}</h3>
                                                 <div className="p-2 bg-[hsl(var(--surface-elevated))] rounded-xl">
                                                     <Settings className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] cursor-pointer" />
                                                 </div>
                                             </div>
-                                            <p className="text-[hsl(var(--text-secondary))] text-sm mb-8 line-clamp-2">{project.description || 'No description provided.'}</p>
-                                            <button 
-                                                onClick={() => handleCreateForm(project.id)}
-                                                className="w-full bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface))] text-[hsl(var(--text-primary))] font-semibold py-3 rounded-2xl border border-[hsl(var(--border))] transition-all flex items-center justify-center space-x-2"
-                                            >
-                                                <PlusCircle className="w-4 h-4" />
-                                                <span>New Form</span>
-                                            </button>
+                                            <p className="text-[hsl(var(--text-secondary))] text-sm mb-6 line-clamp-2">{project.description || 'No description provided.'}</p>
+
+                                            {forms.filter(f => f.project_id === project.id).length > 0 && (
+                                                <div className="space-y-3 mb-6">
+                                                    {forms.filter(f => f.project_id === project.id).map(form => (
+                                                        <div
+                                                            key={form.id}
+                                                            onClick={() => navigate(`/builder/${form.id}`)}
+                                                            className="flex items-center justify-between p-3 bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-2xl hover:border-[hsl(var(--primary))] transition-all cursor-pointer group"
+                                                        >
+                                                            <div className="flex items-center space-x-3 overflow-hidden">
+                                                                <div className="p-2 bg-[hsl(var(--primary))]/10 rounded-xl">
+                                                                    <FileText className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                                                </div>
+                                                                <span className="text-sm font-semibold truncate">{form.title}</span>
+                                                            </div>
+                                                            <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); navigate(`/simulator/${form.id}`); }}
+                                                                    className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] rounded-lg text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors"
+                                                                    title="Simulator"
+                                                                >
+                                                                    <Play className="w-4 h-4 fill-current" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            <div className="mt-auto">
+                                                <button
+                                                    onClick={() => handleCreateForm(project.id)}
+                                                    className="w-full bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))] font-semibold py-3 rounded-2xl border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 transition-all flex items-center justify-center space-x-2"
+                                                >
+                                                    <PlusCircle className="w-4 h-4" />
+                                                    <span>New Form</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="bg-[hsl(var(--surface-elevated))] px-8 py-4 border-t border-[hsl(var(--border))] flex justify-between text-xs text-[hsl(var(--text-tertiary))]">
                                             <span>{forms.filter(f => f.project_id === project.id).length} Forms</span>
                                             <span>Created {new Date(project.created_at).toLocaleDateString()}</span>
                                         </div>
                                     </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {activeTab === 'members' && currentOrg && (
                         <div className="space-y-8">
@@ -272,31 +328,28 @@ const Dashboard: React.FC = () => {
                             <div className="flex items-center gap-4 border-b border-[hsl(var(--border))] pb-4">
                                 <button
                                     onClick={() => setMembersSubTab('members')}
-                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                                        membersSubTab === 'members'
-                                            ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
-                                            : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                    }`}
+                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${membersSubTab === 'members'
+                                        ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
+                                        : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
+                                        }`}
                                 >
                                     Members
                                 </button>
                                 <button
                                     onClick={() => setMembersSubTab('teams')}
-                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                                        membersSubTab === 'teams'
-                                            ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
-                                            : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                    }`}
+                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${membersSubTab === 'teams'
+                                        ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
+                                        : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
+                                        }`}
                                 >
                                     Teams
                                 </button>
                                 <button
                                     onClick={() => setMembersSubTab('roles')}
-                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
-                                        membersSubTab === 'roles'
-                                            ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
-                                            : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                    }`}
+                                    className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${membersSubTab === 'roles'
+                                        ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
+                                        : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
+                                        }`}
                                 >
                                     Roles
                                 </button>
@@ -314,10 +367,6 @@ const Dashboard: React.FC = () => {
                             )}
                         </div>
                     )}
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
             </main>
 
@@ -329,7 +378,7 @@ const Dashboard: React.FC = () => {
                         <form onSubmit={handleCreateProject} className="space-y-6">
                             <div>
                                 <label className="label">Project Name</label>
-                                <input 
+                                <input
                                     value={projectName}
                                     onChange={(e) => setProjectName(e.target.value)}
                                     className="input"
@@ -338,14 +387,14 @@ const Dashboard: React.FC = () => {
                                 />
                             </div>
                             <div className="flex space-x-3">
-                                <button 
+                                <button
                                     type="button"
                                     onClick={() => setShowCreateProject(false)}
                                     className="flex-1 px-6 py-3 rounded-2xl border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     type="submit"
                                     className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-2xl shadow-lg shadow-black/10 transition-all"
                                 >

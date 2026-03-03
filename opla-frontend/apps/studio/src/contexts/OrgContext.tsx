@@ -22,11 +22,13 @@ interface OrgContextType {
     organizations: Organization[];
     currentOrg: Organization | null;
     projects: Project[];
+    members: any[];
     isLoading: boolean;
     error: string | null;
     setCurrentOrg: (org: Organization | null) => void;
     refreshOrganizations: () => Promise<void>;
     refreshProjects: (orgId: string) => Promise<void>;
+    refreshMembers: (orgId: string) => Promise<void>;
     createOrganization: (name: string) => Promise<Organization>;
     createProject: (name: string, description?: string) => Promise<Project>;
 }
@@ -40,6 +42,8 @@ export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [projects, setProjects] = useState<Project[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const [members, setMembers] = useState<any[]>([]);
 
     const refreshOrganizations = async () => {
         if (!isAuthenticated) return;
@@ -69,6 +73,15 @@ export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     };
 
+    const refreshMembers = async (orgId: string) => {
+        try {
+            const data = await orgAPI.getMembers(orgId);
+            setMembers(data);
+        } catch (err: any) {
+            console.error('Failed to fetch members', err);
+        }
+    };
+
     useEffect(() => {
         if (isAuthenticated) {
             refreshOrganizations();
@@ -76,6 +89,7 @@ export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setOrganizations([]);
             setCurrentOrg(null);
             setProjects([]);
+            setMembers([]);
         }
     }, [isAuthenticated]);
 
@@ -83,6 +97,7 @@ export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (currentOrg) {
             localStorage.setItem('current_org_id', currentOrg.id);
             refreshProjects(currentOrg.id);
+            refreshMembers(currentOrg.id);
         }
     }, [currentOrg]);
 
@@ -117,11 +132,13 @@ export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             organizations,
             currentOrg,
             projects,
+            members,
             isLoading,
             error,
             setCurrentOrg,
             refreshOrganizations,
             refreshProjects,
+            refreshMembers,
             createOrganization,
             createProject
         }}>

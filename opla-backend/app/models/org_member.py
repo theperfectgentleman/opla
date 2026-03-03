@@ -20,9 +20,9 @@ class OrgMember(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
-    global_role = Column(Enum(GlobalRole), default=GlobalRole.MEMBER, nullable=False)
+    global_role = Column(Enum(GlobalRole, name="global_role", values_callable=lambda obj: [e.value for e in obj]), default=GlobalRole.MEMBER, nullable=False)
     invited_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    invitation_status = Column(Enum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False)
+    invitation_status = Column(Enum(InvitationStatus, name="invitation_status", values_callable=lambda obj: [e.value for e in obj]), default=InvitationStatus.PENDING, nullable=False)
     joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     user = relationship("User", foreign_keys=[user_id], backref="org_memberships")

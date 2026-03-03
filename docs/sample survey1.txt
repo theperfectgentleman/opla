@@ -1,0 +1,199 @@
+School Experience Stress Test Survey
+
+This survey is designed to test the architectural limits of a survey builder, specifically targeting:
+
+Conditional Branching (Skip Logic)
+
+Response Validation
+
+Data Piping
+
+UI Layout (Matrices & Ranking)
+
+SECTION 1: Routing & Identity
+
+Goal: Test the initial branching logic of the system.
+
+Q1. Respondent Type
+
+Type: Single Select (Radio Buttons)
+
+Options: [Student], [Parent/Guardian], [Staff Member]
+
+Logic: - If Student -> Go to Section 2
+
+If Parent -> Go to Section 3
+
+If Staff -> Go to Section 4
+
+SECTION 2: Student Experience (Conditional)
+
+Goal: Test Multi-select and Data Piping.
+
+Q2. Grade Level
+
+Type: Dropdown
+
+Options: 9th, 10th, 11th, 12th
+
+Q3. Extracurricular Participation
+
+Type: Yes/No (Boolean)
+
+Logic: If "No", skip to Q5.
+
+Q4. Specific Interests
+
+Type: Multi-select (Checkboxes)
+
+Options: [Debate], [Football], [Coding Club], [Drama], [Band]
+
+Q5. Program Satisfaction
+
+Type: 5-Point Likert Scale
+
+Content: "How satisfied are you with the school's social environment?"
+
+Test: (Optional) Pipe the answer from Q4 if possible (e.g., "How satisfied are you with the [Band] program?").
+
+SECTION 3: Parent & Facility Feedback
+
+Goal: Test Matrix/Grid UI and Ranking logic.
+
+Q6. Facility Rating Matrix
+
+Type: Matrix / Radio Grid
+
+Rows: Library, Cafeteria, Science Labs, Playground
+
+Columns: Poor, Fair, Good, Excellent
+
+Constraint: One selection per row required.
+
+Q7. Resource Priority
+
+Type: Drag-and-Drop Ranking
+
+Items: - Advanced Technology
+
+Better Sports Equipment
+
+Healthy Meal Options
+
+Higher Security
+
+Goal: Test if the system can handle a re-ordered list as a data output.
+
+Q8. Communication Sentiment
+
+Type: Semantic Differential (Slider)
+
+Scale: 1 to 5
+
+Labels: "Confusing" (1) to "Clear" (5)
+
+SECTION 4: Staff & Administrative Data
+
+Goal: Test strict numerical validation and constraints.
+
+Q9. Workload Distribution
+
+Type: Constant Sum
+
+Instructions: Allocate 100% of your weekly time to these categories.
+
+Fields: - Lesson Planning: __%
+
+Grading: __%
+
+Direct Instruction: __%
+
+Admin/Meetings: __%
+
+Validation: Must total exactly 100%.
+
+Q10. Experience Level
+
+Type: Number Input
+
+Validation: Integer only, Minimum 0, Maximum 50.
+
+Q11. Identity Verification
+
+Type: File Upload
+
+Validation: Limit to .pdf or .png only. Max size 5MB.
+
+SECTION 5: General Validation & Edge Cases
+
+Goal: Test "Other" fields, mutually exclusive options, and rich text.
+
+Q12. Subject Engagement
+
+Type: Multi-select with Limit
+
+Options: Math, English, Science, Arts, History, PE
+
+Validation: "Select at least 2 and no more than 3."
+
+Q13. Event Attendance
+
+Type: Multi-select with "Other"
+
+Options: Back to School Night, Science Fair, None
+
+Logic: - If "Other" is selected, open a required text box.
+
+If "None" is selected, uncheck all other options (Exclusive Logic).
+
+Q14. Policy Review
+
+Type: Rich Text Block + Single Select
+
+Content: [Insert 500 words of Lorem Ipsum representing a school policy]
+
+Question: Do you acknowledge these terms? [Yes/No]
+
+Q15. School Recommendation (NPS)
+
+Type: Net Promoter Score (0-10)
+
+Validation: Horizontal layout required.
+
+SECTION 6: Survey Flow & Termination
+
+Q16. Future Enrollment Date
+
+Type: Date Picker
+
+Validation: No dates in the past allowed.
+
+Q17. Image Choice
+
+Type: Visual Selection
+
+Question: "Which proposed mascot design do you prefer?"
+
+Options: Image A, Image B, Image C.
+
+Q18. Hidden Metadata
+
+Type: Hidden Field
+
+Data: browser_type, time_spent_on_page
+
+Goal: Ensure these are saved to the database without being visible to the user.
+
+Q19. Disqualification Logic
+
+Type: Single Select
+
+Question: "Do you reside in the current school district?"
+
+Logic: If "No", trigger "Disqualified" end-screen immediately.
+
+Q20. Open Feedback
+
+Type: Long Text Area
+
+Validation: Character limit: 1,000.

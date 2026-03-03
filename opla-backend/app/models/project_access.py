@@ -20,8 +20,8 @@ class ProjectAccess(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)
     accessor_id = Column(UUID(as_uuid=True), nullable=False) # Polymorphic: user_id or team_id
-    accessor_type = Column(Enum(AccessorType), nullable=False)
-    role = Column(Enum(ProjectRole), nullable=False)
+    accessor_type = Column(Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]), nullable=False)
+    role = Column(Enum(ProjectRole, name="project_role", values_callable=lambda obj: [e.value for e in obj]), nullable=False)
     
     project = relationship("Project", backref="access_rules")
     

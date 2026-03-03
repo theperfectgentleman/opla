@@ -21,7 +21,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
     const [roles, setRoles] = useState<OrgRole[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [roleName, setRoleName] = useState('');
-    const [roleSlug, setRoleSlug] = useState '';
+    const [roleSlug, setRoleSlug] = useState('');
     const [roleDescription, setRoleDescription] = useState('');
     const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
     const [priority, setPriority] = useState(50);

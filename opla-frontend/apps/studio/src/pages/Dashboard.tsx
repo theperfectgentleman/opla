@@ -146,7 +146,10 @@ const Dashboard: React.FC = () => {
                     </nav>
                 </div>
 
-                <div className="mt-auto p-6 border-t border-[hsl(var(--border))]">
+                <div className="mt-auto p-6 border-t border-[hsl(var(--border))] space-y-4">
+                    <div className="flex justify-start px-2">
+                        <ThemeToggle />
+                    </div>
                     <button
                         onClick={() => { logout(); navigate('/login'); }}
                         className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--error))] transition-all"
@@ -166,7 +169,6 @@ const Dashboard: React.FC = () => {
                         <input className="bg-transparent border-none w-full text-sm text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:outline-none" placeholder="Search forms, projects..." />
                     </div>
                     <div className="flex items-center space-x-4">
-                        <ThemeToggle />
                         <button className="p-2 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all relative">
                             <Bell className="w-5 h-5" />
                             <span className="absolute top-2 right-2 w-2 h-2 bg-[hsl(var(--primary))] rounded-full border-2 border-[hsl(var(--surface))]"></span>

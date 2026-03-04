@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { formAPI } from '../lib/api';
+import { formAPI, sectionTemplateAPI } from '../lib/api';
 import { useOrg } from '../contexts/OrgContext';
 import ThemeToggle from '../components/ThemeToggle';
 import {
@@ -8,7 +8,7 @@ import {
     MapPin, Camera, Type, Hash, CheckSquare, List, Mail,
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
     ChevronDown, ChevronRight, ArrowLeft, Zap, GitBranch, Terminal,
-    Layers, ChevronRight as Crumb, Copy, MoveRight
+    Layers, ChevronRight as Crumb, Copy, MoveRight, Table2, Database
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -32,13 +32,27 @@ type FieldType =
     | 'file_upload'
     | 'signature_pad'
     | 'barcode_scanner'
-    | 'audio_recorder';
+    | 'audio_recorder'
+    | 'matrix_table'
+    | 'lookup_list';
 
 interface FieldOption {
     label: string;        // Display text shown to respondent
     value: string;        // Machine-readable key stored in data
     skip_to?: string;     // Optional: section id to jump to when this option is picked
 }
+
+interface TableColumn {
+    id: string;
+    label: string;
+}
+
+interface TableRow {
+    id: string;
+    label: string;
+}
+
+type TableCellType = 'checkbox' | 'radio' | 'text' | 'number' | 'dropdown';
 
 interface FormField {
     id: string;
@@ -48,14 +62,26 @@ interface FormField {
     placeholder?: string;
     options?: FieldOption[];         // Replaces old string[]
     platforms?: Platform[];
-    min?: number;
-    max?: number;
+    min?: number | string;
+    max?: number | string;
     minLength?: number;
     maxLength?: number;
     pattern?: string;
     default_value?: string;          // Pre-filled value; overridable during administration
     is_sensitive?: boolean;          // Marks field as PII / sensitive data
     exclude_from_export?: boolean;   // Omit field from data exports / views
+    // Matrix table fields
+    table_columns?: TableColumn[];
+    table_rows?: TableRow[];
+    table_cell_type?: TableCellType;
+    table_allow_multiple?: boolean;
+    mask?: string;
+    lookup_source_type?: 'preset' | 'custom';
+    lookup_preset_id?: string;
+    lookup_custom_data?: string;
+    lookup_separator?: string;
+    lookup_label_column?: number;
+    lookup_value_column?: number;
 }
 
 interface SectionProperties {
@@ -72,6 +98,7 @@ interface FormSection {
     title: string;
     fields: FormField[];
     properties: SectionProperties;
+    template_id?: string;
 }
 
 /** Strips stop words and builds a ≤5-word snake_case key from a label. */
@@ -140,6 +167,8 @@ const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNo
     { type: 'signature_pad', label: 'Signature', icon: <PenTool className="w-4 h-4" /> },
     { type: 'barcode_scanner', label: 'Barcode Scanner', icon: <Barcode className="w-4 h-4" /> },
     { type: 'audio_recorder', label: 'Audio Recorder', icon: <Mic className="w-4 h-4" /> },
+    { type: 'matrix_table', label: 'Table / Matrix', icon: <Table2 className="w-4 h-4" /> },
+    { type: 'lookup_list', label: 'Lookup List', icon: <Database className="w-4 h-4" />, defaults: { lookup_source_type: 'preset' } },
 ];
 
 const FormBuilder: React.FC = () => {
@@ -149,6 +178,7 @@ const FormBuilder: React.FC = () => {
     const { showToast } = useToast();
     const [formMeta, setFormMeta] = useState<{ id: string; project_id: string; slug: string; version: number; is_public: boolean } | null>(null);
     const [title, setTitle] = useState('Untitled Form');
+    const [templates, setTemplates] = useState<any[]>([]);
     const defaultSectionProperties = (): SectionProperties => ({ render_mode: 'list', platforms: ['mobile', 'web'] });
     const [sections, setSections] = useState<FormSection[]>([{ id: 'screen_1', title: 'Section 1', fields: [], properties: defaultSectionProperties() }]);
     const [currentSectionId, setCurrentSectionId] = useState<string>('screen_1');
@@ -160,8 +190,21 @@ const FormBuilder: React.FC = () => {
     const [view, setView] = useState<'form' | 'section'>('form');
     const [slideDir, setSlideDir] = useState<'forward' | 'back'>('forward');
     const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
+    const [dragEnabledFieldId, setDragEnabledFieldId] = useState<string | null>(null);
     const dragFieldIdRef = React.useRef<string | null>(null);
     const [moveMenuFieldId, setMoveMenuFieldId] = useState<string | null>(null);
+    const [showSimulatorMenu, setShowSimulatorMenu] = useState(false);
+    const [initialHash, setInitialHash] = useState<string>('');
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+
+    const computeHash = (t: string, s: any[], l: any[]) => JSON.stringify({ t, s, l });
+
+    useEffect(() => {
+        if (initialHash) {
+            const currentHash = computeHash(title, sections, logic);
+            setHasUnsavedChanges(currentHash !== initialHash);
+        }
+    }, [title, sections, logic, initialHash]);
 
     const enterSection = (sectionId: string) => {
         setSlideDir('forward');
@@ -199,7 +242,9 @@ const FormBuilder: React.FC = () => {
         'file_upload',
         'signature_pad',
         'barcode_scanner',
-        'audio_recorder'
+        'audio_recorder',
+        'matrix_table',
+        'lookup_list'
     ];
 
     const getWidget = (type: FieldType) => widgetLibrary.find((w) => w.type === type);
@@ -248,15 +293,22 @@ const FormBuilder: React.FC = () => {
                             default_value: child.default_value,
                             is_sensitive: !!child.is_sensitive,
                             exclude_from_export: !!child.exclude_from_export,
+                            table_columns: child.table_columns,
+                            table_rows: child.table_rows,
+                            table_cell_type: child.table_cell_type,
+                            table_allow_multiple: !!child.table_allow_multiple,
                         })) : []
                     }));
                     setSections(loadedSections);
                     setCurrentSectionId(loadedSections[0].id);
                     setLogic(blueprint.logic || []);
+                    setInitialHash(computeHash(data.title || 'Untitled Form', loadedSections, blueprint.logic || []));
                 } else {
-                    setSections([{ id: 'screen_1', title: 'Section 1', fields: [], properties: { render_mode: 'list', platforms: ['mobile', 'web'] } }]);
+                    const defaultSecs: FormSection[] = [{ id: 'screen_1', title: 'Section 1', fields: [], properties: { render_mode: 'list', platforms: ['mobile', 'web'] } }];
+                    setSections(defaultSecs);
                     setCurrentSectionId('screen_1');
                     setLogic([]);
+                    setInitialHash(computeHash('Untitled Form', defaultSecs, []));
                 }
             } catch (err) {
                 console.error('Failed to load form', err);
@@ -266,19 +318,48 @@ const FormBuilder: React.FC = () => {
         loadForm();
     }, [formId]);
 
+    useEffect(() => {
+        if (!currentOrg?.id) return;
+        const loadTemplates = async () => {
+            try {
+                const data = await sectionTemplateAPI.list(currentOrg.id);
+                setTemplates(data);
+            } catch (err) {
+                console.error('Failed to load templates', err);
+            }
+        };
+        loadTemplates();
+    }, [currentOrg?.id]);
+
     const addField = (type: FieldType, defaults?: Partial<FormField>) => {
         const isChoice = ['dropdown', 'radio_group', 'checkbox_group'].includes(type);
         const defaultOpts: FieldOption[] = isChoice
             ? [{ label: 'Option A', value: 'option_a' }, { label: 'Option B', value: 'option_b' }]
             : [];
+        const isMatrix = type === 'matrix_table';
+        const defaultColumns: TableColumn[] = isMatrix ? [
+            { id: 'col_1', label: 'Strongly Agree' },
+            { id: 'col_2', label: 'Agree' },
+            { id: 'col_3', label: 'Neutral' },
+            { id: 'col_4', label: 'Disagree' },
+            { id: 'col_5', label: 'Strongly Disagree' },
+        ] : [];
+        const defaultRows: TableRow[] = isMatrix ? [
+            { id: 'row_1', label: 'Statement 1' },
+            { id: 'row_2', label: 'Statement 2' },
+            { id: 'row_3', label: 'Statement 3' },
+        ] : [];
         const newField: FormField = {
             id: `field_${Date.now()}`,
             type,
-            label: `New ${type.replace(/_/g, ' ')}`,
+            label: isMatrix ? 'New Table / Matrix' : `New ${type.replace(/_/g, ' ')}`,
             required: false,
             placeholder: 'Enter value...',
             platforms: ['mobile', 'web'],
             options: isChoice ? defaultOpts : undefined,
+            table_columns: isMatrix ? defaultColumns : undefined,
+            table_rows: isMatrix ? defaultRows : undefined,
+            table_cell_type: isMatrix ? 'radio' : undefined,
             ...defaults
         };
         setSections(prev => prev.map(p => p.id === currentSectionId ? { ...p, fields: [...p.fields, newField] } : p));
@@ -374,6 +455,61 @@ const FormBuilder: React.FC = () => {
         setLogic(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
     };
 
+    const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
+    const [templateName, setTemplateName] = useState('');
+    const [templateDesc, setTemplateDesc] = useState('');
+    const [templateVis, setTemplateVis] = useState<'organization' | 'team'>('organization');
+
+    const handleSaveTemplate = async () => {
+        if (!currentOrg?.id) return;
+        const currentSec = sections.find(s => s.id === currentSectionId);
+        if (!currentSec) return;
+        try {
+            const blueprint = {
+                title: currentSec.title,
+                properties: currentSec.properties,
+                fields: currentSec.fields
+            };
+            const res = await sectionTemplateAPI.create(currentOrg.id, {
+                name: templateName || currentSec.title,
+                description: templateDesc,
+                visibility: templateVis,
+                blueprint
+            });
+            setTemplates(prev => [...prev, res]);
+            setIsSaveTemplateModalOpen(false);
+            setTemplateName('');
+            setTemplateDesc('');
+            setTemplateVis('organization');
+            showToast('Template saved', 'Section successfully saved as template', 'success');
+
+            // Link current section to new template
+            setSections(prev => prev.map(s => s.id === currentSectionId ? { ...s, template_id: res.id } : s));
+        } catch (err) {
+            console.error(err);
+            showToast('Failed to save', 'Could not save section template', 'error');
+        }
+    };
+
+    const updateExistingTemplate = async () => {
+        if (!currentOrg?.id) return;
+        const currentSec = sections.find(s => s.id === currentSectionId);
+        if (!currentSec || !currentSec.template_id) return;
+        try {
+            const blueprint = {
+                title: currentSec.title,
+                properties: currentSec.properties,
+                fields: currentSec.fields
+            };
+            await sectionTemplateAPI.update(currentOrg.id, currentSec.template_id, {
+                blueprint
+            });
+            showToast('Template updated', 'Linked template has been updated', 'success');
+        } catch (err) {
+            showToast('Failed to update template', 'Could not update linked template', 'error');
+        }
+    };
+
     const mapSchemaType = (type: FieldType) => {
         if (type === 'input_number') return 'integer';
         if (type === 'toggle') return 'boolean';
@@ -381,6 +517,7 @@ const FormBuilder: React.FC = () => {
         if (type === 'time_picker') return 'time';
         if (type === 'gps_capture') return 'geojson';
         if (type === 'checkbox_group') return 'array';
+        if (type === 'matrix_table') return 'object';
         return 'string';
     };
 
@@ -414,12 +551,18 @@ const FormBuilder: React.FC = () => {
                     if (f.type === 'checkbox_group') {
                         entry.items = { type: 'string' };
                     }
+                    if (f.type === 'matrix_table') {
+                        entry.columns = f.table_columns;
+                        entry.rows = f.table_rows;
+                        entry.cell_type = f.table_cell_type;
+                    }
                     return entry;
                 }),
                 ui: sections.map((p) => ({
                     id: p.id,
                     type: 'screen',
                     title: p.title,
+                    template_id: p.template_id,
                     render_mode: p.properties.render_mode,
                     description: p.properties.description,
                     platforms: p.properties.platforms,
@@ -441,11 +584,27 @@ const FormBuilder: React.FC = () => {
                         default_value: f.default_value,
                         is_sensitive: f.is_sensitive,
                         exclude_from_export: f.exclude_from_export,
+                        table_columns: f.table_columns,
+                        table_rows: f.table_rows,
+                        table_cell_type: f.table_cell_type,
+                        table_allow_multiple: f.table_allow_multiple,
+                        mask: f.mask,
+                        lookup_source_type: f.lookup_source_type,
+                        lookup_preset_id: f.lookup_preset_id,
+                        lookup_custom_data: f.lookup_custom_data,
+                        lookup_separator: f.lookup_separator,
+                        lookup_label_column: f.lookup_label_column,
+                        lookup_value_column: f.lookup_value_column,
                     }))
                 })),
                 logic: logic
             };
             await formAPI.updateBlueprint(formId, blueprint);
+
+            const newHash = computeHash(title, sections, logic);
+            setInitialHash(newHash);
+            setHasUnsavedChanges(false);
+
             showToast('Successfully saved!', 'Anyone with a link can now view this file.', 'success');
         } catch (err) {
             console.error('Save failed', err);
@@ -509,18 +668,54 @@ const FormBuilder: React.FC = () => {
                     <button
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="flex items-center space-x-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface))] px-4 py-2 rounded-xl transition-all border border-[hsl(var(--border))]"
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all border ${hasUnsavedChanges
+                            ? 'bg-[hsl(var(--warning))] text-white border-[hsl(var(--warning))] hover:brightness-110 shadow-lg shadow-[hsl(var(--warning))]/20 animate-pulse'
+                            : 'bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface))] transition-all border-[hsl(var(--border))]'
+                            }`}
                     >
                         <Save className="w-4 h-4" />
-                        <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                        <span className="font-semibold">{isSaving ? 'Saving...' : 'Save'}</span>
                     </button>
-                    <button
-                        onClick={() => navigate(`/simulator/${formId}`)}
-                        className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] px-4 py-2 rounded-xl transition-all shadow-lg shadow-black/10 text-white"
-                    >
-                        <Play className="w-4 h-4" />
-                        <span>Simulator</span>
-                    </button>
+                    <div className="relative">
+                        <button
+                            onClick={() => {
+                                if (view === 'section') {
+                                    setShowSimulatorMenu(!showSimulatorMenu);
+                                } else {
+                                    navigate(`/simulator/${formId}`);
+                                }
+                            }}
+                            className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] px-4 py-2 rounded-xl transition-all shadow-lg shadow-black/10 text-white"
+                        >
+                            <Play className="w-4 h-4" />
+                            <span>Simulator</span>
+                        </button>
+
+                        {showSimulatorMenu && (
+                            <div className="absolute right-0 top-full mt-2 w-56 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-xl shadow-xl z-50 overflow-hidden">
+                                <button
+                                    onClick={() => {
+                                        setShowSimulatorMenu(false);
+                                        navigate(`/simulator/${formId}`);
+                                    }}
+                                    className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors border-b border-[hsl(var(--border))] flex items-center space-x-2"
+                                >
+                                    <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                    <span>Run From Beginning</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowSimulatorMenu(false);
+                                        navigate(`/simulator/${formId}?section=${currentSectionId}`);
+                                    }}
+                                    className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors flex items-center space-x-2"
+                                >
+                                    <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                    <span>Run Current Section</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header>
 
@@ -589,10 +784,44 @@ const FormBuilder: React.FC = () => {
                                     {openSection === 'templates' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                 </button>
                                 {openSection === 'templates' && (
-                                    <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200 text-center p-6 border-2 border-dashed border-[hsl(var(--border))] rounded-xl">
-                                        <List className="w-8 h-8 text-[hsl(var(--border-hover))] mx-auto mb-2" />
-                                        <p className="text-sm font-medium text-[hsl(var(--text-secondary))]">Pre-built Templates</p>
-                                        <p className="text-xs text-[hsl(var(--text-tertiary))]">Coming soon...</p>
+                                    <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200">
+                                        {templates.length === 0 ? (
+                                            <div className="text-center p-6 border-2 border-dashed border-[hsl(var(--border))] rounded-xl">
+                                                <List className="w-8 h-8 text-[hsl(var(--border-hover))] mx-auto mb-2" />
+                                                <p className="text-xs text-[hsl(var(--text-tertiary))]">No templates found</p>
+                                            </div>
+                                        ) : (
+                                            templates.map((tpl) => (
+                                                <button
+                                                    key={tpl.id}
+                                                    onClick={() => {
+                                                        const newId = `screen_${Date.now()}`;
+                                                        const clonedFields = (tpl.blueprint?.fields || []).map((f: any) => ({
+                                                            ...f,
+                                                            id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                                                        }));
+                                                        setSections(prev => [...prev, {
+                                                            id: newId,
+                                                            title: tpl.blueprint?.title || tpl.name,
+                                                            fields: clonedFields,
+                                                            properties: tpl.blueprint?.properties || defaultSectionProperties(),
+                                                            template_id: tpl.id
+                                                        }]);
+                                                        setCurrentSectionId(newId);
+                                                        showToast('Template added', 'Section created from template', 'success');
+                                                    }}
+                                                    className="sidebar-btn group"
+                                                >
+                                                    <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">
+                                                        <Layers className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="text-left w-full overflow-hidden">
+                                                        <div className="text-sm font-medium text-[hsl(var(--text-primary))] truncate">{tpl.name}</div>
+                                                        {tpl.description && <div className="text-xs text-[hsl(var(--text-secondary))] truncate">{tpl.description}</div>}
+                                                    </div>
+                                                </button>
+                                            ))
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -707,6 +936,49 @@ const FormBuilder: React.FC = () => {
                                 } duration-300`}
                         >
                             <div className="max-w-2xl mx-auto space-y-6">
+
+                                {/* ── Section selector chip ───────────────────────────── */}
+                                {(() => {
+                                    const sec = sections.find(s => s.id === currentSectionId)!;
+                                    const isSelected = selectedFieldId === null;
+                                    return (
+                                        <button
+                                            onClick={() => setSelectedFieldId(null)}
+                                            className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl border-2 transition-all text-left group ${isSelected
+                                                ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/6 shadow-md shadow-[hsl(var(--primary))]/10'
+                                                : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] hover:border-[hsl(var(--primary))]/40 hover:bg-[hsl(var(--primary))]/3'
+                                                }`}
+                                        >
+                                            {/* Section icon */}
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${isSelected
+                                                ? 'bg-[hsl(var(--primary))] text-white'
+                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] group-hover:bg-[hsl(var(--primary))]/10 group-hover:text-[hsl(var(--primary))]'
+                                                }`}>
+                                                <Layout className="w-5 h-5" />
+                                            </div>
+
+                                            {/* Section info */}
+                                            <div className="flex-1 min-w-0">
+                                                <p className={`font-bold text-sm truncate ${isSelected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-primary))]'}`}>
+                                                    {sec.title}
+                                                </p>
+                                                <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">
+                                                    {sec.fields.length} field{sec.fields.length !== 1 ? 's' : ''} · {sec.properties.render_mode} mode
+                                                    {sec.properties.shuffle_options && ' · shuffled'}
+                                                </p>
+                                            </div>
+
+                                            {/* Indicator */}
+                                            <div className={`text-xs font-bold uppercase tracking-widest transition-all px-2.5 py-1 rounded-lg ${isSelected
+                                                ? 'bg-[hsl(var(--primary))]/15 text-[hsl(var(--primary))]'
+                                                : 'text-[hsl(var(--text-tertiary))] opacity-0 group-hover:opacity-100'
+                                                }`}>
+                                                {isSelected ? 'selected' : 'select'}
+                                            </div>
+                                        </button>
+                                    );
+                                })()}
+
                                 {fields.length === 0 ? (
                                     <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-3xl p-20 text-center text-[hsl(var(--text-tertiary))]">
                                         <p className="text-lg font-medium">Select a widget to add a field</p>
@@ -716,7 +988,7 @@ const FormBuilder: React.FC = () => {
                                     fields.map((field) => (
                                         <div
                                             key={field.id}
-                                            draggable
+                                            draggable={dragEnabledFieldId === field.id}
                                             onDragStart={() => { dragFieldIdRef.current = field.id; }}
                                             onDragOver={(e) => { e.preventDefault(); setDragOverFieldId(field.id); }}
                                             onDrop={(e) => {
@@ -747,7 +1019,13 @@ const FormBuilder: React.FC = () => {
                                             <div className="flex justify-between items-start mb-4">
                                                 <div className="flex items-center space-x-3 w-full">
                                                     {/* Drag handle */}
-                                                    <span className="text-[hsl(var(--text-tertiary))] cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-all select-none">⠿</span>
+                                                    <span
+                                                        onMouseEnter={() => setDragEnabledFieldId(field.id)}
+                                                        onMouseLeave={() => setDragEnabledFieldId(null)}
+                                                        className="text-[hsl(var(--text-tertiary))] cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-all px-1 select-none"
+                                                    >
+                                                        ⠿
+                                                    </span>
                                                     <div className="p-2 bg-[hsl(var(--surface-elevated))] rounded-lg text-[hsl(var(--text-tertiary))]">
                                                         {getWidget(field.type)?.icon || <Smartphone className="w-4 h-4" />}
                                                     </div>
@@ -802,11 +1080,53 @@ const FormBuilder: React.FC = () => {
                                                 </div>
                                             </div>
                                             {/* Field preview */}
-                                            <div className="h-12 bg-white/50 dark:bg-black/20 border border-[hsl(var(--border))] rounded-xl px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
-                                                {field.type.replace(/input_|_/g, ' ').trim()} preview
-                                                {field.default_value && <span className="ml-2 text-[10px] font-mono bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded text-[hsl(var(--primary))]">{field.default_value}</span>}
-                                                {field.is_sensitive && <span className="ml-1 text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded">🔒 sensitive</span>}
-                                            </div>
+                                            {field.type === 'matrix_table' ? (
+                                                <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))]">
+                                                    <table className="w-full text-[11px] border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-[hsl(var(--primary))]/8">
+                                                                <th className="p-2 text-left font-semibold text-[hsl(var(--text-secondary))] border-r border-[hsl(var(--border))] w-28"></th>
+                                                                {(field.table_columns || []).slice(0, 4).map(col => (
+                                                                    <th key={col.id} className="p-2 text-center font-semibold text-[hsl(var(--text-secondary))] border-r border-[hsl(var(--border))] last:border-r-0 max-w-[60px] truncate">{col.label}</th>
+                                                                ))}
+                                                                {(field.table_columns || []).length > 4 && (
+                                                                    <th className="p-2 text-center text-[hsl(var(--text-tertiary))] italic">+{(field.table_columns || []).length - 4}</th>
+                                                                )}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {(field.table_rows || []).slice(0, 3).map((row, rIdx) => (
+                                                                <tr key={row.id} className={rIdx % 2 === 0 ? 'bg-[hsl(var(--surface))]' : 'bg-[hsl(var(--surface-elevated))]/60'}>
+                                                                    <td className="p-2 text-[hsl(var(--text-secondary))] border-r border-[hsl(var(--border))] font-medium truncate max-w-[112px]">{row.label}</td>
+                                                                    {(field.table_columns || []).slice(0, 4).map(col => (
+                                                                        <td key={col.id} className="p-2 text-center border-r border-[hsl(var(--border))] last:border-r-0">
+                                                                            {(field.table_cell_type === 'radio' || !field.table_cell_type) && <span className="inline-block w-3 h-3 rounded-full border-2 border-[hsl(var(--border))]" />}
+                                                                            {field.table_cell_type === 'checkbox' && <span className="inline-block w-3 h-3 rounded border-2 border-[hsl(var(--border))]" />}
+                                                                            {field.table_cell_type === 'text' && <span className="inline-block w-10 h-2.5 bg-[hsl(var(--border))] rounded-sm" />}
+                                                                            {field.table_cell_type === 'number' && <span className="inline-block w-6 h-2.5 bg-[hsl(var(--border))] rounded-sm" />}
+                                                                            {field.table_cell_type === 'dropdown' && <span className="inline-block w-10 h-2.5 bg-[hsl(var(--border))] rounded-sm" />}
+                                                                        </td>
+                                                                    ))}
+                                                                    {(field.table_columns || []).length > 4 && <td />}
+                                                                </tr>
+                                                            ))}
+                                                            {(field.table_rows || []).length > 3 && (
+                                                                <tr>
+                                                                    <td colSpan={(field.table_columns || []).length + 1} className="p-1.5 text-center text-[10px] text-[hsl(var(--text-tertiary))] italic bg-[hsl(var(--surface-elevated))]/40">
+                                                                        +{(field.table_rows || []).length - 3} more rows
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="h-12 bg-white/50 dark:bg-black/20 border border-[hsl(var(--border))] rounded-xl px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
+                                                    {field.type.replace(/input_|_/g, ' ').trim()} preview
+                                                    {field.default_value && <span className="ml-2 text-[10px] font-mono bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded text-[hsl(var(--primary))]">{field.default_value}</span>}
+                                                    {field.is_sensitive && <span className="ml-1 text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded">🔒 sensitive</span>}
+                                                </div>
+                                            )}
                                         </div>
                                     ))
                                 )}
@@ -1005,6 +1325,26 @@ const FormBuilder: React.FC = () => {
                                                     )}
                                                 </div>
 
+                                                {/* Save as Template */}
+                                                <div className="pt-4 border-t border-[hsl(var(--border))]">
+                                                    <button
+                                                        onClick={() => setIsSaveTemplateModalOpen(true)}
+                                                        className="w-full py-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 text-[hsl(var(--primary))] font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                                                    >
+                                                        <Save className="w-4 h-4" />
+                                                        Save as Template
+                                                    </button>
+                                                    {sections.find(p => p.id === currentSectionId)?.template_id && (
+                                                        <button
+                                                            onClick={updateExistingTemplate}
+                                                            className="w-full mt-2 py-1.5 text-xs font-semibold text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] transition-all flex items-center justify-center gap-1.5"
+                                                        >
+                                                            <Layers className="w-3.5 h-3.5" />
+                                                            Update Linked Template
+                                                        </button>
+                                                    )}
+                                                </div>
+
                                                 <p className="text-[hsl(var(--text-tertiary))] text-xs italic">Select a field in the canvas to see its individual properties.</p>
                                             </div>
                                         ) : (
@@ -1041,6 +1381,177 @@ const FormBuilder: React.FC = () => {
                                                         className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
                                                     />
                                                 </div>
+
+                                                {/* ── Matrix Table Editor ───────────────────── */}
+                                                {selectedField.type === 'matrix_table' && (
+                                                    <div className="space-y-5 animate-in fade-in duration-200">
+                                                        {/* Divider */}
+                                                        <div className="flex items-center gap-2">
+                                                            <Table2 className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                                                            <span className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--primary))]">Matrix Structure</span>
+                                                            <div className="flex-1 h-px bg-[hsl(var(--border))]" />
+                                                        </div>
+
+                                                        {/* Cell Type */}
+                                                        <div>
+                                                            <label className="label">Cell Type</label>
+                                                            <div className="grid grid-cols-3 gap-1.5">
+                                                                {(['radio', 'checkbox', 'text', 'number', 'dropdown'] as TableCellType[]).map(ct => (
+                                                                    <button
+                                                                        key={ct}
+                                                                        onClick={() => updateField(selectedField.id, { table_cell_type: ct })}
+                                                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all capitalize ${(selectedField.table_cell_type || 'radio') === ct
+                                                                            ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--border-hover))]'
+                                                                            }`}
+                                                                    >
+                                                                        {ct}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Allow Multiple — only for checkbox */}
+                                                        {selectedField.table_cell_type === 'checkbox' && (
+                                                            <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-xl border border-[hsl(var(--border))]">
+                                                                <div>
+                                                                    <p className="text-sm font-semibold">Allow Multiple per Row</p>
+                                                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Check more than one cell per row</p>
+                                                                </div>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!selectedField.table_allow_multiple}
+                                                                    onChange={e => updateField(selectedField.id, { table_allow_multiple: e.target.checked })}
+                                                                    className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {/* Columns */}
+                                                        <div>
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <label className="label !mb-0 text-xs">Columns (Scale Points)</label>
+                                                                <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg p-0.5">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const cols = selectedField.table_columns || [];
+                                                                            if (cols.length <= 1) return;
+                                                                            updateField(selectedField.id, { table_columns: cols.slice(0, -1) });
+                                                                        }}
+                                                                        className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
+                                                                    >−</button>
+                                                                    <span className="text-xs font-bold w-5 text-center tabular-nums">{(selectedField.table_columns || []).length}</span>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const cols = selectedField.table_columns || [];
+                                                                            const n = cols.length + 1;
+                                                                            updateField(selectedField.id, { table_columns: [...cols, { id: `col_${Date.now()}`, label: `Column ${n}` }] });
+                                                                        }}
+                                                                        className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
+                                                                    >+</button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                {(selectedField.table_columns || []).map((col, ci) => (
+                                                                    <div key={col.id} className="flex items-center gap-1.5">
+                                                                        <span className="text-[10px] text-[hsl(var(--text-tertiary))] w-4 text-right shrink-0 tabular-nums">{ci + 1}</span>
+                                                                        <input
+                                                                            value={col.label}
+                                                                            onChange={e => {
+                                                                                const cols = [...(selectedField.table_columns || [])];
+                                                                                cols[ci] = { ...cols[ci], label: e.target.value };
+                                                                                updateField(selectedField.id, { table_columns: cols });
+                                                                            }}
+                                                                            className="input text-sm py-1.5 flex-1"
+                                                                            placeholder={`Column ${ci + 1}`}
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const cols = (selectedField.table_columns || []).filter((_, i) => i !== ci);
+                                                                                updateField(selectedField.id, { table_columns: cols });
+                                                                            }}
+                                                                            className="p-1.5 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg transition-all shrink-0"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const cols = selectedField.table_columns || [];
+                                                                        const n = cols.length + 1;
+                                                                        updateField(selectedField.id, { table_columns: [...cols, { id: `col_${Date.now()}`, label: `Column ${n}` }] });
+                                                                    }}
+                                                                    className="w-full py-1.5 border-2 border-dashed border-[hsl(var(--border))] rounded-xl text-[10px] font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                                >
+                                                                    + Add Column
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Rows / Statements */}
+                                                        <div>
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <label className="label !mb-0 text-xs">Rows (Statements)</label>
+                                                                <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg p-0.5">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const rows = selectedField.table_rows || [];
+                                                                            if (rows.length <= 1) return;
+                                                                            updateField(selectedField.id, { table_rows: rows.slice(0, -1) });
+                                                                        }}
+                                                                        className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
+                                                                    >−</button>
+                                                                    <span className="text-xs font-bold w-5 text-center tabular-nums">{(selectedField.table_rows || []).length}</span>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const rows = selectedField.table_rows || [];
+                                                                            const n = rows.length + 1;
+                                                                            updateField(selectedField.id, { table_rows: [...rows, { id: `row_${Date.now()}`, label: `Statement ${n}` }] });
+                                                                        }}
+                                                                        className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
+                                                                    >+</button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                {(selectedField.table_rows || []).map((row, ri) => (
+                                                                    <div key={row.id} className="flex items-center gap-1.5">
+                                                                        <span className="text-[10px] text-[hsl(var(--text-tertiary))] w-4 text-right shrink-0 tabular-nums">{ri + 1}</span>
+                                                                        <input
+                                                                            value={row.label}
+                                                                            onChange={e => {
+                                                                                const rows = [...(selectedField.table_rows || [])];
+                                                                                rows[ri] = { ...rows[ri], label: e.target.value };
+                                                                                updateField(selectedField.id, { table_rows: rows });
+                                                                            }}
+                                                                            className="input text-sm py-1.5 flex-1"
+                                                                            placeholder={`Statement ${ri + 1}`}
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const rows = (selectedField.table_rows || []).filter((_, i) => i !== ri);
+                                                                                updateField(selectedField.id, { table_rows: rows });
+                                                                            }}
+                                                                            className="p-1.5 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg transition-all shrink-0"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const rows = selectedField.table_rows || [];
+                                                                        const n = rows.length + 1;
+                                                                        updateField(selectedField.id, { table_rows: [...rows, { id: `row_${Date.now()}`, label: `Statement ${n}` }] });
+                                                                    }}
+                                                                    className="w-full py-1.5 border-2 border-dashed border-[hsl(var(--border))] rounded-xl text-[10px] font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                                >
+                                                                    + Add Row
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
                                                     <div>
@@ -1127,6 +1638,129 @@ const FormBuilder: React.FC = () => {
                                                     </div>
                                                 )}
 
+                                                {selectedField.type === 'lookup_list' && (
+                                                    <div className="space-y-4">
+                                                        <div className="flex bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-xl p-1 w-full text-sm">
+                                                            <button
+                                                                className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${selectedField.lookup_source_type === 'preset' ? 'bg-[hsl(var(--primary))] text-white shadow-sm' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'}`}
+                                                                onClick={() => updateField(selectedField.id, { lookup_source_type: 'preset' })}
+                                                            >
+                                                                Preset Data
+                                                            </button>
+                                                            <button
+                                                                className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${selectedField.lookup_source_type === 'custom' ? 'bg-[hsl(var(--primary))] text-white shadow-sm' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'}`}
+                                                                onClick={() => updateField(selectedField.id, { lookup_source_type: 'custom' })}
+                                                            >
+                                                                Custom List (CSV)
+                                                            </button>
+                                                        </div>
+
+                                                        {selectedField.lookup_source_type === 'preset' && (
+                                                            <div>
+                                                                <label className="label">Dataset</label>
+                                                                <select
+                                                                    value={selectedField.lookup_preset_id || ''}
+                                                                    onChange={(e) => updateField(selectedField.id, { lookup_preset_id: e.target.value })}
+                                                                    className="input py-2 flex-1 w-full"
+                                                                >
+                                                                    <option value="">Select a dataset...</option>
+                                                                    <option value="global_countries">All Countries</option>
+                                                                    <option value="african_countries">African Countries</option>
+                                                                    <option value="us_states">US States</option>
+                                                                </select>
+                                                            </div>
+                                                        )}
+
+                                                        {selectedField.lookup_source_type === 'custom' && (
+                                                            <div className="space-y-3">
+                                                                <div>
+                                                                    <label className="label">CSV / Text Data</label>
+                                                                    <textarea
+                                                                        value={selectedField.lookup_custom_data || ''}
+                                                                        onChange={(e) => updateField(selectedField.id, { lookup_custom_data: e.target.value })}
+                                                                        className="input min-h-[120px] font-mono text-xs whitespace-pre"
+                                                                        placeholder="Paste comma-separated values, or one item per line..."
+                                                                    />
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-2">
+                                                                    <div>
+                                                                        <label className="label text-[10px] mb-1">Separator</label>
+                                                                        <input
+                                                                            value={selectedField.lookup_separator || ''}
+                                                                            onChange={(e) => updateField(selectedField.id, { lookup_separator: e.target.value })}
+                                                                            className="input text-xs"
+                                                                            placeholder="e.g. ,"
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="label text-[10px] mb-1">Label Col</label>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={selectedField.lookup_label_column ?? 0}
+                                                                            onChange={(e) => updateField(selectedField.id, { lookup_label_column: parseInt(e.target.value) || 0 })}
+                                                                            className="input text-xs"
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="label text-[10px] mb-1">Value Col</label>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={selectedField.lookup_value_column ?? 0}
+                                                                            onChange={(e) => updateField(selectedField.id, { lookup_value_column: parseInt(e.target.value) || 0 })}
+                                                                            className="input text-xs"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        let parsedCount = 0;
+                                                                        if (selectedField.lookup_custom_data) {
+                                                                            parsedCount = selectedField.lookup_custom_data.split('\n').filter(Boolean).length;
+                                                                        }
+                                                                        showToast('Data Validated', `Successfully parsed ${parsedCount} rows from your CSV data.`, 'success');
+                                                                    }}
+                                                                    className="w-full py-2.5 bg-[hsl(var(--background))] hover:bg-[hsl(var(--primary))]/10 border border-[hsl(var(--border))] rounded-lg text-sm font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all flex items-center justify-center space-x-2"
+                                                                >
+                                                                    <CheckSquare className="w-4 h-4" />
+                                                                    <span>Validate Data Structure</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {selectedField.type === 'input_text' && (
+                                                    <div>
+                                                        <label className="label flex items-center justify-between">
+                                                            <span>Input Mask Format</span>
+                                                        </label>
+                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-1.5 leading-tight">Use <strong className="text-[hsl(var(--text-primary))]">9</strong> for numbers, <strong className="text-[hsl(var(--text-primary))]">A</strong> for uppercase, <strong className="text-[hsl(var(--text-primary))]">a</strong> for lowercase, and <strong className="text-[hsl(var(--text-primary))]">*</strong> for any character. Symbols render as-is.</p>
+                                                        <div className="flex gap-2 mb-2 flex-wrap">
+                                                            {[
+                                                                { label: 'None', val: '' },
+                                                                { label: 'Phone', val: '+233 99 999 9999' },
+                                                                { label: 'Card', val: '9999-9999-9999-9999' },
+                                                                { label: 'Date', val: '99/99/9999' },
+                                                                { label: 'Ghana Card', val: 'GHA-999999999-9' }
+                                                            ].map(preset => (
+                                                                <button
+                                                                    key={preset.label}
+                                                                    onClick={() => updateField(selectedField.id, { mask: preset.val })}
+                                                                    className={`px-2 py-1 text-[10px] rounded-md font-medium border transition-all ${selectedField.mask === preset.val || (!selectedField.mask && preset.val === '') ? 'bg-[hsl(var(--primary))]/10 border-[hsl(var(--primary))] text-[hsl(var(--primary))]' : 'bg-[hsl(var(--surface))] border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'}`}
+                                                                >
+                                                                    {preset.label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <input
+                                                            value={selectedField.mask || ''}
+                                                            onChange={(e) => updateField(selectedField.id, { mask: e.target.value || undefined })}
+                                                            className="input font-mono text-sm"
+                                                            placeholder="e.g. (999) 999-9999"
+                                                        />
+                                                    </div>
+                                                )}
+
                                                 {['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
                                                     <div className="grid grid-cols-2 gap-3">
                                                         <div>
@@ -1173,6 +1807,29 @@ const FormBuilder: React.FC = () => {
                                                     </div>
                                                 )}
 
+                                                {['date_picker', 'time_picker'].includes(selectedField.type) && (
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <label className="label">Min {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
+                                                            <input
+                                                                type={selectedField.type === 'date_picker' ? 'date' : 'time'}
+                                                                value={selectedField.min || ''}
+                                                                onChange={(e) => updateField(selectedField.id, { min: e.target.value || undefined })}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label">Max {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
+                                                            <input
+                                                                type={selectedField.type === 'date_picker' ? 'date' : 'time'}
+                                                                value={selectedField.max || ''}
+                                                                onChange={(e) => updateField(selectedField.id, { max: e.target.value || undefined })}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 <div>
                                                     <label className="label">Platforms</label>
                                                     <div className="grid grid-cols-1 gap-2">
@@ -1195,39 +1852,74 @@ const FormBuilder: React.FC = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* Default Value */}
-                                                <div>
-                                                    <label className="label">Default Value</label>
-                                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-1.5">Pre-filled automatically; overridable during administration.</p>
-                                                    <input
-                                                        value={selectedField.default_value || ''}
-                                                        onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
-                                                        className="input"
-                                                        placeholder="e.g. Yes, 0, Ghana..."
-                                                    />
-                                                </div>
-
-                                                {/* Flags */}
-                                                <div className="space-y-2">
-                                                    <label className="label">Field Flags</label>
-                                                    {[
-                                                        { key: 'is_sensitive', label: 'Sensitive', desc: 'Contains PII or health data' },
-                                                        { key: 'exclude_from_export', label: 'Exclude from Export', desc: 'Hide from data views & CSV exports' },
-                                                    ].map(({ key, label, desc }) => (
-                                                        <label key={key} className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-xl border border-[hsl(var(--border))] cursor-pointer hover:border-[hsl(var(--border-hover))] transition-all">
-                                                            <div>
-                                                                <p className="text-sm font-semibold">{label}</p>
-                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">{desc}</p>
+                                                {/* Default Value — not applicable for matrix tables */}
+                                                {selectedField.type !== 'matrix_table' && (
+                                                    <div>
+                                                        <label className="label">Default Value</label>
+                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-1.5">Pre-filled automatically; overridable during administration.</p>
+                                                        {['dropdown', 'radio_group'].includes(selectedField.type) ? (
+                                                            <select
+                                                                value={selectedField.default_value || ''}
+                                                                onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
+                                                                className="input text-sm py-2"
+                                                            >
+                                                                <option value="">No Default</option>
+                                                                {(selectedField.options || []).map((o, i) => (
+                                                                    <option key={i} value={o.value}>{o.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : selectedField.type === 'toggle' ? (
+                                                            <div className="flex items-center mt-2 p-2 bg-[hsl(var(--surface-elevated))] rounded-xl border border-[hsl(var(--border))]">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedField.default_value === 'true'}
+                                                                    onChange={(e) => updateField(selectedField.id, { default_value: e.target.checked ? 'true' : undefined })}
+                                                                    className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
+                                                                />
+                                                                <span className="ml-3 text-sm font-medium">Checked by default</span>
                                                             </div>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!(selectedField as any)[key]}
-                                                                onChange={(e) => updateField(selectedField.id, { [key]: e.target.checked } as any)}
-                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                        ) : selectedField.type === 'textarea' ? (
+                                                            <textarea
+                                                                value={selectedField.default_value || ''}
+                                                                onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
+                                                                className="input min-h-[80px]"
+                                                                placeholder="Enter default text..."
                                                             />
-                                                        </label>
-                                                    ))}
-                                                </div>
+                                                        ) : (
+                                                            <input
+                                                                type={['input_number', 'lookup_list'].includes(selectedField.type) ? 'number' : selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'text'}
+                                                                value={selectedField.default_value || ''}
+                                                                onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
+                                                                className="input"
+                                                                placeholder={selectedField.type === 'input_text' ? "e.g. Yes, 0, Ghana..." : selectedField.type === 'lookup_list' ? "Index (0 = first item)..." : ""}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Flags — not applicable for matrix tables */}
+                                                {selectedField.type !== 'matrix_table' && (
+                                                    <div className="space-y-2">
+                                                        <label className="label">Field Flags</label>
+                                                        {[
+                                                            { key: 'is_sensitive', label: 'Sensitive', desc: 'Contains PII or health data' },
+                                                            { key: 'exclude_from_export', label: 'Exclude from Export', desc: 'Hide from data views & CSV exports' },
+                                                        ].map(({ key, label, desc }) => (
+                                                            <label key={key} className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-xl border border-[hsl(var(--border))] cursor-pointer hover:border-[hsl(var(--border-hover))] transition-all">
+                                                                <div>
+                                                                    <p className="text-sm font-semibold">{label}</p>
+                                                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))]">{desc}</p>
+                                                                </div>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={!!(selectedField as any)[key]}
+                                                                    onChange={(e) => updateField(selectedField.id, { [key]: e.target.checked } as any)}
+                                                                    className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                                />
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </>
@@ -1631,7 +2323,68 @@ const FormBuilder: React.FC = () => {
                     background: hsl(var(--surface-elevated));
                 }
             `}</style>
-        </div>
+
+            {/* Save Template Modal */}
+            {
+                isSaveTemplateModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                            <div className="px-6 py-4 border-b border-[hsl(var(--border))] flex justify-between items-center bg-[hsl(var(--surface-elevated))]">
+                                <h2 className="text-lg font-bold text-[hsl(var(--text-primary))]">Save as Template</h2>
+                                <button onClick={() => setIsSaveTemplateModalOpen(false)} className="text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-colors">
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="label">Template Name</label>
+                                    <input
+                                        value={templateName}
+                                        onChange={e => setTemplateName(e.target.value)}
+                                        className="input"
+                                        placeholder={sections.find(s => s.id === currentSectionId)?.title || "My Template"}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Description (optional)</label>
+                                    <textarea
+                                        value={templateDesc}
+                                        onChange={e => setTemplateDesc(e.target.value)}
+                                        className="input resize-none h-20"
+                                        placeholder="Describe this template..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Visibility</label>
+                                    <select
+                                        value={templateVis}
+                                        onChange={e => setTemplateVis(e.target.value as 'organization' | 'team')}
+                                        className="input"
+                                    >
+                                        <option value="organization">Entire Organization</option>
+                                        <option value="team" disabled title="Coming soon">Specific Teams</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="px-6 py-4 border-t border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] flex justify-end gap-3">
+                                <button
+                                    onClick={() => setIsSaveTemplateModalOpen(false)}
+                                    className="px-4 py-2 rounded-xl text-sm font-semibold text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] transition-all border border-transparent shadow-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveTemplate}
+                                    className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] transition-all shadow-md shadow-[hsl(var(--primary))]/20"
+                                >
+                                    Save Template
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

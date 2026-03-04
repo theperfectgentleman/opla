@@ -279,4 +279,25 @@ export const submissionAPI = {
     },
 };
 
+// ============= Section Template API Methods =============
+
+export const sectionTemplateAPI = {
+    create: async (orgId: string, data: { name: string; description?: string; blueprint: any; visibility: 'organization' | 'team'; team_ids?: string[] }) => {
+        const response = await apiClient.post(`/organizations/${orgId}/templates/section`, data);
+        return response.data;
+    },
+    list: async (orgId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/templates/section`);
+        return response.data;
+    },
+    update: async (orgId: string, templateId: string, data: { name?: string; description?: string; blueprint?: any; visibility?: 'organization' | 'team'; team_ids?: string[] }) => {
+        const response = await apiClient.put(`/organizations/${orgId}/templates/section/${templateId}`, data);
+        return response.data;
+    },
+    delete: async (orgId: string, templateId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/templates/section/${templateId}`);
+        return response.data;
+    },
+};
+
 export default apiClient;

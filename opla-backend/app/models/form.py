@@ -23,6 +23,8 @@ class Form(Base):
     version = Column(Integer, default=1, nullable=False)
     is_public = Column(Boolean, default=False, nullable=False)
     status = Column(Enum(FormStatus, name="form_status", values_callable=lambda obj: [e.value for e in obj]), default=FormStatus.DRAFT, nullable=False)
+    published_version = Column(Integer, nullable=True)
+    published_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formAPI, sectionTemplateAPI } from '../lib/api';
 import { useOrg } from '../contexts/OrgContext';
-import ThemeToggle from '../components/ThemeToggle';
+import StudioLayout from '../components/StudioLayout';
 import {
     Save, Play, Trash2, Settings, Smartphone, Layout,
     MapPin, Camera, Type, Hash, CheckSquare, List, Mail,
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
     ChevronDown, ChevronRight, ArrowLeft, Zap, GitBranch, Terminal,
-    Layers, ChevronRight as Crumb, Copy, MoveRight, Table2, Database
+    Layers, ChevronRight as Crumb, Copy, MoveRight, Table2, Database,
+    Eye, RotateCcw
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -176,7 +177,15 @@ const FormBuilder: React.FC = () => {
     const navigate = useNavigate();
     const { currentOrg } = useOrg();
     const { showToast } = useToast();
-    const [formMeta, setFormMeta] = useState<{ id: string; project_id: string; slug: string; version: number; is_public: boolean } | null>(null);
+    const [formMeta, setFormMeta] = useState<{
+        id: string;
+        project_id: string;
+        slug: string;
+        version: number;
+        is_public: boolean;
+        status?: 'draft' | 'live' | 'archived';
+        published_version?: number | null;
+    } | null>(null);
     const [title, setTitle] = useState('Untitled Form');
     const [templates, setTemplates] = useState<any[]>([]);
     const defaultSectionProperties = (): SectionProperties => ({ render_mode: 'list', platforms: ['mobile', 'web'] });
@@ -194,8 +203,21 @@ const FormBuilder: React.FC = () => {
     const dragFieldIdRef = React.useRef<string | null>(null);
     const [moveMenuFieldId, setMoveMenuFieldId] = useState<string | null>(null);
     const [showSimulatorMenu, setShowSimulatorMenu] = useState(false);
+    const [showMultiActionMenu, setShowMultiActionMenu] = useState(false);
+    const [showBackupTools, setShowBackupTools] = useState(false);
     const [initialHash, setInitialHash] = useState<string>('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+    const [isPublishing, setIsPublishing] = useState(false);
+    const [activeVersions, setActiveVersions] = useState<Array<{
+        id: string;
+        kind: 'draft' | 'live';
+        slot_index?: number | null;
+        version_number: number;
+        created_at?: string;
+        blueprint?: any;
+    }>>([]);
+    const [previewSlot, setPreviewSlot] = useState<2 | 3 | null>(null);
+    const multiActionMenuRef = React.useRef<HTMLDivElement | null>(null);
 
     const computeHash = (t: string, s: any[], l: any[]) => JSON.stringify({ t, s, l });
 
@@ -205,6 +227,18 @@ const FormBuilder: React.FC = () => {
             setHasUnsavedChanges(currentHash !== initialHash);
         }
     }, [title, sections, logic, initialHash]);
+
+    useEffect(() => {
+        const handleOutsideClick = (event: MouseEvent) => {
+            if (multiActionMenuRef.current && !multiActionMenuRef.current.contains(event.target as Node)) {
+                setShowMultiActionMenu(false);
+                setShowBackupTools(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, []);
 
     const enterSection = (sectionId: string) => {
         setSlideDir('forward');
@@ -221,6 +255,54 @@ const FormBuilder: React.FC = () => {
     const currentSectionIndex = sections.findIndex(p => p.id === currentSectionId) !== -1 ? sections.findIndex(p => p.id === currentSectionId) : 0;
     const fields = sections[currentSectionIndex]?.fields || [];
     const selectedField = sections.flatMap(p => p.fields).find(f => f.id === selectedFieldId) || null;
+
+    const getSlotVersion = (slot: 1 | 2 | 3) => activeVersions.find(v => v.kind === 'draft' && v.slot_index === slot);
+
+    const applyBlueprintToBuilder = (blueprint: any, fallbackTitle?: string) => {
+        if (!blueprint?.ui?.length) return;
+
+        const normaliseOptions = (raw: any[]): FieldOption[] =>
+            raw.map(o => typeof o === 'string'
+                ? { label: o, value: toSmartValue(o) }
+                : { label: o.label ?? o, value: o.value ?? toSmartValue(o.label ?? o), skip_to: o.skip_to }
+            );
+
+        const loadedSections: FormSection[] = blueprint.ui.map((screen: any, idx: number) => ({
+            id: screen.id || `screen_${idx + 1}`,
+            title: screen.title || `Section ${idx + 1}`,
+            properties: {
+                render_mode: screen.render_mode || 'list',
+                description: screen.description,
+                platforms: screen.platforms || ['mobile', 'web'],
+                is_repeatable: !!screen.is_repeatable,
+                max_repeats: screen.max_repeats,
+                shuffle_options: !!screen.shuffle_options,
+            },
+            fields: screen.children ? screen.children.map((child: any) => ({
+                id: child.bind,
+                type: child.type as FieldType,
+                label: child.label || 'Untitled Field',
+                required: !!child.required,
+                placeholder: child.placeholder,
+                options: Array.isArray(child.options) ? normaliseOptions(child.options) : undefined,
+                platforms: child.platforms,
+                default_value: child.default_value,
+                is_sensitive: !!child.is_sensitive,
+                exclude_from_export: !!child.exclude_from_export,
+                table_columns: child.table_columns,
+                table_rows: child.table_rows,
+                table_cell_type: child.table_cell_type,
+                table_allow_multiple: !!child.table_allow_multiple,
+            })) : []
+        }));
+
+        setSections(loadedSections);
+        setCurrentSectionId(loadedSections[0].id);
+        setLogic(blueprint.logic || []);
+        setTitle(blueprint?.meta?.title || fallbackTitle || title);
+        setInitialHash(computeHash(blueprint?.meta?.title || fallbackTitle || title, loadedSections, blueprint.logic || []));
+        setHasUnsavedChanges(false);
+    };
 
     const basicTypes: FieldType[] = [
         'input_text',
@@ -253,14 +335,20 @@ const FormBuilder: React.FC = () => {
         const loadForm = async () => {
             if (!formId) return;
             try {
-                const data = await formAPI.get(formId);
+                const [data, versions] = await Promise.all([
+                    formAPI.get(formId),
+                    formAPI.listVersions(formId),
+                ]);
                 setFormMeta({
                     id: data.id,
                     project_id: data.project_id,
                     slug: data.slug,
                     version: data.version,
-                    is_public: data.is_public
+                    is_public: data.is_public,
+                    status: data.status,
+                    published_version: data.published_version,
                 });
+                setActiveVersions(Array.isArray(versions) ? versions : []);
                 setTitle(data.title || 'Untitled Form');
 
                 const blueprint = data.blueprint_draft || data.blueprint_live;
@@ -599,7 +687,11 @@ const FormBuilder: React.FC = () => {
                 })),
                 logic: logic
             };
-            await formAPI.updateBlueprint(formId, blueprint);
+            // Working draft is always slot 1.
+            await formAPI.updateBlueprint(formId, blueprint, 1);
+
+            const versions = await formAPI.listVersions(formId);
+            setActiveVersions(Array.isArray(versions) ? versions : []);
 
             const newHash = computeHash(title, sections, logic);
             setInitialHash(newHash);
@@ -614,8 +706,165 @@ const FormBuilder: React.FC = () => {
         }
     };
 
+    const handleShellNavSelect = (key: 'projects' | 'forms' | 'members' | 'audience' | 'analysis' | 'reports' | 'settings') => {
+        navigate(`/dashboard?tab=${key}`);
+    };
+
+    const handlePublish = async () => {
+        if (!formId || isPublishing) return;
+        setIsPublishing(true);
+
+        try {
+            if (hasUnsavedChanges) {
+                await handleSave();
+            }
+
+            // Publish always promotes the working draft (slot 1).
+            const data = await formAPI.publish(formId, { draft_slot: 1 });
+            setFormMeta((prev) => prev ? {
+                ...prev,
+                version: data.version ?? prev.version,
+                status: data.status ?? prev.status,
+                published_version: data.published_version ?? data.version ?? prev.published_version,
+            } : prev);
+
+            const versions = await formAPI.listVersions(formId);
+            setActiveVersions(Array.isArray(versions) ? versions : []);
+
+            showToast('Published', `Live version ${data.published_version ?? data.version ?? ''} is now deployed.`, 'success');
+        } catch (err) {
+            console.error('Publish failed', err);
+            showToast('Publish failed', 'Could not publish this form.', 'error');
+        } finally {
+            setIsPublishing(false);
+        }
+    };
+
+    const handleSaveToBackup = async (slot: 2 | 3) => {
+        if (!formId) return;
+        setIsSaving(true);
+        try {
+            const themeMode = document.documentElement.getAttribute('data-theme') || 'light';
+            const primaryColor = currentOrg?.primary_color || '#16a34a';
+
+            const blueprint: FormBlueprint = {
+                meta: {
+                    app_id: formMeta?.project_id || 'unknown',
+                    app_id_slug: formMeta?.project_id ? `project_${formMeta.project_id}` : 'unknown',
+                    form_id: formMeta?.id || formId,
+                    version: formMeta?.version || 1,
+                    title,
+                    slug: formMeta?.slug || title.toLowerCase().replace(/\s+/g, '-'),
+                    is_public: formMeta?.is_public || false,
+                    theme: {
+                        primary_color: primaryColor,
+                        mode: themeMode
+                    }
+                },
+                schema: sections.flatMap(p => p.fields).map((f) => {
+                    const entry: Record<string, any> = {
+                        key: f.id,
+                        type: mapSchemaType(f.type),
+                        required: f.required
+                    };
+                    if (f.type === 'checkbox_group') {
+                        entry.items = { type: 'string' };
+                    }
+                    if (f.type === 'matrix_table') {
+                        entry.columns = f.table_columns;
+                        entry.rows = f.table_rows;
+                        entry.cell_type = f.table_cell_type;
+                    }
+                    return entry;
+                }),
+                ui: sections.map((p) => ({
+                    id: p.id,
+                    type: 'screen',
+                    title: p.title,
+                    template_id: p.template_id,
+                    render_mode: p.properties.render_mode,
+                    description: p.properties.description,
+                    platforms: p.properties.platforms,
+                    is_repeatable: p.properties.is_repeatable,
+                    max_repeats: p.properties.max_repeats,
+                    shuffle_options: p.properties.shuffle_options,
+                    children: p.fields.map(f => ({
+                        type: f.type,
+                        bind: f.id,
+                        label: f.label,
+                        required: f.required,
+                        placeholder: f.placeholder,
+                        options: f.options,
+                        platforms: f.platforms,
+                        min: f.min,
+                        max: f.max,
+                        minLength: f.minLength,
+                        maxLength: f.maxLength,
+                        default_value: f.default_value,
+                        is_sensitive: f.is_sensitive,
+                        exclude_from_export: f.exclude_from_export,
+                        table_columns: f.table_columns,
+                        table_rows: f.table_rows,
+                        table_cell_type: f.table_cell_type,
+                        table_allow_multiple: f.table_allow_multiple,
+                        mask: f.mask,
+                        lookup_source_type: f.lookup_source_type,
+                        lookup_preset_id: f.lookup_preset_id,
+                        lookup_custom_data: f.lookup_custom_data,
+                        lookup_separator: f.lookup_separator,
+                        lookup_label_column: f.lookup_label_column,
+                        lookup_value_column: f.lookup_value_column,
+                    }))
+                })),
+                logic: logic
+            };
+
+            await formAPI.updateBlueprint(formId, blueprint, slot);
+            const versions = await formAPI.listVersions(formId);
+            setActiveVersions(Array.isArray(versions) ? versions : []);
+            showToast('Backup saved', `Stored current state in backup ${slot === 2 ? 'A' : 'B'}.`, 'success');
+        } catch (err) {
+            console.error('Backup save failed', err);
+            showToast('Backup failed', 'Could not save backup slot.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleRestoreBackupToDraft = async (slot: 2 | 3) => {
+        if (!formId) return;
+        const backup = getSlotVersion(slot);
+        if (!backup?.blueprint) {
+            showToast('Backup empty', `Backup ${slot === 2 ? 'A' : 'B'} has no saved state yet.`, 'error');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            await formAPI.updateBlueprint(formId, backup.blueprint, 1);
+            const refreshedForm = await formAPI.get(formId);
+            const versions = await formAPI.listVersions(formId);
+            setActiveVersions(Array.isArray(versions) ? versions : []);
+
+            const workingBlueprint = refreshedForm.blueprint_draft || backup.blueprint;
+            applyBlueprintToBuilder(workingBlueprint, refreshedForm.title || title);
+            showToast('Draft restored', `Backup ${slot === 2 ? 'A' : 'B'} copied into working draft.`, 'success');
+        } catch (err) {
+            console.error('Backup restore failed', err);
+            showToast('Restore failed', 'Could not restore backup to draft.', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
-        <div className="flex flex-col h-screen bg-[hsl(var(--background))] text-[hsl(var(--text-primary))]">
+        <StudioLayout
+            activeNav="forms"
+            onSelectNav={handleShellNavSelect}
+            contentClassName="flex-1 overflow-hidden"
+            alignRightRail
+        >
+        <div className="flex flex-col h-full bg-[hsl(var(--background))] text-[hsl(var(--text-primary))]">
             {/* Header */}
             <header className="h-16 border-b border-[hsl(var(--border))] flex items-center justify-between px-6 bg-[hsl(var(--surface))]/70 backdrop-blur-md shrink-0">
                 <div className="flex items-center space-x-3">
@@ -664,58 +913,19 @@ const FormBuilder: React.FC = () => {
                     )}
                 </div>
                 <div className="flex items-center space-x-3">
-                    <ThemeToggle />
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all border ${hasUnsavedChanges
-                            ? 'bg-[hsl(var(--warning))] text-white border-[hsl(var(--warning))] hover:brightness-110 shadow-lg shadow-[hsl(var(--warning))]/20 animate-pulse'
-                            : 'bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface))] transition-all border-[hsl(var(--border))]'
-                            }`}
-                    >
-                        <Save className="w-4 h-4" />
-                        <span className="font-semibold">{isSaving ? 'Saving...' : 'Save'}</span>
-                    </button>
-                    <div className="relative">
-                        <button
-                            onClick={() => {
-                                if (view === 'section') {
-                                    setShowSimulatorMenu(!showSimulatorMenu);
-                                } else {
-                                    navigate(`/simulator/${formId}`);
-                                }
-                            }}
-                            className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] px-4 py-2 rounded-xl transition-all shadow-lg shadow-black/10 text-white"
-                        >
-                            <Play className="w-4 h-4" />
-                            <span>Simulator</span>
-                        </button>
-
-                        {showSimulatorMenu && (
-                            <div className="absolute right-0 top-full mt-2 w-56 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-xl shadow-xl z-50 overflow-hidden">
-                                <button
-                                    onClick={() => {
-                                        setShowSimulatorMenu(false);
-                                        navigate(`/simulator/${formId}`);
-                                    }}
-                                    className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors border-b border-[hsl(var(--border))] flex items-center space-x-2"
-                                >
-                                    <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                    <span>Run From Beginning</span>
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setShowSimulatorMenu(false);
-                                        navigate(`/simulator/${formId}?section=${currentSectionId}`);
-                                    }}
-                                    className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors flex items-center space-x-2"
-                                >
-                                    <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                    <span>Run Current Section</span>
-                                </button>
-                            </div>
-                        )}
+                    <div className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg border ${formMeta?.status === 'live'
+                        ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))] border-[hsl(var(--success))]/30'
+                        : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border-[hsl(var(--border))]'
+                        }`}>
+                        {formMeta?.status === 'live'
+                            ? `Live v${formMeta?.published_version ?? formMeta?.version ?? 0}`
+                            : 'Draft'}
                     </div>
+                    {hasUnsavedChanges && (
+                        <div className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-[hsl(var(--warning))]/15 text-[hsl(var(--warning))] border border-[hsl(var(--warning))]/30">
+                            Unsaved Changes
+                        </div>
+                    )}
                 </div>
             </header>
 
@@ -1137,6 +1347,160 @@ const FormBuilder: React.FC = () => {
 
                 {/* Right Panel — Form settings in Form View, field/section properties in Section View */}
                 <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
+                    <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div ref={multiActionMenuRef} className="relative">
+                                <div className="w-full flex rounded-xl overflow-hidden border border-[hsl(var(--primary))] shadow-lg shadow-black/10">
+                                    <button
+                                        onClick={handleSave}
+                                        disabled={isSaving || isPublishing}
+                                        className="flex-1 flex items-center justify-center px-3 py-2.5 bg-[hsl(var(--primary))] text-white hover:brightness-110 transition-all disabled:opacity-60"
+                                        title="Save draft"
+                                    >
+                                        <span className="font-semibold text-sm">{isSaving ? 'Saving...' : 'Save Draft'}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowMultiActionMenu(prev => {
+                                                const next = !prev;
+                                                if (!next) setShowBackupTools(false);
+                                                return next;
+                                            });
+                                        }}
+                                        disabled={isSaving || isPublishing}
+                                        className="w-10 flex items-center justify-center bg-[hsl(var(--primary))] text-white border-l border-white/20 hover:brightness-110 transition-all disabled:opacity-60"
+                                        title="More actions"
+                                    >
+                                        <ChevronDown className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                {showMultiActionMenu && (
+                                    <div className="absolute left-0 top-full mt-2 w-72 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl z-50 overflow-hidden p-2 space-y-2">
+                                        <button
+                                            onClick={async () => {
+                                                setShowMultiActionMenu(false);
+                                                setShowBackupTools(false);
+                                                await handlePublish();
+                                            }}
+                                            className="w-full text-left px-3 py-2.5 text-sm font-semibold text-[hsl(var(--success))] bg-[hsl(var(--success))]/12 hover:bg-[hsl(var(--success))]/18 rounded-xl transition-all duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_1px_6px_rgba(34,197,94,0.10)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_0_0_1px_rgba(34,197,94,0.20),0_3px_10px_rgba(34,197,94,0.16)] flex items-center space-x-2"
+                                        >
+                                            <Zap className="w-4 h-4 text-[hsl(var(--success))]" />
+                                            <span>Publish</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => setShowBackupTools((prev) => !prev)}
+                                            className="w-full text-left px-3 py-2 text-xs font-semibold tracking-wide text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-colors flex items-center justify-between"
+                                        >
+                                            <span>Backup Tools</span>
+                                            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBackupTools ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {showBackupTools && (
+                                            <div className="px-1 py-1 bg-[hsl(var(--surface-elevated))]/20 rounded-xl space-y-1.5">
+                                                {[2, 3].map((slot) => {
+                                                    const backup = getSlotVersion(slot as 2 | 3);
+                                                    const shortLabel = slot === 2 ? 'A' : 'B';
+                                                    const isPreviewing = previewSlot === slot;
+                                                    const previewBlueprint = isPreviewing ? backup?.blueprint : null;
+                                                    const sectionCount = previewBlueprint?.ui?.length || 0;
+                                                    const fieldCount = previewBlueprint?.ui?.reduce((acc: number, s: any) => acc + ((s.children || []).length), 0) || 0;
+
+                                                    return (
+                                                        <div
+                                                            key={slot}
+                                                            className="group rounded-lg px-2 py-1.5 bg-gradient-to-r from-[hsl(var(--surface))] via-[hsl(var(--surface-elevated))]/55 to-[hsl(var(--surface))] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_8px_rgba(15,23,42,0.08)] transition-all duration-200 hover:brightness-[1.02] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(15,23,42,0.12)]"
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <p className="text-[10px] font-medium text-[hsl(var(--text-tertiary))] truncate">
+                                                                    {backup ? `v${backup.version_number}` : 'Empty'}
+                                                                    {isPreviewing && backup ? ` · ${sectionCount}s ${fieldCount}f` : ''}
+                                                                </p>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-[11px] font-semibold text-[hsl(var(--text-primary))] w-3 text-center transition-colors group-hover:text-[hsl(var(--primary))]">{shortLabel}</span>
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        await handleSaveToBackup(slot as 2 | 3);
+                                                                    }}
+                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
+                                                                    title={`Save current draft to backup ${shortLabel}`}
+                                                                >
+                                                                    <Save className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setPreviewSlot(isPreviewing ? null : (slot as 2 | 3))}
+                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
+                                                                    title={`Preview backup ${shortLabel}`}
+                                                                >
+                                                                    <Eye className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        setShowMultiActionMenu(false);
+                                                                        setShowBackupTools(false);
+                                                                        await handleRestoreBackupToDraft(slot as 2 | 3);
+                                                                    }}
+                                                                    disabled={!backup}
+                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-40"
+                                                                    title={`Restore backup ${shortLabel} into draft`}
+                                                                >
+                                                                    <RotateCcw className="w-3.5 h-3.5 text-[hsl(var(--success))]" />
+                                                                </button>
+                                                            </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="relative">
+                                <button
+                                    onClick={() => {
+                                        if (view === 'section') {
+                                            setShowSimulatorMenu(!showSimulatorMenu);
+                                        } else {
+                                            navigate(`/simulator/${formId}`);
+                                        }
+                                    }}
+                                    className="w-full flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] px-3 py-2.5 rounded-xl transition-all shadow-lg shadow-black/10 text-white"
+                                >
+                                    <Play className="w-4 h-4" />
+                                    <span className="font-semibold text-sm">Simulator</span>
+                                </button>
+
+                                {showSimulatorMenu && (
+                                    <div className="absolute right-0 top-full mt-2 w-56 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-xl shadow-xl z-50 overflow-hidden">
+                                        <button
+                                            onClick={() => {
+                                                setShowSimulatorMenu(false);
+                                                navigate(`/simulator/${formId}`);
+                                            }}
+                                            className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors border-b border-[hsl(var(--border))] flex items-center space-x-2"
+                                        >
+                                            <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                            <span>Run From Beginning</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowSimulatorMenu(false);
+                                                navigate(`/simulator/${formId}?section=${currentSectionId}`);
+                                            }}
+                                            className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors flex items-center space-x-2"
+                                        >
+                                            <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                            <span>Run Current Section</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     {view === 'form' ? (
                         /* Form View right panel: form-level settings */
                         <div className="flex-1 overflow-y-auto p-6 hide-scrollbar animate-in fade-in duration-200">
@@ -2384,7 +2748,8 @@ const FormBuilder: React.FC = () => {
                     </div>
                 )
             }
-        </div >
+        </div>
+        </StudioLayout>
     );
 };
 

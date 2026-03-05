@@ -5,7 +5,7 @@ import {
     Smartphone, ChevronLeft, Send, RotateCcw,
     MapPin, Camera as CameraIcon, CheckCircle2, AlertCircle
 } from 'lucide-react';
-import ThemeToggle from '../components/ThemeToggle';
+import StudioLayout from '../components/StudioLayout';
 
 interface UIField {
     type: string;
@@ -364,8 +364,17 @@ const FormSimulator: React.FC = () => {
 
     if (isLoading) return <div className="min-h-screen bg-[hsl(var(--background))] flex items-center justify-center text-[hsl(var(--text-primary))]">Loading Simulator...</div>;
 
+    const handleShellNavSelect = (key: 'projects' | 'forms' | 'members' | 'audience' | 'analysis' | 'reports' | 'settings') => {
+        navigate(`/dashboard?tab=${key}`);
+    };
+
     return (
-        <div className="min-h-screen bg-[hsl(var(--background))] flex items-center justify-center p-8">
+        <StudioLayout
+            activeNav="forms"
+            onSelectNav={handleShellNavSelect}
+            contentClassName="flex-1 overflow-auto"
+        >
+        <div className="h-full bg-[hsl(var(--background))] flex items-center justify-center p-8">
             <div className="flex flex-col items-center">
                 {/* Simulator Controls */}
                 <div className="mb-8 flex space-x-4 items-center">
@@ -381,7 +390,6 @@ const FormSimulator: React.FC = () => {
                     >
                         <RotateCcw className="w-6 h-6" />
                     </button>
-                    <ThemeToggle />
                 </div>
 
                 {/* Device Frame */}
@@ -696,6 +704,7 @@ const FormSimulator: React.FC = () => {
                 </div>
             </div>
         </div>
+        </StudioLayout>
     );
 };
 

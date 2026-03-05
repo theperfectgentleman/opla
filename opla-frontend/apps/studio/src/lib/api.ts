@@ -244,16 +244,24 @@ export const formAPI = {
         const response = await apiClient.post(`/projects/${projectId}/forms`, data);
         return response.data;
     },
-    updateBlueprint: async (formId: string, blueprint: any) => {
-        const response = await apiClient.put(`/forms/${formId}/blueprint`, blueprint);
+    updateBlueprint: async (formId: string, blueprint: any, targetSlot: number = 1) => {
+        const response = await apiClient.put(`/forms/${formId}/blueprint?target_slot=${targetSlot}`, blueprint);
         return response.data;
     },
     get: async (formId: string) => {
         const response = await apiClient.get(`/forms/${formId}`);
         return response.data;
     },
-    publish: async (formId: string) => {
-        const response = await apiClient.post(`/forms/${formId}/publish`);
+    publish: async (formId: string, payload?: { draft_version_id?: string; draft_slot?: number; changelog?: string }) => {
+        const response = await apiClient.post(`/forms/${formId}/publish`, payload || {});
+        return response.data;
+    },
+    listVersions: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/versions`);
+        return response.data;
+    },
+    getRuntime: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/runtime`);
         return response.data;
     },
     list: async (projectId: string) => {

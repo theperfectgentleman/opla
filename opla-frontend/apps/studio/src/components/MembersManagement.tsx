@@ -106,11 +106,19 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
         }
     };
 
-    const filteredMembers = members.filter(member =>
-        member.user.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.user.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const filteredMembers = members.filter(member => {
+        const phone = (member.user?.phone ?? '').toLowerCase();
+        const email = (member.user?.email ?? '').toLowerCase();
+        const fullName = (member.user?.full_name ?? '').toLowerCase();
+
+        if (!normalizedSearch) return true;
+        return (
+            phone.includes(normalizedSearch) ||
+            email.includes(normalizedSearch) ||
+            fullName.includes(normalizedSearch)
+        );
+    });
 
     return (
         <div className="space-y-6">
@@ -186,29 +194,33 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {filteredMembers.map((member) => {
                                 const memberRole = getMemberRole(member.user_id);
+                                const fullName = member.user?.full_name || 'Unnamed User';
+                                const phone = member.user?.phone || 'No phone';
+                                const email = member.user?.email;
+                                const avatarLetter = (fullName[0] || phone[0] || '?').toUpperCase();
                                 return (
                                     <tr key={member.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
-                                                    {member.user.full_name?.[0]?.toUpperCase() || member.user.phone[0]}
+                                                    {avatarLetter}
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                                        {member.user.full_name || 'Unnamed User'}
+                                                        {fullName}
                                                     </div>
                                                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                        {member.user.phone}
+                                                        {phone}
                                                     </div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                                {member.user.email ? (
+                                                {email ? (
                                                     <>
                                                         <Mail className="w-4 h-4" />
-                                                        {member.user.email}
+                                                        {email}
                                                     </>
                                                 ) : (
                                                     <span className="text-gray-400">No email</span>

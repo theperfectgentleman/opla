@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from app.api.dependencies import get_current_user, get_db
-from app.api.schemas.form import FormCreateIn, FormOut
+from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, PublishFormIn
 from app.services.form_service import FormService
 from app.models.user import User
 import uuid
@@ -45,15 +45,38 @@ def get_form(
         raise HTTPException(status_code=404, detail="Form not found")
     return form
 
+
+@router.get("/{form_id}/runtime", response_model=FormRuntimeOut)
+def get_runtime_form(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    form = FormService.get_runtime_form_by_id(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form is not deployed")
+    return form
+
 @router.put("/{form_id}/blueprint", response_model=FormOut)
 def update_form_blueprint(
     form_id: uuid.UUID,
     blueprint: Dict,
+    target_slot: int = 1,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     # In a real app, verify project edit access
-    form = FormService.update_blueprint(db, form_id, blueprint)
+    try:
+        form = FormService.update_blueprint(
+            db,
+            form_id,
+            blueprint,
+            target_slot=target_slot,
+            updated_by=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     return form
@@ -62,19 +85,46 @@ def update_form_blueprint(
 def update_form_blueprint_patch(
     form_id: uuid.UUID,
     blueprint: Dict,
+    target_slot: int = 1,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return update_form_blueprint(form_id, blueprint, db, current_user)
+    return update_form_blueprint(form_id, blueprint, target_slot, db, current_user)
 
-@router.post("/{form_id}/publish", response_model=FormOut)
-def publish_form(
+
+@router.get("/{form_id}/versions", response_model=List[FormVersionOut])
+def list_form_versions(
     form_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    return FormService.get_form_versions(db, form_id)
+
+@router.post("/{form_id}/publish", response_model=FormOut)
+def publish_form(
+    form_id: uuid.UUID,
+    payload: PublishFormIn | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     # In a real app, verify project edit access
-    form = FormService.publish_form(db, form_id)
+    payload = payload or PublishFormIn()
+
+    try:
+        form = FormService.publish_form(
+            db,
+            form_id,
+            draft_version_id=payload.draft_version_id,
+            draft_slot=payload.draft_slot,
+            changelog=payload.changelog,
+            published_by=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     return form

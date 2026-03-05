@@ -118,11 +118,18 @@ export default function DeskFormScreen() {
       deskFormAPI.get(id),
       AsyncStorage.getItem(DRAFT_KEY(id)),
     ]).then(([res, draftJson]) => {
-      setForm(res.data);
+      setForm((res as any)?.data ?? (res as any));
       if (draftJson) {
         try { setAnswers(JSON.parse(draftJson)); } catch { /* corrupt draft */ }
       }
-    }).catch(() => setError('Could not load form.'))
+    }).catch((e: any) => {
+      const detail = e?.response?.data?.detail;
+      if (e?.response?.status === 404 || e?.response?.status === 409) {
+        setError(detail || 'This form is not deployed yet. Ask your admin to publish it first.');
+      } else {
+        setError('Could not load form.');
+      }
+    })
       .finally(() => setLoading(false));
   }, [id]);
 

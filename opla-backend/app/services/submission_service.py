@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models.submission import Submission
-from app.models.form import Form
+from app.models.form import Form, FormStatus
 import uuid
 from typing import Dict, Optional
 
@@ -13,11 +13,16 @@ class SubmissionService:
         user_id: Optional[uuid.UUID] = None,
         metadata: Optional[Dict] = None
     ) -> Submission:
+        form = db.query(Form).filter(Form.id == form_id).first()
+        if not form or form.status != FormStatus.LIVE or not form.blueprint_live:
+            raise ValueError("FORM_NOT_PUBLISHED")
+
         submission = Submission(
             form_id=form_id,
             user_id=user_id,
             data=data,
-            metadata_json=metadata
+            metadata_json=metadata,
+            form_version_number=form.published_version or form.version,
         )
         db.add(submission)
         db.commit()

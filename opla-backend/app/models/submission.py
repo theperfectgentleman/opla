@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
@@ -13,6 +13,7 @@ class Submission(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True) # Null for public submissions
     data = Column(JSONB, nullable=False) # The actual form response
     metadata_json = Column(JSONB, nullable=True) # Browser info, duration, etc.
+    form_version_number = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     form = relationship("Form", backref="submissions")

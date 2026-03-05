@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrg } from '../contexts/OrgContext';
 import { formAPI } from '../lib/api';
-import ThemeToggle from '../components/ThemeToggle';
+import StudioLayout from '../components/StudioLayout';
 import MembersManagement from '../components/MembersManagement';
 import TeamsManagement from '../components/TeamsManagement';
 import RolesManagement from '../components/RolesManagement';
 import {
-    Plus, Layout, Folder, Users, Settings, LogOut, ChevronRight,
-    Search, Bell, PlusCircle, FileText, Activity, Play
+    Plus, Settings, ChevronRight, PlusCircle, FileText, Activity, Play
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-    const { user, logout } = useAuth();
-    const { currentOrg, organizations, projects, members, createProject, setCurrentOrg, isLoading } = useOrg();
+    const { currentOrg, organizations, projects, members, createProject, isLoading } = useOrg();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('forms');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
     const [forms, setForms] = useState<any[]>([]);
@@ -48,6 +46,23 @@ const Dashboard: React.FC = () => {
         fetchForms();
     }, [projects]);
 
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab && ['projects', 'forms', 'members', 'audience', 'analysis', 'reports', 'settings'].includes(tab)) {
+            setActiveTab(tab);
+            if (tab === 'members') {
+                setMembersSubTab('teams');
+            }
+        }
+    }, [searchParams]);
+
+    const handleShellNavSelect = (key: 'projects' | 'forms' | 'members' | 'audience' | 'analysis' | 'reports' | 'settings') => {
+        setActiveTab(key);
+        if (key === 'members') {
+            setMembersSubTab('teams');
+        }
+    };
+
     const handleCreateProject = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!projectName.trim()) return;
@@ -72,118 +87,13 @@ const Dashboard: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen bg-[hsl(var(--background))] text-[hsl(var(--text-primary))] overflow-hidden">
-            {/* Sidebar */}
-            <aside className="w-64 bg-[hsl(var(--surface))] border-r border-[hsl(var(--border))] flex flex-col">
-                <div className="p-6">
-                    <div className="flex items-center space-x-3 mb-8">
-                        <div className="w-8 h-8 bg-[hsl(var(--primary))] rounded-lg flex items-center justify-center font-bold text-white shadow-lg shadow-black/10">
-                            O
-                        </div>
-                        <span className="font-bold text-xl tracking-tight">Opla Studio</span>
-                    </div>
-
-                    {/* Org Switcher */}
-                    <div className="mb-8">
-                        <label className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-widest mb-3 block">Organization</label>
-                        <select
-                            value={currentOrg?.id}
-                            onChange={(e) => {
-                                const org = organizations.find(o => o.id === e.target.value);
-                                if (org) setCurrentOrg(org);
-                            }}
-                            className="w-full bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[hsl(var(--primary))] transition-all cursor-pointer"
-                        >
-                            {organizations.map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <nav className="space-y-1">
-                        <button
-                            onClick={() => setActiveTab('forms')}
-                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === 'forms' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
-                        >
-                            <div className="flex items-center space-x-3">
-                                <Layout className="w-5 h-5" />
-                                <span className="font-medium">All Forms</span>
-                            </div>
-                            {forms.length > 0 && (
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'forms' ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
-                                    {forms.length}
-                                </span>
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('projects')}
-                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === 'projects' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
-                        >
-                            <div className="flex items-center space-x-3">
-                                <Folder className="w-5 h-5" />
-                                <span className="font-medium">Projects</span>
-                            </div>
-                            {projects.length > 0 && (
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'projects' ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
-                                    {projects.length}
-                                </span>
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('members')}
-                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${activeTab === 'members' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
-                        >
-                            <div className="flex items-center space-x-3">
-                                <Users className="w-5 h-5" />
-                                <span className="font-medium">Team Members</span>
-                            </div>
-                            {members?.length > 0 && (
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'members' ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
-                                    {members.length}
-                                </span>
-                            )}
-                        </button>
-                    </nav>
-                </div>
-
-                <div className="mt-auto p-6 border-t border-[hsl(var(--border))] space-y-4">
-                    <div className="flex justify-start px-2">
-                        <ThemeToggle />
-                    </div>
-                    <button
-                        onClick={() => { logout(); navigate('/login'); }}
-                        className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--error))] transition-all"
-                    >
-                        <LogOut className="w-5 h-5" />
-                        <span className="font-medium">Logout</span>
-                    </button>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-hidden">
-                {/* Top Header */}
-                <header className="h-16 border-b border-[hsl(var(--border))] flex items-center justify-between px-8 bg-[hsl(var(--surface))]/70 backdrop-blur-md">
-                    <div className="flex items-center bg-[hsl(var(--surface-elevated))] rounded-xl px-4 py-2 w-96 border border-[hsl(var(--border))] focus-within:ring-2 focus-within:ring-[hsl(var(--primary))]/50 transition-all">
-                        <Search className="w-4 h-4 text-[hsl(var(--text-tertiary))] mr-2" />
-                        <input className="bg-transparent border-none w-full text-sm text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:outline-none" placeholder="Search forms, projects..." />
-                    </div>
-                    <div className="flex items-center space-x-4">
-                        <button className="p-2 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all relative">
-                            <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-[hsl(var(--primary))] rounded-full border-2 border-[hsl(var(--surface))]"></span>
-                        </button>
-                        <div className="flex items-center space-x-3 pl-4 border-l border-[hsl(var(--border))]">
-                            <div className="text-right">
-                                <p className="text-sm font-semibold">{user?.full_name}</p>
-                                <p className="text-xs text-[hsl(var(--text-tertiary))]">{currentOrg?.name}</p>
-                            </div>
-                            <div className="w-10 h-10 bg-gradient-to-br from-[hsl(var(--accent-1))] to-[hsl(var(--accent-2))] rounded-xl shadow-lg"></div>
-                        </div>
-                    </div>
-                </header>
-
-                <div className="flex-1 overflow-y-auto p-10">
+        <>
+            <StudioLayout
+                activeNav={activeTab as 'projects' | 'forms' | 'members' | 'audience' | 'analysis' | 'reports' | 'settings'}
+                onSelectNav={handleShellNavSelect}
+                counts={{ projects: projects.length, forms: forms.length, members: members?.length || 0 }}
+                contentClassName="flex-1 overflow-y-auto p-10"
+            >
                     {organizations.length === 0 && !isLoading && (
                         <div className="mb-10 card border-dashed border-2">
                             <div className="flex items-center justify-between">
@@ -369,8 +279,59 @@ const Dashboard: React.FC = () => {
                             )}
                         </div>
                     )}
-                </div>
-            </main>
+
+                    {activeTab === 'audience' && (
+                        <div className="space-y-8">
+                            <div>
+                                <h2 className="text-3xl font-bold mb-2">Audience</h2>
+                                <p className="text-[hsl(var(--text-secondary))]">Create reusable sampling pools and segments for survey deployment.</p>
+                            </div>
+                            <div className="card border-dashed border-2">
+                                <h3 className="text-lg font-bold mb-2">Audience Pool Management</h3>
+                                <p className="text-[hsl(var(--text-secondary))]">Start by creating your first audience pool and saved filters.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'analysis' && (
+                        <div className="space-y-8">
+                            <div>
+                                <h2 className="text-3xl font-bold mb-2">Analysis</h2>
+                                <p className="text-[hsl(var(--text-secondary))]">Run analysis views across submissions, teams, and time windows.</p>
+                            </div>
+                            <div className="card border-dashed border-2">
+                                <h3 className="text-lg font-bold mb-2">Analysis Sections</h3>
+                                <p className="text-[hsl(var(--text-secondary))]">Configure descriptive, comparative, and trend analysis blocks for this organization.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'reports' && (
+                        <div className="space-y-8">
+                            <div>
+                                <h2 className="text-3xl font-bold mb-2">Reports</h2>
+                                <p className="text-[hsl(var(--text-secondary))]">Store, schedule, and export report outputs from your analysis views.</p>
+                            </div>
+                            <div className="card border-dashed border-2">
+                                <h3 className="text-lg font-bold mb-2">Report Store</h3>
+                                <p className="text-[hsl(var(--text-secondary))]">Saved reports and export history will appear here once reporting is enabled.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'settings' && (
+                        <div className="space-y-8">
+                            <div>
+                                <h2 className="text-3xl font-bold mb-2">Organization Settings</h2>
+                                <p className="text-[hsl(var(--text-secondary))]">Manage organization-level preferences, branding, and governance options.</p>
+                            </div>
+                            <div className="card border-dashed border-2">
+                                <h3 className="text-lg font-bold mb-2">Configuration</h3>
+                                <p className="text-[hsl(var(--text-secondary))]">Branding, default workflows, and policy controls will be surfaced in this section.</p>
+                            </div>
+                        </div>
+                    )}
+            </StudioLayout>
 
             {/* Create Project Modal */}
             {showCreateProject && (
@@ -407,7 +368,7 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 };
 

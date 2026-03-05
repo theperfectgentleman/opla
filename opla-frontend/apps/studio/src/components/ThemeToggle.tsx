@@ -3,6 +3,11 @@ import { Moon, Sun } from 'lucide-react';
 
 type Theme = 'light' | 'dark';
 
+type ThemeToggleProps = {
+    iconOnly?: boolean;
+    className?: string;
+};
+
 const getInitialTheme = (): Theme => {
     const stored = localStorage.getItem('theme');
     if (stored === 'light' || stored === 'dark') return stored;
@@ -14,7 +19,7 @@ const applyTheme = (theme: Theme) => {
     localStorage.setItem('theme', theme);
 };
 
-const ThemeToggle: React.FC = () => {
+const ThemeToggle: React.FC<ThemeToggleProps> = ({ iconOnly = false, className = '' }) => {
     const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
     useEffect(() => {
@@ -29,11 +34,13 @@ const ThemeToggle: React.FC = () => {
         <button
             type="button"
             onClick={toggleTheme}
-            className="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] shadow-sm hover:border-[hsl(var(--border-hover))] hover:text-[hsl(var(--text-primary))] transition-all"
+            className={iconOnly
+                ? `p-2 rounded-xl text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all ${className}`
+                : `inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] shadow-sm hover:border-[hsl(var(--border-hover))] hover:text-[hsl(var(--text-primary))] transition-all ${className}`}
             aria-label="Toggle theme"
         >
-            {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-            <span className="hidden sm:inline">{theme === 'light' ? 'Dark' : 'Light'} mode</span>
+            {theme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+            {!iconOnly && <span className="hidden sm:inline">{theme === 'light' ? 'Dark' : 'Light'} mode</span>}
         </button>
     );
 };

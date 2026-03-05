@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.api.dependencies import get_current_user, get_db, get_optional_user
 from app.api.schemas.submission import SubmissionCreate, PublicSubmissionCreate, SubmissionOut
-from app.api.schemas.form import FormOut
+from app.api.schemas.form import FormRuntimeOut
 from app.services.submission_service import SubmissionService
 from app.models.user import User
+from app.models.form import FormStatus
 import uuid
 
 router = APIRouter(tags=["submissions"])
@@ -16,21 +17,26 @@ def create_submission(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return SubmissionService.create_submission(
-        db=db,
-        form_id=submission_in.form_id,
-        data=submission_in.data,
-        user_id=current_user.id,
-        metadata=submission_in.metadata
-    )
+    try:
+        return SubmissionService.create_submission(
+            db=db,
+            form_id=submission_in.form_id,
+            data=submission_in.data,
+            user_id=current_user.id,
+            metadata=submission_in.metadata
+        )
+    except ValueError as exc:
+        if str(exc) == "FORM_NOT_PUBLISHED":
+            raise HTTPException(status_code=409, detail="Form is not deployed") from exc
+        raise
 
-@router.get("/public/forms/{slug}", response_model=FormOut)
+@router.get("/public/forms/{slug}", response_model=FormRuntimeOut)
 def get_public_form(
     slug: str,
     db: Session = Depends(get_db)
 ):
     form = SubmissionService.get_form_by_slug(db, slug)
-    if not form or not form.is_public:
+    if not form or not form.is_public or not form.blueprint_live or form.status != FormStatus.LIVE:
         raise HTTPException(status_code=404, detail="Form not found or not public")
     return form
 
@@ -42,13 +48,18 @@ def create_public_submission(
     current_user: User = Depends(get_optional_user) # might be logged in user filling public form
 ):
     form = SubmissionService.get_form_by_slug(db, slug)
-    if not form or not form.is_public:
+    if not form or not form.is_public or not form.blueprint_live or form.status != FormStatus.LIVE:
         raise HTTPException(status_code=404, detail="Form not found or not public")
-        
-    return SubmissionService.create_submission(
-        db=db,
-        form_id=form.id,
-        data=submission_in.data,
-        user_id=current_user.id if current_user else None,
-        metadata=submission_in.metadata
-    )
+
+    try:
+        return SubmissionService.create_submission(
+            db=db,
+            form_id=form.id,
+            data=submission_in.data,
+            user_id=current_user.id if current_user else None,
+            metadata=submission_in.metadata
+        )
+    except ValueError as exc:
+        if str(exc) == "FORM_NOT_PUBLISHED":
+            raise HTTPException(status_code=409, detail="Form is not deployed") from exc
+        raise

@@ -70,12 +70,8 @@ export const publicFormAPI = {
 
 // ─── Desk form endpoints (authenticated) ────────────────────────────────────
 export const deskFormAPI = {
-  myForms: async () => {
-    const res = await apiClient.get('/mobile/forms');
-    return res.data;
-  },
   get: async (formId: string) => {
-    const res = await apiClient.get(`/forms/${formId}`);
+    const res = await apiClient.get(`/forms/${formId}/runtime`);
     return res.data;
   },
   submit: async (formId: string, data: Record<string, any>, metadata: Record<string, any>) => {
@@ -84,10 +80,34 @@ export const deskFormAPI = {
   },
 };
 
+// ─── Project endpoints ───────────────────────────────────────────────────────
+export const projectAPI = {
+  listByOrg: async (orgId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects`);
+    return res.data;
+  },
+  listForms: async (projectId: string) => {
+    const res = await apiClient.get(`/projects/${projectId}/forms`);
+    return res.data;
+  },
+};
+
 // ─── Organization endpoints ──────────────────────────────────────────────────
 export const orgAPI = {
   list: async () => {
     const res = await apiClient.get('/organizations');
+    return res.data;
+  },
+  getTeams: async (orgId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/teams`);
+    return res.data;
+  },
+  getMembers: async (orgId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/members`);
+    return res.data;
+  },
+  getTeamMembers: async (orgId: string, teamId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/teams/${teamId}/members`);
     return res.data;
   },
 };

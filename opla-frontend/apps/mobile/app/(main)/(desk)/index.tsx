@@ -1,5 +1,6 @@
 /**
- * Desk home — authenticated user's assigned forms and workspace overview.
+ * Desk home — list of organisations the user belongs to.
+ * Tap an org to see everything inside it (teams, projects, forms).
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -9,69 +10,60 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../../contexts/AuthContext';
-import { deskFormAPI } from '../../../services/api';
+import { orgAPI } from '../../../services/api';
 
-type AssignedForm = {
+type Org = {
   id: string;
-  title: string;
-  description?: string;
-  due_date?: string;
-  status?: 'pending' | 'in_progress' | 'completed';
-  submission_count?: number;
-  organization?: { name: string };
+  name: string;
+  slug?: string;
+  logo_url?: string;
+  primary_color?: string;
+  owner_id?: string;
 };
 
-const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
-  pending:     { label: 'Pending',      color: '#fbbf24', bg: '#451a03' },
-  in_progress: { label: 'In progress',  color: '#60a5fa', bg: '#1e3a5f' },
-  completed:   { label: 'Completed',    color: '#4ade80', bg: '#052e16' },
-};
-
-function FormCard({ form, onPress }: { form: AssignedForm; onPress: () => void }) {
-  const s = STATUS_LABEL[form.status ?? 'pending'];
-  const dueSoon = form.due_date
-    ? (new Date(form.due_date).getTime() - Date.now()) / 86400000 <= 2
-    : false;
+function OrgCard({ org, onPress, isOwner }: { org: Org; onPress: () => void; isOwner: boolean }) {
+  const initials = org.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const accent = org.primary_color ?? '#6366f1';
 
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.75}
       style={{
-        backgroundColor: '#1e293b', borderRadius: 16, padding: 20,
+        backgroundColor: '#1e293b', borderRadius: 18, padding: 18,
         marginBottom: 12, borderWidth: 1, borderColor: '#334155',
+        flexDirection: 'row', alignItems: 'center', gap: 16,
       }}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1, marginRight: 12 }}>
-          {form.organization && (
-            <Text style={{ fontSize: 11, color: '#6366f1', fontWeight: '600', marginBottom: 6 }}>
-              {form.organization.name}
-            </Text>
-          )}
-          <Text style={{ fontSize: 16, fontWeight: '700', color: '#f1f5f9', lineHeight: 22 }}>
-            {form.title}
-          </Text>
-          {form.description ? (
-            <Text style={{ fontSize: 13, color: '#94a3b8', marginTop: 4 }} numberOfLines={2}>
-              {form.description}
-            </Text>
-          ) : null}
-        </View>
-        <View style={{
-          paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
-          backgroundColor: s.bg,
-        }}>
-          <Text style={{ fontSize: 11, fontWeight: '600', color: s.color }}>{s.label}</Text>
-        </View>
+      {/* Avatar */}
+      <View style={{
+        width: 52, height: 52, borderRadius: 16,
+        backgroundColor: accent + '33',
+        borderWidth: 2, borderColor: accent + '66',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Text style={{ color: accent, fontSize: 18, fontWeight: '800' }}>{initials}</Text>
       </View>
-      {form.due_date && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 }}>
-          <Text style={{ fontSize: 12, color: dueSoon ? '#f87171' : '#64748b' }}>
-            {dueSoon ? '⚠️' : '📅'} Due {new Date(form.due_date).toLocaleDateString()}
-          </Text>
-        </View>
-      )}
+
+      {/* Info */}
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: '#f1f5f9' }}>{org.name}</Text>
+        {org.slug && (
+          <Text style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>@{org.slug}</Text>
+        )}
+        {isOwner && (
+          <View style={{
+            marginTop: 5, alignSelf: 'flex-start',
+            backgroundColor: '#1e1b4b', borderRadius: 8,
+            paddingHorizontal: 8, paddingVertical: 2,
+          }}>
+            <Text style={{ fontSize: 11, color: '#a5b4fc', fontWeight: '600' }}>Owner</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Chevron */}
+      <Text style={{ color: '#475569', fontSize: 18 }}>›</Text>
     </TouchableOpacity>
   );
 }
@@ -81,34 +73,33 @@ export default function DeskIndexScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [forms, setForms] = useState<AssignedForm[]>([]);
+  const [orgs, setOrgs]       = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
 
-  const fetchForms = useCallback(async () => {
+  const fetchOrgs = useCallback(async () => {
     try {
-      const res = await deskFormAPI.myForms();
-      setForms(res.data?.forms ?? res.data ?? []);
+      const data = await orgAPI.list();
+      setOrgs(Array.isArray(data) ? data : data?.organizations ?? []);
       setError('');
-    } catch (e: any) {
-      setError('Could not load your forms.');
+    } catch {
+      setError('Could not load your organisations.');
     }
   }, []);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
-    fetchForms().finally(() => setLoading(false));
+    fetchOrgs().finally(() => setLoading(false));
   }, [status]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchForms();
+    await fetchOrgs();
     setRefreshing(false);
   };
 
   if (status !== 'authenticated') {
-    // Shouldn't normally render — RootGuard handles routing
     return (
       <View style={{ flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
         <Text style={{ fontSize: 15, color: '#94a3b8', textAlign: 'center' }}>
@@ -116,10 +107,7 @@ export default function DeskIndexScreen() {
         </Text>
         <TouchableOpacity
           onPress={() => router.push('/(auth)/login')}
-          style={{
-            marginTop: 20, backgroundColor: '#6366f1', borderRadius: 12,
-            paddingHorizontal: 28, paddingVertical: 12,
-          }}
+          style={{ marginTop: 20, backgroundColor: '#6366f1', borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12 }}
         >
           <Text style={{ color: '#fff', fontWeight: '700' }}>Sign In</Text>
         </TouchableOpacity>
@@ -130,58 +118,64 @@ export default function DeskIndexScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#0f172a' }}>
       <StatusBar barStyle="light-content" />
+
       {/* Header */}
       <View style={{
         paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 16,
         backgroundColor: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#1e293b',
       }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            <Text style={{ fontSize: 26, fontWeight: '800', color: '#f1f5f9' }}>💼 Desk</Text>
-            {user?.full_name && (
-              <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                Welcome, {user.full_name.split(' ')[0]}
-              </Text>
-            )}
-          </View>
-        </View>
+        <Text style={{ fontSize: 26, fontWeight: '800', color: '#f1f5f9' }}>💼 Desk</Text>
+        {user?.full_name && (
+          <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+            Welcome, {user.full_name.split(' ')[0]}
+          </Text>
+        )}
       </View>
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator color="#6366f1" size="large" />
         </View>
+      ) : error ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+          <Text style={{ color: '#94a3b8', textAlign: 'center', fontSize: 14 }}>{error}</Text>
+        </View>
       ) : (
         <FlatList
-          data={forms}
+          data={orgs}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
-            <FormCard
-              form={item}
+            <OrgCard
+              org={item}
+              isOwner={item.owner_id === user?.id}
               onPress={() => router.push({
-                pathname: '/(main)/(desk)/form/[id]',
-                params: { id: item.id },
+                pathname: '/(main)/(desk)/org/[id]',
+                params: {
+                  id: item.id,
+                  name: item.name,
+                  color: item.primary_color ?? '#6366f1',
+                  owner: item.owner_id ?? '',
+                },
               })}
             />
           )}
-          contentContainerStyle={{
-            padding: 16, paddingBottom: insets.bottom + 16, flexGrow: 1,
-          }}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 20, flexGrow: 1 }}
+          ListHeaderComponent={
+            orgs.length > 0 ? (
+              <Text style={{ fontSize: 13, color: '#475569', marginBottom: 16 }}>
+                {orgs.length} organisation{orgs.length !== 1 ? 's' : ''}
+              </Text>
+            ) : null
+          }
           ListEmptyComponent={
-            !error ? (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 }}>
-                <Text style={{ fontSize: 40, marginBottom: 16 }}>📭</Text>
-                <Text style={{ color: '#94a3b8', fontSize: 15 }}>No forms assigned to you</Text>
-              </View>
-            ) : (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 }}>
-                <Text style={{ color: '#94a3b8', fontSize: 15, textAlign: 'center' }}>{error}</Text>
-              </View>
-            )
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 }}>
+              <Text style={{ fontSize: 40, marginBottom: 16 }}>🏢</Text>
+              <Text style={{ color: '#94a3b8', fontSize: 15, textAlign: 'center' }}>
+                You're not part of any organisation yet.
+              </Text>
+            </View>
           }
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
         />
       )}
     </View>

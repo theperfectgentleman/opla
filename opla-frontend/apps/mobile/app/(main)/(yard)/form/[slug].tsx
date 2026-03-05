@@ -146,8 +146,15 @@ export default function YardFormScreen() {
   useEffect(() => {
     if (!slug) return;
     publicFormAPI.getBySlug(slug)
-      .then(r => setForm(r.data))
-      .catch(() => setError('Survey not found or no longer available.'))
+      .then(r => setForm((r as any)?.data ?? (r as any)))
+      .catch((e: any) => {
+        const detail = e?.response?.data?.detail;
+        if (e?.response?.status === 404 || e?.response?.status === 409) {
+          setError(detail || 'Survey is not available yet. It may not be published.');
+        } else {
+          setError('Survey not found or no longer available.');
+        }
+      })
       .finally(() => setLoading(false));
   }, [slug]);
 
@@ -164,7 +171,7 @@ export default function YardFormScreen() {
     setError('');
     setSubmitting(true);
     try {
-      await publicFormAPI.submit(form!.id, { responses: answers }, {});
+      await publicFormAPI.submit(String(slug), { responses: answers }, {});
       setSubmitted(true);
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? 'Submission failed. Please try again.');

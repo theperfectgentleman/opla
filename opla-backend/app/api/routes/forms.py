@@ -4,6 +4,8 @@ from typing import List, Dict
 from app.api.dependencies import get_current_user, get_db
 from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, PublishFormIn
 from app.services.form_service import FormService
+from app.services.project_access_service import ProjectAccessService
+from app.models.project import ProjectStatus
 from app.models.user import User
 import uuid
 
@@ -17,7 +19,7 @@ def create_form(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # In a real app, verify project edit access
+    project = ProjectAccessService.ensure_can_create_form(db, current_user.id, project_id)
     return FormService.create_form(
         db=db,
         project_id=project_id,
@@ -31,7 +33,7 @@ def list_project_forms(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # In a real app, verify project access
+    ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
     return FormService.get_project_forms(db, project_id)
 
 @router.get("/{form_id}", response_model=FormOut)
@@ -43,6 +45,7 @@ def get_form(
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
     return form
 
 
@@ -52,6 +55,13 @@ def get_runtime_form(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    source_form = FormService.get_form(db, form_id)
+    if not source_form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, source_form)
+    if source_form.project.status != ProjectStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="Project is not active")
+
     form = FormService.get_runtime_form_by_id(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form is not deployed")
@@ -65,7 +75,11 @@ def update_form_blueprint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # In a real app, verify project edit access
+    source_form = FormService.get_form(db, form_id)
+    if not source_form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, source_form)
+
     try:
         form = FormService.update_blueprint(
             db,
@@ -101,6 +115,7 @@ def list_form_versions(
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
     return FormService.get_form_versions(db, form_id)
 
 @router.post("/{form_id}/publish", response_model=FormOut)
@@ -110,7 +125,11 @@ def publish_form(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # In a real app, verify project edit access
+    source_form = FormService.get_form(db, form_id)
+    if not source_form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_publish_form(db, current_user.id, source_form)
+
     payload = payload or PublishFormIn()
 
     try:

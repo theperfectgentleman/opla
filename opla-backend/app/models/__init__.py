@@ -3,6 +3,7 @@ from app.models.user import User
 from app.models.organization import Organization
 from app.models.org_member import OrgMember
 from app.models.project import Project
+from app.models.project_role_template import ProjectRoleTemplate
 from app.models.team import Team
 from app.models.team_member import TeamMember
 from app.models.form import Form

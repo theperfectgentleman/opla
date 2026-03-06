@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-    const { currentOrg, organizations, projects, members, createProject, isLoading } = useOrg();
+    const { currentOrg, organizations, projects, members, createProject, isLoading, setCurrentProject } = useOrg();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('forms');
@@ -22,6 +22,10 @@ const Dashboard: React.FC = () => {
 
     // Check if current user is admin (simplified - in production, fetch from API)
     const isAdmin = true; // TODO: Get from API based on user's role in current org
+
+    useEffect(() => {
+        setCurrentProject(null);
+    }, [setCurrentProject]);
 
     useEffect(() => {
         if (!isLoading && organizations.length === 0) {
@@ -84,6 +88,11 @@ const Dashboard: React.FC = () => {
         } catch (err) {
             alert('Failed to create form');
         }
+    };
+
+    const openProjectWorkspace = (project: typeof projects[number]) => {
+        setCurrentProject(project);
+        navigate(`/projects/${project.id}`);
     };
 
     return (
@@ -176,11 +185,21 @@ const Dashboard: React.FC = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {projects.map(project => (
-                                    <div key={project.id} className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-3xl overflow-hidden hover:border-[hsl(var(--border-hover))] transition-all shadow-sm flex flex-col">
+                                    <div
+                                        key={project.id}
+                                        onClick={() => openProjectWorkspace(project)}
+                                        className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-3xl overflow-hidden hover:border-[hsl(var(--border-hover))] transition-all shadow-sm flex flex-col cursor-pointer"
+                                    >
                                         <div className="p-8 flex-1 flex flex-col">
                                             <div className="flex justify-between items-start mb-4">
                                                 <h3 className="text-xl font-bold">{project.name}</h3>
-                                                <div className="p-2 bg-[hsl(var(--surface-elevated))] rounded-xl">
+                                                <div
+                                                    className="p-2 bg-[hsl(var(--surface-elevated))] rounded-xl"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        openProjectWorkspace(project);
+                                                    }}
+                                                >
                                                     <Settings className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] cursor-pointer" />
                                                 </div>
                                             </div>

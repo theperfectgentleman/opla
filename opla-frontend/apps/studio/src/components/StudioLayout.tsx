@@ -63,7 +63,7 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
 }) => {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
-    const { currentOrg, organizations, setCurrentOrg } = useOrg();
+    const { currentOrg, currentProject, organizations, setCurrentOrg, setCurrentProject } = useOrg();
 
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -87,6 +87,7 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
         // Persist selection immediately so the next boot loads the chosen org.
         localStorage.setItem('current_org_id', org.id);
         setCurrentOrg(org);
+        setCurrentProject(null);
         setIsProfileMenuOpen(false);
 
         // Force a full app re-initialization into the selected organization scope.
@@ -128,6 +129,15 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                     )}
 
                     <nav className="space-y-1">
+                        {!isSidebarCollapsed && currentOrg && (
+                            <div className="mb-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[hsl(var(--text-tertiary))]">Workspace</p>
+                                <p className="mt-2 truncate text-sm font-semibold text-[hsl(var(--text-primary))]">{currentOrg.name}</p>
+                                <p className="truncate text-xs text-[hsl(var(--text-secondary))]">
+                                    {currentProject ? currentProject.name : 'Organization overview'}
+                                </p>
+                            </div>
+                        )}
                         {navItems.map(item => {
                             const isActive = activeNav === item.key;
                             const count = item.countKey ? (counts?.[item.countKey] ?? 0) : 0;

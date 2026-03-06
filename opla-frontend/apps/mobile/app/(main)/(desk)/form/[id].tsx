@@ -98,7 +98,12 @@ function FieldRenderer({ field, value, onChange }: {
 }
 
 export default function DeskFormScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, orgId, projectId, projectName } = useLocalSearchParams<{
+    id: string;
+    orgId?: string;
+    projectId?: string;
+    projectName?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -110,6 +115,14 @@ export default function DeskFormScreen() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [draftSaved, setDraftSaved] = useState(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const navigateBack = () => {
+    if (orgId && projectId) {
+      router.replace(`../project/${projectId}?orgId=${orgId}`);
+      return;
+    }
+    router.back();
+  };
 
   // Load form + existing draft
   useEffect(() => {
@@ -194,13 +207,15 @@ export default function DeskFormScreen() {
           Your response has been recorded.
         </Text>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={navigateBack}
           style={{
             marginTop: 32, backgroundColor: '#6366f1', borderRadius: 14,
             paddingHorizontal: 32, paddingVertical: 14,
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Back to Desk</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
+            {projectId ? 'Back to Project' : 'Back to Desk'}
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -229,13 +244,18 @@ export default function DeskFormScreen() {
         backgroundColor: '#0f172a', borderBottomWidth: 1, borderBottomColor: '#1e293b',
         flexDirection: 'row', alignItems: 'center', gap: 12,
       }}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={navigateBack}>
           <Text style={{ fontSize: 22, color: '#94a3b8' }}>←</Text>
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 17, fontWeight: '700', color: '#f1f5f9' }} numberOfLines={1}>
             {form?.title}
           </Text>
+          {projectName ? (
+            <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }} numberOfLines={1}>
+              {projectName}
+            </Text>
+          ) : null}
           {form?.organization && (
             <Text style={{ fontSize: 11, color: '#6366f1', marginTop: 2 }}>
               {form.organization.name}

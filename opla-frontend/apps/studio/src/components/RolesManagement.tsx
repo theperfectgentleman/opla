@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Plus, Trash2, Lock } from 'lucide-react';
+import { Shield, Plus, Trash2, Lock, Pencil } from 'lucide-react';
 import { roleAPI } from '../lib/api';
 
 interface OrgRole {
@@ -12,6 +12,13 @@ interface OrgRole {
     is_system: boolean;
 }
 
+interface PermissionDefinition {
+    key: string;
+    label: string;
+    description: string;
+    category: string;
+}
+
 interface RolesManagementProps {
     orgId: string;
     isAdmin: boolean;
@@ -20,28 +27,14 @@ interface RolesManagementProps {
 const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => {
     const [roles, setRoles] = useState<OrgRole[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
     const [roleName, setRoleName] = useState('');
     const [roleSlug, setRoleSlug] = useState('');
     const [roleDescription, setRoleDescription] = useState('');
     const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
     const [priority, setPriority] = useState(50);
     const [loading, setLoading] = useState(false);
-
-    const availablePermissions = [
-        { value: 'form.view', label: 'View Forms' },
-        { value: 'form.create', label: 'Create Forms' },
-        { value: 'form.edit', label: 'Edit Forms' },
-        { value: 'form.delete', label: 'Delete Forms' },
-        { value: 'submission.view', label: 'View Submissions' },
-        { value: 'submission.view_own', label: 'View Own Submissions' },
-        { value: 'submission.create', label: 'Create Submissions' },
-        { value: 'submission.edit', label: 'Edit Submissions' },
-        { value: 'submission.export', label: 'Export Submissions' },
-        { value: 'project.view', label: 'View Projects' },
-        { value: 'project.edit', label: 'Edit Projects' },
-        { value: 'team.view', label: 'View Teams' },
-        { value: 'team.manage', label: 'Manage Teams' }
-    ];
+    const [availablePermissions, setAvailablePermissions] = useState<PermissionDefinition[]>([]);
 
     useEffect(() => {
         loadRoles();
@@ -49,8 +42,12 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
 
     const loadRoles = async () => {
         try {
-            const data = await roleAPI.list(orgId);
-            setRoles(data);
+            const [roleData, catalog] = await Promise.all([
+                roleAPI.list(orgId),
+                roleAPI.getCatalog(orgId),
+            ]);
+            setRoles(roleData);
+            setAvailablePermissions(catalog.permissions || []);
         } catch (err) {
             console.error('Failed to load roles:', err);
         }
@@ -79,6 +76,29 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
         }
     };
 
+    const handleUpdateRole = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingRoleId || !roleName.trim()) return;
+
+        setLoading(true);
+        try {
+            await roleAPI.update(orgId, editingRoleId, {
+                name: roleName,
+                description: roleDescription,
+                permissions: selectedPermissions,
+                priority,
+            });
+            resetForm();
+            setEditingRoleId(null);
+            setShowCreateModal(false);
+            loadRoles();
+        } catch (err) {
+            alert('Failed to update role');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDeleteRole = async (roleId: string) => {
         if (!confirm('Are you sure you want to delete this role?')) return;
 
@@ -96,6 +116,22 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
         setRoleDescription('');
         setSelectedPermissions([]);
         setPriority(50);
+    };
+
+    const openCreateModal = () => {
+        resetForm();
+        setEditingRoleId(null);
+        setShowCreateModal(true);
+    };
+
+    const openEditModal = (role: OrgRole) => {
+        setEditingRoleId(role.id);
+        setRoleName(role.name);
+        setRoleSlug(role.slug);
+        setRoleDescription(role.description || '');
+        setSelectedPermissions(role.permissions || []);
+        setPriority(role.priority || 50);
+        setShowCreateModal(true);
     };
 
     const togglePermission = (permission: string) => {
@@ -117,6 +153,16 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
         }
     };
 
+    const permissionsByCategory = availablePermissions.reduce<Record<string, PermissionDefinition[]>>((acc, permission) => {
+        acc[permission.category] = acc[permission.category] || [];
+        acc[permission.category].push(permission);
+        return acc;
+    }, {});
+
+    const labelForPermission = (permissionKey: string) => {
+        return availablePermissions.find(permission => permission.key === permissionKey)?.label || permissionKey;
+    };
+
     return (
         <div className="space-y-8">
             <div className="flex justify-between items-end">
@@ -126,7 +172,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                 </div>
                 {isAdmin && (
                     <button
-                        onClick={() => setShowCreateModal(true)}
+                        onClick={openCreateModal}
                         className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-black/10 transition-all"
                     >
                         <Plus className="w-5 h-5" />
@@ -154,13 +200,25 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                     )}
                                 </div>
                             </div>
-                            {isAdmin && !role.is_system && (
-                                <button
-                                    onClick={() => handleDeleteRole(role.id)}
-                                    className="p-2 hover:bg-[hsl(var(--error))]/10 rounded-xl transition-all"
-                                >
-                                    <Trash2 className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))]" />
-                                </button>
+                            {isAdmin && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => openEditModal(role)}
+                                        className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-xl transition-all"
+                                        title="Edit role"
+                                    >
+                                        <Pencil className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]" />
+                                    </button>
+                                    {!role.is_system && (
+                                        <button
+                                            onClick={() => handleDeleteRole(role.id)}
+                                            className="p-2 hover:bg-[hsl(var(--error))]/10 rounded-xl transition-all"
+                                            title="Delete role"
+                                        >
+                                            <Trash2 className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))]" />
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
                         <p className="text-sm text-[hsl(var(--text-secondary))] mb-4">
@@ -173,7 +231,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                             <div className="flex flex-wrap gap-2">
                                 {role.permissions.slice(0, 5).map(perm => (
                                     <span key={perm} className="text-xs px-2 py-1 bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg text-[hsl(var(--text-secondary))]">
-                                        {perm}
+                                        {labelForPermission(perm)}
                                     </span>
                                 ))}
                                 {role.permissions.length > 5 && (
@@ -199,8 +257,15 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
             {showCreateModal && (
                 <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
                     <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-[32px] p-8 w-full max-w-2xl shadow-2xl my-8">
-                        <h2 className="text-2xl font-bold mb-6">Create Custom Role</h2>
-                        <form onSubmit={handleCreateRole} className="space-y-6">
+                        <h2 className="text-2xl font-bold mb-2">
+                            {editingRoleId ? 'Edit Role Template' : 'Create Custom Role'}
+                        </h2>
+                        <p className="text-sm text-[hsl(var(--text-secondary))] mb-6">
+                            {editingRoleId
+                                ? 'Adjust the permissions and defaults for this role template.'
+                                : 'Create a custom role template for your organization.'}
+                        </p>
+                        <form onSubmit={editingRoleId ? handleUpdateRole : handleCreateRole} className="space-y-6">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="label">Role Name</label>
@@ -221,7 +286,13 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                         className="input font-mono text-sm"
                                         placeholder="e.g. data-analyst"
                                         required
+                                        disabled={!!editingRoleId}
                                     />
+                                    {editingRoleId && (
+                                        <p className="mt-2 text-xs text-[hsl(var(--text-tertiary))]">
+                                            Slug stays fixed after creation so assignments remain stable.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             <div>
@@ -247,17 +318,29 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                             </div>
                             <div>
                                 <label className="label mb-3">Permissions</label>
-                                <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto p-4 bg-[hsl(var(--surface-elevated))] rounded-2xl border border-[hsl(var(--border))]">
-                                    {availablePermissions.map(perm => (
-                                        <label key={perm.value} className="flex items-center space-x-3 p-3 hover:bg-[hsl(var(--surface))] rounded-xl cursor-pointer transition-all">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedPermissions.includes(perm.value)}
-                                                onChange={() => togglePermission(perm.value)}
-                                                className="w-4 h-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-2 focus:ring-[hsl(var(--primary))]"
-                                            />
-                                            <span className="text-sm">{perm.label}</span>
-                                        </label>
+                                <div className="max-h-[340px] overflow-y-auto p-4 bg-[hsl(var(--surface-elevated))] rounded-2xl border border-[hsl(var(--border))] space-y-5">
+                                    {Object.entries(permissionsByCategory).map(([category, permissions]) => (
+                                        <div key={category}>
+                                            <div className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                                {category}
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                {permissions.map(perm => (
+                                                    <label key={perm.key} className="flex items-start space-x-3 p-3 hover:bg-[hsl(var(--surface))] rounded-xl cursor-pointer transition-all">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedPermissions.includes(perm.key)}
+                                                            onChange={() => togglePermission(perm.key)}
+                                                            className="mt-0.5 w-4 h-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                                                        />
+                                                        <div>
+                                                            <div className="text-sm font-medium">{perm.label}</div>
+                                                            <div className="text-xs text-[hsl(var(--text-tertiary))] mt-1">{perm.description}</div>
+                                                        </div>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
@@ -266,6 +349,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                     type="button"
                                     onClick={() => {
                                         setShowCreateModal(false);
+                                        setEditingRoleId(null);
                                         resetForm();
                                     }}
                                     className="flex-1 px-6 py-3 rounded-2xl border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
@@ -277,7 +361,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                     disabled={loading || selectedPermissions.length === 0}
                                     className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-2xl shadow-lg shadow-black/10 transition-all disabled:opacity-50"
                                 >
-                                    {loading ? 'Creating...' : 'Create Role'}
+                                    {loading ? (editingRoleId ? 'Saving...' : 'Creating...') : (editingRoleId ? 'Save Role' : 'Create Role')}
                                 </button>
                             </div>
                         </form>

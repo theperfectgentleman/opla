@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from app.core.permission_catalog import STARTER_ROLE_TEMPLATES, PERMISSION_CATALOG, VALID_PERMISSION_KEYS, validate_permissions
 from app.models.organization import Organization
 from app.models.org_member import OrgMember, GlobalRole, InvitationStatus
 from app.models.team import Team
@@ -7,6 +8,7 @@ from app.models.team_member import TeamMember
 from app.models.user import User
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType
 from app.models.project_access import AccessorType as ProjectAccessorType
+from app.services.project_role_service import ProjectRoleService
 import uuid
 from typing import List, Optional
 import re
@@ -47,49 +49,15 @@ class OrganizationService:
         db.flush()
 
         OrganizationService.seed_default_roles(db, org.id, owner_id)
+        ProjectRoleService.seed_default_roles(db, org.id)
         db.commit()
         db.refresh(org)
         return org
 
     @staticmethod
     def seed_default_roles(db: Session, org_id: uuid.UUID, owner_id: uuid.UUID) -> None:
-        defaults = [
-            {
-                "name": "Admin",
-                "slug": "admin",
-                "description": "Full access to org settings and projects",
-                "permissions": ["*"],
-                "priority": 100,
-                "is_system": True
-            },
-            {
-                "name": "Editor",
-                "slug": "editor",
-                "description": "Create and edit projects and forms",
-                "permissions": ["projects:edit", "forms:edit", "forms:publish", "data:view"],
-                "priority": 80,
-                "is_system": True
-            },
-            {
-                "name": "Supervisor",
-                "slug": "supervisor",
-                "description": "Review data and manage team workflows",
-                "permissions": ["forms:view", "data:view", "teams:view"],
-                "priority": 60,
-                "is_system": True
-            },
-            {
-                "name": "Agent",
-                "slug": "agent",
-                "description": "Collect data and submit forms",
-                "permissions": ["forms:submit", "data:collect"],
-                "priority": 40,
-                "is_system": True
-            }
-        ]
-
         roles = []
-        for role in defaults:
+        for role in STARTER_ROLE_TEMPLATES:
             roles.append(OrgRole(
                 org_id=org_id,
                 name=role["name"],
@@ -102,7 +70,7 @@ class OrganizationService:
         db.add_all(roles)
         db.flush()
 
-        admin_role = next((r for r in roles if r.slug == "admin"), None)
+        admin_role = next((r for r in roles if r.slug == "org-admin"), None)
         if admin_role:
             db.add(OrgRoleAssignment(
                 org_id=org_id,
@@ -212,12 +180,14 @@ class OrganizationService:
             slug = f"{base_slug}-{counter}"
             counter += 1
 
+        validated_permissions = validate_permissions(permissions)
+
         role = OrgRole(
             org_id=org_id,
             name=name,
             slug=slug,
             description=description,
-            permissions=permissions,
+            permissions=validated_permissions,
             priority=priority,
             is_system=False
         )
@@ -243,21 +213,26 @@ class OrganizationService:
         role = db.query(OrgRole).filter(OrgRole.org_id == org_id, OrgRole.id == role_id).first()
         if not role:
             return None
-        if role.is_system:
-            return role
 
-        if name:
+        if name and not role.is_system:
             role.name = name
         if description is not None:
             role.description = description
         if permissions is not None:
-            role.permissions = permissions
+            role.permissions = validate_permissions(permissions)
         if priority is not None:
             role.priority = priority
 
         db.commit()
         db.refresh(role)
         return role
+
+    @staticmethod
+    def get_role_catalog() -> dict:
+        return {
+            "permissions": PERMISSION_CATALOG,
+            "starter_roles": STARTER_ROLE_TEMPLATES,
+        }
 
     @staticmethod
     def assign_role(
@@ -330,3 +305,17 @@ class OrganizationService:
         if roles:
             effective = sorted(roles, key=lambda r: r.priority, reverse=True)[0]
         return effective, assignments
+
+    @staticmethod
+    def get_effective_permissions_for_user(db: Session, org_id: uuid.UUID, user_id: uuid.UUID) -> set[str]:
+        _effective_role, assignments = OrganizationService.get_effective_roles_for_user(db, org_id, user_id)
+        permissions: set[str] = set()
+        for assignment in assignments:
+            if not assignment.role or not assignment.role.permissions:
+                continue
+            role_permissions = set(assignment.role.permissions)
+            if "*" in role_permissions:
+                permissions.update(VALID_PERMISSION_KEYS)
+                continue
+            permissions.update(role_permissions)
+        return permissions

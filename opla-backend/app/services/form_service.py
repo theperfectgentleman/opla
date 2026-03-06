@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session
 from app.models.project import Project
+from app.models.project import ProjectStatus
 from app.models.form import Form, FormStatus
 from app.models.form_version import FormVersion, FormVersionKind
+from app.models.project_access import ProjectAccess, ProjectRole, AccessorType
 import uuid
 from typing import List, Optional, Dict
 import re
@@ -14,13 +16,31 @@ def slugify(text: str) -> str:
 
 class ProjectService:
     @staticmethod
-    def create_project(db: Session, org_id: uuid.UUID, name: str, description: Optional[str] = None) -> Project:
+    def create_project(
+        db: Session,
+        org_id: uuid.UUID,
+        name: str,
+        description: Optional[str] = None,
+        created_by: Optional[uuid.UUID] = None,
+    ) -> Project:
         project = Project(
             org_id=org_id,
             name=name,
             description=description
         )
         db.add(project)
+        db.flush()
+
+        if created_by:
+            db.add(
+                ProjectAccess(
+                    project_id=project.id,
+                    accessor_id=created_by,
+                    accessor_type=AccessorType.USER,
+                    role=ProjectRole.EDITOR,
+                )
+            )
+
         db.commit()
         db.refresh(project)
         return project
@@ -28,6 +48,43 @@ class ProjectService:
     @staticmethod
     def get_org_projects(db: Session, org_id: uuid.UUID) -> List[Project]:
         return db.query(Project).filter(Project.org_id == org_id).all()
+
+    @staticmethod
+    def get_project(db: Session, project_id: uuid.UUID) -> Optional[Project]:
+        return db.query(Project).filter(Project.id == project_id).first()
+
+    @staticmethod
+    def update_project(
+        db: Session,
+        project: Project,
+        *,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        status: Optional[ProjectStatus] = None,
+    ) -> Project:
+        if name is not None:
+            project.name = name
+        if description is not None:
+            project.description = description
+        if status is not None and status != project.status:
+            project.status = status
+            now = datetime.utcnow()
+            if status == ProjectStatus.ACTIVE:
+                project.activated_at = now
+                project.paused_at = None
+                project.archived_at = None
+            elif status == ProjectStatus.PAUSED:
+                project.paused_at = now
+                project.archived_at = None
+            elif status == ProjectStatus.ARCHIVED:
+                project.archived_at = now
+            elif status == ProjectStatus.PLANNING:
+                project.paused_at = None
+                project.archived_at = None
+
+        db.commit()
+        db.refresh(project)
+        return project
 
 class FormService:
     DRAFT_SLOTS = (1, 2, 3)

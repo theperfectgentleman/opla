@@ -21,3 +21,4 @@ class Organization(Base):
     members = relationship("OrgMember", back_populates="organization", cascade="all, delete-orphan")
     teams = relationship("Team", back_populates="organization", cascade="all, delete-orphan")
     org_roles = relationship("OrgRole", back_populates="organization", cascade="all, delete-orphan")
+    project_role_templates = relationship("ProjectRoleTemplate", back_populates="organization", cascade="all, delete-orphan")

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.submission import Submission
 from app.models.form import Form, FormStatus
+from app.models.project import ProjectStatus
 import uuid
 from typing import Dict, Optional
 
@@ -16,6 +17,8 @@ class SubmissionService:
         form = db.query(Form).filter(Form.id == form_id).first()
         if not form or form.status != FormStatus.LIVE or not form.blueprint_live:
             raise ValueError("FORM_NOT_PUBLISHED")
+        if not form.project or form.project.status != ProjectStatus.ACTIVE:
+            raise ValueError("PROJECT_NOT_ACTIVE")
 
         submission = Submission(
             form_id=form_id,

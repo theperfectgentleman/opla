@@ -29,12 +29,7 @@ type Member = {
 };
 
 type Project = {
-  id: string; name: string; description?: string;
-};
-
-type Form = {
-  id: string; title: string; description?: string;
-  is_published?: boolean; slug?: string;
+  id: string; name: string; description?: string; status?: string;
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -116,28 +111,18 @@ function MemberRow({ member, isOwner }: { member: Member; isOwner: boolean }) {
   );
 }
 
-function ProjectSection({
-  project, orgAccent, onFormPress,
-}: { project: Project; orgAccent: string; onFormPress: (formId: string) => void }) {
-  const [forms, setForms]   = useState<Form[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen]     = useState(true);
-
-  useEffect(() => {
-    projectAPI.listForms(project.id)
-      .then(data => setForms(Array.isArray(data) ? data : data?.forms ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [project.id]);
-
+function ProjectCard({
+  project, orgAccent, onPress,
+}: { project: Project; orgAccent: string; onPress: () => void }) {
   return (
-    <View style={{
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
       backgroundColor: '#1e293b', borderRadius: 16, marginBottom: 12,
       borderWidth: 1, borderColor: '#334155', overflow: 'hidden',
-    }}>
-      {/* Project header row */}
-      <TouchableOpacity
-        onPress={() => setOpen(o => !o)}
+      }}
+    >
+      <View
         style={{
           flexDirection: 'row', alignItems: 'center', gap: 12,
           padding: 16,
@@ -153,47 +138,22 @@ function ProjectSection({
             <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }} numberOfLines={1}>
               {project.description}
             </Text>
-          ) : null}
+          ) : (
+            <Text style={{ fontSize: 12, color: '#475569', marginTop: 2 }} numberOfLines={1}>
+              Open this workspace to view forms and access details.
+            </Text>
+          )}
         </View>
-        <Text style={{ color: '#475569' }}>{open ? '▾' : '▸'}</Text>
-      </TouchableOpacity>
-
-      {open && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
-          {loading ? (
-            <ActivityIndicator color="#6366f1" size="small" style={{ marginVertical: 10 }} />
-          ) : forms.length === 0 ? (
-            <Text style={{ color: '#475569', fontSize: 13 }}>No forms in this project.</Text>
-          ) : forms.map(form => (
-            <TouchableOpacity
-              key={form.id}
-              onPress={() => onFormPress(form.id)}
-              style={{
-                backgroundColor: '#0f172a', borderRadius: 10, padding: 12,
-                marginBottom: 8, borderWidth: 1, borderColor: '#334155',
-                flexDirection: 'row', alignItems: 'center', gap: 10,
-              }}
-            >
-              <View style={{
-                width: 6, height: 6, borderRadius: 3,
-                backgroundColor: form.is_published ? '#4ade80' : '#64748b',
-              }} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#f1f5f9' }}>{form.title}</Text>
-                {form.description ? (
-                  <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }} numberOfLines={1}>
-                    {form.description}
-                  </Text>
-                ) : null}
-              </View>
-              <Text style={{ fontSize: 11, color: form.is_published ? '#4ade80' : '#475569' }}>
-                {form.is_published ? 'Live' : 'Draft'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </View>
+        {project.status ? (
+          <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: '#0f172a' }}>
+            <Text style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', fontWeight: '700' }}>
+              {project.status}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={{ color: '#475569', fontSize: 18 }}>›</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -307,16 +267,16 @@ export default function OrgDetailScreen() {
             </View>
           )}
 
-          {/* ── Projects & their Forms ── */}
+          {/* ── Projects ── */}
           <SectionHeader icon="📁" title="Projects" count={projects.length} />
           {projects.length === 0 ? (
             <Text style={{ color: '#475569', fontSize: 14 }}>No projects in this organisation.</Text>
           ) : projects.map(p => (
-            <ProjectSection
+            <ProjectCard
               key={p.id}
               project={p}
               orgAccent={accent}
-              onFormPress={formId => router.push({ pathname: '/(main)/(desk)/form/[id]', params: { id: formId } })}
+              onPress={() => router.push(`../project/${p.id}?orgId=${id}`)}
             />
           ))}
         </ScrollView>

@@ -11,6 +11,7 @@ import Welcome from './pages/Welcome';
 import FormBuilder from './pages/FormBuilder';
 import FormSimulator from './pages/FormSimulator';
 import PublicForm from './pages/PublicForm';
+import ProjectWorkspace from './pages/ProjectWorkspace';
 
 function App() {
   useEffect(() => {
@@ -45,6 +46,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId"
+                element={
+                  <ProtectedRoute>
+                    <ProjectWorkspace />
                   </ProtectedRoute>
                 }
               />

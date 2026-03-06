@@ -75,6 +75,28 @@ class OrgRoleAssignmentView(BaseModel):
     accessor_name: Optional[str] = None
     role: OrgRoleOut
 
+
+class PermissionDefinitionOut(BaseModel):
+    key: str
+    label: str
+    description: str
+    category: str
+
+
+class StarterRoleTemplateOut(BaseModel):
+    name: str
+    slug: str
+    description: Optional[str] = None
+    scope: str
+    permissions: List[str] = []
+    priority: int
+    is_system: bool = True
+
+
+class OrgRoleCatalogOut(BaseModel):
+    permissions: List[PermissionDefinitionOut]
+    starter_roles: List[StarterRoleTemplateOut]
+
 class OrgMemberDetailOut(OrgMemberOut):
     user: UserResponse
     effective_role: Optional[OrgRoleOut] = None

@@ -21,8 +21,10 @@ class ProjectAccess(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)
     accessor_id = Column(UUID(as_uuid=True), nullable=False) # Polymorphic: user_id or team_id
     accessor_type = Column(Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]), nullable=False)
-    role = Column(Enum(ProjectRole, name="project_role", values_callable=lambda obj: [e.value for e in obj]), nullable=False)
+    role = Column(Enum(ProjectRole, name="project_role", values_callable=lambda obj: [e.value for e in obj]), nullable=True)
+    role_template_id = Column(UUID(as_uuid=True), ForeignKey("project_role_templates.id"), nullable=True)
     
     project = relationship("Project", backref="access_rules")
+    role_template = relationship("ProjectRoleTemplate", backref="assignments")
     
     __table_args__ = (UniqueConstraint('project_id', 'accessor_id', 'accessor_type', name='_project_accessor_uc'),)

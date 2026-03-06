@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from app.core.permission_catalog import STARTER_ROLE_TEMPLATES, validate_permissions
 from app.models.role_template import OrgRole, OrgRoleAssignment
 from app.api.schemas.role import OrgRoleCreate, OrgRoleUpdate
 from uuid import UUID
@@ -14,7 +15,7 @@ class RoleService:
             name=role_data.name,
             slug=role_data.slug,
             description=role_data.description,
-            permissions=role_data.permissions,
+            permissions=validate_permissions(role_data.permissions),
             priority=role_data.priority,
             is_system=is_system
         )
@@ -35,17 +36,17 @@ class RoleService:
 
     @staticmethod
     def update_role(db: Session, role_id: UUID, role_data: OrgRoleUpdate) -> Optional[OrgRole]:
-        """Update a role template (only if not system role)"""
+        """Update a role template."""
         role = db.query(OrgRole).filter(OrgRole.id == role_id).first()
-        if not role or role.is_system:
+        if not role:
             return None
         
-        if role_data.name is not None:
+        if role_data.name is not None and not role.is_system:
             role.name = role_data.name
         if role_data.description is not None:
             role.description = role_data.description
         if role_data.permissions is not None:
-            role.permissions = role_data.permissions
+            role.permissions = validate_permissions(role_data.permissions)
         if role_data.priority is not None:
             role.priority = role_data.priority
         
@@ -111,30 +112,7 @@ class RoleService:
     @staticmethod
     def seed_system_roles(db: Session, org_id: UUID):
         """Seed default system roles for a new organization"""
-        system_roles = [
-            {
-                "name": "Collector",
-                "slug": "collector",
-                "description": "Can collect data via mobile app",
-                "permissions": ["form.view", "submission.create", "submission.view_own"],
-                "priority": 10
-            },
-            {
-                "name": "Analyst",
-                "slug": "analyst",
-                "description": "Can view and analyze submissions",
-                "permissions": ["form.view", "submission.view", "submission.export"],
-                "priority": 20
-            },
-            {
-                "name": "Editor",
-                "slug": "editor",
-                "description": "Can create and edit forms",
-                "permissions": ["form.view", "form.create", "form.edit", "form.delete", 
-                               "submission.view", "submission.export", "submission.edit"],
-                "priority": 30
-            }
-        ]
+        system_roles = STARTER_ROLE_TEMPLATES
         
         for role_data in system_roles:
             existing = db.query(OrgRole).filter(

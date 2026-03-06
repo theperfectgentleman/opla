@@ -197,11 +197,15 @@ export const roleAPI = {
         const response = await apiClient.get(`/organizations/${orgId}/roles`);
         return response.data;
     },
+    getCatalog: async (orgId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/roles/catalog`);
+        return response.data;
+    },
     create: async (orgId: string, data: { name: string; slug?: string; description?: string; permissions: string[]; priority?: number }) => {
         const response = await apiClient.post(`/organizations/${orgId}/roles`, data);
         return response.data;
     },
-    update: async (orgId: string, roleId: string, data: { name?: string; permissions?: string[]; priority?: number }) => {
+    update: async (orgId: string, roleId: string, data: { name?: string; description?: string; permissions?: string[]; priority?: number }) => {
         const response = await apiClient.put(`/organizations/${orgId}/roles/${roleId}`, data);
         return response.data;
     },
@@ -233,6 +237,63 @@ export const projectAPI = {
     },
     list: async (orgId: string) => {
         const response = await apiClient.get(`/organizations/${orgId}/projects`);
+        return response.data;
+    },
+    get: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}`);
+        return response.data;
+    },
+    update: async (
+        orgId: string,
+        projectId: string,
+        data: {
+            name?: string;
+            description?: string;
+            status?: 'planning' | 'active' | 'paused' | 'archived';
+        },
+    ) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}`, data);
+        return response.data;
+    },
+    listAccess: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/access`);
+        return response.data;
+    },
+    listRoleTemplates: async (orgId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/role-templates`);
+        return response.data;
+    },
+    createRoleTemplate: async (
+        orgId: string,
+        data: { name: string; description?: string; permissions: string[]; priority?: number },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/role-templates`, data);
+        return response.data;
+    },
+    updateRoleTemplate: async (
+        orgId: string,
+        roleTemplateId: string,
+        data: { name?: string; description?: string; permissions?: string[]; priority?: number },
+    ) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/projects/role-templates/${roleTemplateId}`, data);
+        return response.data;
+    },
+    deleteRoleTemplate: async (orgId: string, roleTemplateId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/projects/role-templates/${roleTemplateId}`);
+        return response.data;
+    },
+    grantAccess: async (
+        orgId: string,
+        projectId: string,
+        data: { accessor_id: string; accessor_type: 'user' | 'team'; role_template_id?: string; role?: 'collector' | 'analyst' | 'editor' },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/access`, data);
+        return response.data;
+    },
+    revokeAccess: async (orgId: string, projectId: string, accessorId: string, accessorType: 'user' | 'team') => {
+        const response = await apiClient.delete(
+            `/organizations/${orgId}/projects/${projectId}/access/${accessorId}?accessor_type=${accessorType}`,
+        );
         return response.data;
     },
 };

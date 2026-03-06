@@ -11,6 +11,7 @@ from app.api.schemas.organization import (
     OrgRoleCreate,
     OrgRoleOut,
     OrgRoleUpdate,
+    OrgRoleCatalogOut,
     OrgRoleAssignmentCreate,
     OrgRoleAssignmentOut,
     OrgRoleAssignmentView
@@ -183,6 +184,18 @@ def list_roles(
     if not any(m.user_id == current_user.id for m in members):
         raise HTTPException(status_code=403, detail="Not a member of this organization")
     return OrganizationService.list_roles(db, org_id)
+
+
+@router.get("/{org_id}/roles/catalog", response_model=OrgRoleCatalogOut)
+def get_role_catalog(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    members = OrganizationService.get_org_members(db, org_id)
+    if not any(m.user_id == current_user.id for m in members):
+        raise HTTPException(status_code=403, detail="Not a member of this organization")
+    return OrganizationService.get_role_catalog()
 
 @router.post("/{org_id}/roles", response_model=OrgRoleOut, status_code=status.HTTP_201_CREATED)
 def create_role(

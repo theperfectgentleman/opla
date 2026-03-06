@@ -5,8 +5,11 @@ from app.api.dependencies import get_current_user, get_db, get_optional_user
 from app.api.schemas.submission import SubmissionCreate, PublicSubmissionCreate, SubmissionOut
 from app.api.schemas.form import FormRuntimeOut
 from app.services.submission_service import SubmissionService
+from app.services.project_access_service import ProjectAccessService
+from app.services.form_service import FormService
 from app.models.user import User
 from app.models.form import FormStatus
+from app.models.project import ProjectStatus
 import uuid
 
 router = APIRouter(tags=["submissions"])
@@ -17,6 +20,11 @@ def create_submission(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    form = FormService.get_form(db, submission_in.form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_submit_form(db, current_user.id, form)
+
     try:
         return SubmissionService.create_submission(
             db=db,
@@ -28,6 +36,8 @@ def create_submission(
     except ValueError as exc:
         if str(exc) == "FORM_NOT_PUBLISHED":
             raise HTTPException(status_code=409, detail="Form is not deployed") from exc
+        if str(exc) == "PROJECT_NOT_ACTIVE":
+            raise HTTPException(status_code=409, detail="Project is not active") from exc
         raise
 
 @router.get("/public/forms/{slug}", response_model=FormRuntimeOut)
@@ -36,7 +46,13 @@ def get_public_form(
     db: Session = Depends(get_db)
 ):
     form = SubmissionService.get_form_by_slug(db, slug)
-    if not form or not form.is_public or not form.blueprint_live or form.status != FormStatus.LIVE:
+    if (
+        not form
+        or not form.is_public
+        or not form.blueprint_live
+        or form.status != FormStatus.LIVE
+        or form.project.status != ProjectStatus.ACTIVE
+    ):
         raise HTTPException(status_code=404, detail="Form not found or not public")
     return form
 
@@ -48,7 +64,13 @@ def create_public_submission(
     current_user: User = Depends(get_optional_user) # might be logged in user filling public form
 ):
     form = SubmissionService.get_form_by_slug(db, slug)
-    if not form or not form.is_public or not form.blueprint_live or form.status != FormStatus.LIVE:
+    if (
+        not form
+        or not form.is_public
+        or not form.blueprint_live
+        or form.status != FormStatus.LIVE
+        or form.project.status != ProjectStatus.ACTIVE
+    ):
         raise HTTPException(status_code=404, detail="Form not found or not public")
 
     try:
@@ -62,4 +84,6 @@ def create_public_submission(
     except ValueError as exc:
         if str(exc) == "FORM_NOT_PUBLISHED":
             raise HTTPException(status_code=409, detail="Form is not deployed") from exc
+        if str(exc) == "PROJECT_NOT_ACTIVE":
+            raise HTTPException(status_code=409, detail="Project is not active") from exc
         raise

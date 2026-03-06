@@ -86,6 +86,40 @@ export const projectAPI = {
     const res = await apiClient.get(`/organizations/${orgId}/projects`);
     return res.data;
   },
+  get: async (orgId: string, projectId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}`);
+    return res.data;
+  },
+  update: async (
+    orgId: string,
+    projectId: string,
+    data: { name?: string; description?: string; status?: 'planning' | 'active' | 'paused' | 'archived' },
+  ) => {
+    const res = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}`, data);
+    return res.data;
+  },
+  listAccess: async (orgId: string, projectId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/access`);
+    return res.data;
+  },
+  listRoleTemplates: async (orgId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/role-templates`);
+    return res.data;
+  },
+  grantAccess: async (
+    orgId: string,
+    projectId: string,
+    data: { accessor_id: string; accessor_type: 'user' | 'team'; role_template_id?: string; role?: 'collector' | 'analyst' | 'editor' },
+  ) => {
+    const res = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/access`, data);
+    return res.data;
+  },
+  revokeAccess: async (orgId: string, projectId: string, accessorId: string, accessorType: 'user' | 'team') => {
+    const res = await apiClient.delete(
+      `/organizations/${orgId}/projects/${projectId}/access/${accessorId}?accessor_type=${accessorType}`,
+    );
+    return res.data;
+  },
   listForms: async (projectId: string) => {
     const res = await apiClient.get(`/projects/${projectId}/forms`);
     return res.data;

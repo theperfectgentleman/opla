@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FileText, BarChart2, Paperclip, ChevronRight, ChevronDown } from 'lucide-react-native';
 
 import { orgAPI, projectAPI, assetsAPI, reportsAPI } from '../../../../services/api';
+import { fmtDate } from '../../../../src/utils/dateFormat';
 
 type Project = {
   id: string; name: string; description?: string;
@@ -204,7 +205,7 @@ export default function ProjectDetailScreen() {
             {project.description || 'Group your forms, reports and assets for this campaign.'}
           </Text>
           <Text style={{ fontSize: 11, color: '#64748b', marginTop: 10 }}>
-            Updated {new Date(project.updated_at ?? project.created_at ?? Date.now()).toLocaleDateString()}
+            Updated {fmtDate(project.updated_at ?? project.created_at ?? Date.now())}
           </Text>
         </View>
 

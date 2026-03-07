@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FileText, ChevronRight, Inbox } from 'lucide-react-native';
 import { projectAPI } from '../../../../services/api';
+import { fmtDate } from '../../../../src/utils/dateFormat';
 
 type Form = {
   id: string;
@@ -55,7 +56,7 @@ function FormCard({ form, accent, onPress }: { form: Form; accent: string; onPre
           <Text style={{ fontSize: 11, color: '#64748b' }}>v{form.version ?? 1}</Text>
           {form.published_at ? (
             <Text style={{ fontSize: 11, color: '#475569' }}>
-              · published {new Date(form.published_at).toLocaleDateString()}
+              · published {fmtDate(form.published_at)}
             </Text>
           ) : null}
         </View>

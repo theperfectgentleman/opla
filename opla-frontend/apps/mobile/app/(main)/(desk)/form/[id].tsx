@@ -105,13 +105,6 @@ export default function DeskFormScreen() {
 
   // ── Navigation helpers ────────────────────────────────────────────────────
   const navigateBack = () => {
-    if (projectId) {
-      router.replace({
-        pathname: '/(main)/(desk)/project-forms/[projectId]' as any,
-        params: { projectId, orgId, projectName, orgColor: accent },
-      });
-      return;
-    }
     router.back();
   };
 

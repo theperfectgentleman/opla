@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native';
 import { formAPI } from '../../../../services/api';
 import { syncAllLookupDatasets } from '../../../../src/utils/lookupCache';
+import { fmtDate } from '../../../../src/utils/dateFormat';
 import {
   getPendingCount, getQueue,
   QueuedSubmission,
@@ -46,13 +47,13 @@ function StatCard({
 }) {
   return (
     <View style={{
-      flex: 1, backgroundColor: '#1e293b', borderRadius: 14,
-      padding: 14, borderWidth: 1, borderColor: '#334155',
-      alignItems: 'center', gap: 6,
+      flex: 1, backgroundColor: '#1e293b', borderRadius: 10,
+      padding: 10, borderWidth: 1, borderColor: '#334155',
+      alignItems: 'center', gap: 4,
     }}>
       {icon}
-      <Text style={{ fontSize: 20, fontWeight: '800', color: '#f1f5f9' }}>{value}</Text>
-      <Text style={{ fontSize: 11, color: '#64748b', textAlign: 'center' }}>{label}</Text>
+      <Text style={{ fontSize: 16, fontWeight: '800', color: '#f1f5f9' }}>{value}</Text>
+      <Text style={{ fontSize: 10, color: '#64748b', textAlign: 'center' }}>{label}</Text>
     </View>
   );
 }
@@ -78,7 +79,11 @@ export default function FormStartScreen() {
   const [preloading, setPreloading]       = useState(false);
   const [error, setError]                 = useState('');
 
-  const accent = orgColor ?? '#158754';
+  // Sanitize: strip old purple values that may still be stored in DB / routing params
+  const rawColor = orgColor ?? '#158754';
+  const accent = (rawColor === '#6366f1' || rawColor === '#1e1b4b' || rawColor === '#a5b4fc')
+    ? '#158754'
+    : rawColor;
 
   useEffect(() => {
     if (!id) return;
@@ -214,16 +219,16 @@ export default function FormStartScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
 
         {/* Breadcrumb */}
-        <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>
+        <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>
           {projectName ?? 'Project'} › Forms
         </Text>
 
         {/* Form title + version */}
-        <Text style={{ fontSize: 26, fontWeight: '800', color: '#f1f5f9', lineHeight: 34 }}>{title}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 }}>
+        <Text style={{ fontSize: 20, fontWeight: '800', color: '#f1f5f9', lineHeight: 28 }}>{title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 }}>
           <View style={{ backgroundColor: '#1e293b', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
             <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: '600' }}>
               v{meta?.version ?? 1}
@@ -250,11 +255,11 @@ export default function FormStartScreen() {
           <>
             <Text style={{
               fontSize: 11, fontWeight: '700', color: '#64748b',
-              textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 24, marginBottom: 12,
+              textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 16, marginBottom: 8,
             }}>
               Activity
             </Text>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               <StatCard
                 icon={<Users size={18} color="#60a5fa" />}
                 label="Total submissions"
@@ -269,9 +274,7 @@ export default function FormStartScreen() {
                 icon={<Clock size={18} color="#a78bfa" />}
                 label="Last submitted"
                 value={
-                  stats.last_submitted_at
-                    ? new Date(stats.last_submitted_at).toLocaleDateString()
-                    : '—'
+                  fmtDate(stats.last_submitted_at)
                 }
               />
             </View>
@@ -304,13 +307,13 @@ export default function FormStartScreen() {
           onPress={handlePreloadOffline}
           disabled={preloading}
           style={{
-            flexDirection: 'row', alignItems: 'center', gap: 10,
-            marginTop: 16, padding: 14, backgroundColor: '#1e293b',
-            borderRadius: 14, borderWidth: 1, borderColor: '#334155',
+            flexDirection: 'row', alignItems: 'center', gap: 8,
+            marginTop: 12, padding: 10, backgroundColor: '#1e293b',
+            borderRadius: 10, borderWidth: 1, borderColor: '#334155',
           }}
         >
-          <WifiOff size={18} color={preloading ? '#475569' : '#94a3b8'} />
-          <Text style={{ flex: 1, fontSize: 14, color: preloading ? '#475569' : '#94a3b8', fontWeight: '600' }}>
+          <WifiOff size={15} color={preloading ? '#475569' : '#94a3b8'} />
+          <Text style={{ flex: 1, fontSize: 13, color: preloading ? '#475569' : '#94a3b8', fontWeight: '600' }}>
             {preloading ? 'Pre-loading…' : 'Pre-load for offline use'}
           </Text>
           {preloading ? <ActivityIndicator size="small" color="#475569" /> : null}
@@ -322,12 +325,12 @@ export default function FormStartScreen() {
           activeOpacity={0.85}
           style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            gap: 10, marginTop: 28, backgroundColor: accent,
-            borderRadius: 16, paddingVertical: 18,
+            gap: 8, marginTop: 20, backgroundColor: '#158754',
+            borderRadius: 12, paddingVertical: 14,
           }}
         >
-          <PlayCircle size={22} color="#fff" />
-          <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>
+          <PlayCircle size={18} color="#fff" />
+          <Text style={{ fontSize: 15, fontWeight: '800', color: '#fff' }}>
             {hasDraft ? 'Resume Draft' : 'Start Form'}
           </Text>
         </TouchableOpacity>
@@ -337,7 +340,7 @@ export default function FormStartScreen() {
         </Text>
 
         {/* ── Device Records ─────────────────────────────────────────────── */}
-        <View style={{ marginTop: 28 }}>
+        <View style={{ marginTop: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Database size={14} color="#64748b" />

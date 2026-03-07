@@ -13,6 +13,7 @@ import { deskFormAPI } from '../../../../services/api';
 import {
   clearItem, flush, getPendingCount, getQueue, QueuedSubmission,
 } from '../../../../src/utils/offlineQueue';
+import { fmtDateTime } from '../../../../src/utils/dateFormat';
 
 export default function DeviceRecordsScreen() {
   const { id, projectId, projectName, formTitle, orgColor } = useLocalSearchParams<{
@@ -211,9 +212,7 @@ export default function DeviceRecordsScreen() {
             <View style={{ gap: 10 }}>
               {localRecords.map((item, idx) => {
                 const isFailed = item.attempts > 0;
-                const capturedAt = new Date(item.queued_at);
-                const dateStr = capturedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                const timeStr = capturedAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                const capturedAt = fmtDateTime(item.queued_at);
                 const fieldCount = Object.keys(item.data).length;
                 const isSyncing = syncingId === item.id;
 
@@ -243,7 +242,7 @@ export default function DeviceRecordsScreen() {
                           )}
                         </View>
                         <Text style={{ fontSize: 13, color: '#64748b', marginTop: 6 }}>
-                          {dateStr} at {timeStr} · {fieldCount} field{fieldCount === 1 ? '' : 's'}
+                          {capturedAt} · {fieldCount} field{fieldCount === 1 ? '' : 's'}
                         </Text>
                       </View>
 

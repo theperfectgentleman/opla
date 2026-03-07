@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, KeyRound, ShieldAlert } from 'lucide-react-nat
 
 import { orgAPI } from '../../services/api';
 import { updateSessionOrgIds } from '../../services/authService';
+import { fmtDateTime } from '../../src/utils/dateFormat';
 
 type AcceptResponse = {
   status: 'accepted' | 'pending_review';
@@ -193,7 +194,7 @@ export default function JoinTeamScreen() {
               <Text style={{ color: '#cbd5e1', fontSize: 13 }}>Invitation status: {result.invitation.status}</Text>
               {result.membership?.joined_at ? (
                 <Text style={{ color: '#cbd5e1', fontSize: 13 }}>
-                  Joined: {new Date(result.membership.joined_at).toLocaleString()}
+                  Joined: {fmtDateTime(result.membership.joined_at)}
                 </Text>
               ) : null}
             </View>

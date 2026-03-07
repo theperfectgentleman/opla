@@ -7,6 +7,7 @@ const rootNodeModules = path.resolve(__dirname, '../../node_modules')
 
 // https://vite.dev/config/
 export default defineConfig({
+  envDir: path.resolve(__dirname, '../../..'),
   plugins: [react()],
   build: {
     rollupOptions: {

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView, TextInput, ActivityIndicator } from 'react-native';
 import { FormField } from '@opla/types';
 import { loadLookupOptions, LookupContext, LookupOption, resolveStaticLookupOptions } from '../../utils/lookupCache';
+import { fmtDateTime } from '../../utils/dateFormat';
 
 interface Props {
     field: FormField;
@@ -32,7 +33,7 @@ export function LookupListField({ field, value, onChange, error, lookupContext }
                 if (!cancelled) {
                     setOptions(nextOptions);
                     if (syncedAt) {
-                        setLastSyncLabel(new Date(syncedAt).toLocaleString());
+                        setLastSyncLabel(fmtDateTime(syncedAt));
                     }
                 }
             } catch {
@@ -114,7 +115,7 @@ export function LookupListField({ field, value, onChange, error, lookupContext }
             )}
             {!error && field.lookup_source_type === 'dataset' && lastSyncLabel && (
                 <Text style={{ color: '#64748b', fontSize: 12, marginTop: 6 }}>
-                    Cached lookup • last sync {lastSyncLabel}
+                    Cached lookup ï¿½ last sync {lastSyncLabel}
                 </Text>
             )}
 

@@ -5,7 +5,9 @@ export async function ensureSyncfusionLicense() {
     return;
   }
 
+  const licenseKey = import.meta.env.VITE_SYNCFUSION_LICENSE_KEY || import.meta.env.VITE_SYNCFUSION_API_KEY || '';
+
   const { registerLicense } = await import('@syncfusion/ej2-base');
-  registerLicense(import.meta.env.VITE_SYNCFUSION_LICENSE_KEY || '');
+  registerLicense(licenseKey);
   licenseRegistered = true;
 }

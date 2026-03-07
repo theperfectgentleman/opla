@@ -132,6 +132,10 @@ export const orgAPI = {
     const res = await apiClient.get('/organizations');
     return res.data;
   },
+  acceptInvitation: async (data: { token?: string; pin_code?: string }) => {
+    const res = await apiClient.post('/organizations/invitations/accept', data);
+    return res.data;
+  },
   getTeams: async (orgId: string) => {
     const res = await apiClient.get(`/organizations/${orgId}/teams`);
     return res.data;

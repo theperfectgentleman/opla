@@ -4,6 +4,28 @@ from datetime import datetime
 from typing import Optional, Dict, List
 from app.models.form import FormStatus
 from app.models.form_version import FormVersionKind
+from app.models.project_access import AccessorType
+
+
+class ArtifactResponsibilityFields(BaseModel):
+    lead_accessor_id: Optional[UUID] = None
+    lead_accessor_type: Optional[AccessorType] = None
+    assigned_accessor_id: Optional[UUID] = None
+    assigned_accessor_type: Optional[AccessorType] = None
+    guest_accessor_id: Optional[UUID] = None
+    guest_accessor_type: Optional[AccessorType] = None
+
+    @staticmethod
+    def _validate_pair(accessor_id: Optional[UUID], accessor_type: Optional[AccessorType], label: str) -> None:
+        if bool(accessor_id) != bool(accessor_type):
+            raise ValueError(f"{label} accessor id and type must be provided together")
+
+    @classmethod
+    def _validate_pairs(cls, payload: "ArtifactResponsibilityFields") -> "ArtifactResponsibilityFields":
+        cls._validate_pair(payload.lead_accessor_id, payload.lead_accessor_type, "Lead")
+        cls._validate_pair(payload.assigned_accessor_id, payload.assigned_accessor_type, "Assigned")
+        cls._validate_pair(payload.guest_accessor_id, payload.guest_accessor_type, "Guest")
+        return payload
 
 class FormBase(BaseModel):
     title: str
@@ -27,8 +49,21 @@ class FormOut(FormBase):
     published_version: Optional[int] = None
     published_at: Optional[datetime] = None
     status: FormStatus
+    lead_accessor_id: Optional[UUID] = None
+    lead_accessor_type: Optional[AccessorType] = None
+    assigned_accessor_id: Optional[UUID] = None
+    assigned_accessor_type: Optional[AccessorType] = None
+    guest_accessor_id: Optional[UUID] = None
+    guest_accessor_type: Optional[AccessorType] = None
     created_at: datetime
     updated_at: datetime
+
+
+class FormResponsibilityUpdateIn(ArtifactResponsibilityFields):
+    @classmethod
+    def model_validate(cls, obj, *args, **kwargs):
+        payload = super().model_validate(obj, *args, **kwargs)
+        return cls._validate_pairs(payload)
 
 
 class FormVersionOut(BaseModel):

@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.core.permission_catalog import STARTER_ROLE_TEMPLATES, PERMISSION_CATALOG, VALID_PERMISSION_KEYS, validate_permissions
 from app.models.organization import Organization
-from app.models.org_member import OrgMember, GlobalRole, InvitationStatus
+from app.models.org_member import OrgMember, GlobalRole, InvitationStatus, MemberType
 from app.models.team import Team
 from app.models.team_member import TeamMember
 from app.models.user import User
@@ -43,6 +43,7 @@ class OrganizationService:
             user_id=owner_id,
             org_id=org.id,
             global_role=GlobalRole.ADMIN,
+            member_type=MemberType.INTERNAL,
             invitation_status=InvitationStatus.ACCEPTED
         )
         db.add(member)
@@ -112,6 +113,7 @@ class OrganizationService:
             user_id=user.id,
             org_id=org_id,
             global_role=role,
+            member_type=MemberType.INTERNAL,
             invited_by=invited_by_id,
             invitation_status=InvitationStatus.PENDING
         )

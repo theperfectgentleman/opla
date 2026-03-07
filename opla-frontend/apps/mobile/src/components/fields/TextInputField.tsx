@@ -17,7 +17,7 @@ export function TextInputField({ field, value, error, onChange }: TextInputField
             <TextInput
                 value={value || ''}
                 onChangeText={onChange}
-                placeholder={field.title}
+                placeholder={field.placeholder || field.label}
                 placeholderTextColor="#64748b"
                 multiline={isTextArea}
                 style={{

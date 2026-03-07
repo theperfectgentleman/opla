@@ -11,7 +11,9 @@ from app.models.org_member import GlobalRole, InvitationStatus, OrgMember
 from app.models.organization import Organization
 from app.models.project import Project, ProjectStatus
 from app.models.project_access import AccessorType, ProjectAccess, ProjectRole
+from app.models.project_report import ProjectReport
 from app.models.project_role_template import ProjectRoleTemplate
+from app.models.project_task import ProjectTask, ProjectTaskStatus
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType as RoleAccessorType
 from app.models.submission import Submission
 from app.models.user import User
@@ -162,6 +164,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
             self.db.query(Form.id).filter(Form.project_id.in_(project_ids))
         )).delete(synchronize_session=False)
         self.db.query(Form).filter(Form.project_id.in_(project_ids)).delete(synchronize_session=False)
+        self.db.query(ProjectReport).filter(ProjectReport.project_id.in_(project_ids)).delete(synchronize_session=False)
+        self.db.query(ProjectTask).filter(ProjectTask.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectAccess).filter(ProjectAccess.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectRoleTemplate).filter(ProjectRoleTemplate.org_id == org_id).delete(synchronize_session=False)
         self.db.query(OrgRoleAssignment).filter(OrgRoleAssignment.org_id == org_id).delete(synchronize_session=False)
@@ -281,6 +285,142 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         templates = {item["slug"]: item for item in response.json()}
         self.assertIn("field-personnel", templates)
         self.assertEqual(templates["field-personnel"]["assignment_count"], 1)
+
+    def test_admin_can_create_and_list_project_tasks(self):
+        response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/tasks",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "title": "Kickoff briefing",
+                "description": "Prepare the field kickoff checklist.",
+                "assigned_accessor_id": str(self.member_user.id),
+                "assigned_accessor_type": "user",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["title"], "Kickoff briefing")
+        self.assertEqual(payload["status"], ProjectTaskStatus.TODO.value)
+
+        list_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/tasks",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()), 1)
+
+    def test_assigned_member_can_update_task_status(self):
+        task = ProjectTask(
+            project_id=self.open_project.id,
+            title=f"Assigned Task {self.suffix}",
+            assigned_accessor_id=self.member_user.id,
+            assigned_accessor_type=AccessorType.USER,
+            created_by=self.admin_user.id,
+        )
+        self.db.add(task)
+        self.db.commit()
+
+        response = self.client.patch(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/tasks/{task.id}",
+            headers=self.auth_headers(self.member_user),
+            json={"status": "done"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], ProjectTaskStatus.DONE.value)
+        self.assertIsNotNone(payload["completed_at"])
+
+    def test_admin_can_update_form_responsibility(self):
+        form = Form(
+            project_id=self.open_project.id,
+            title=f"Responsibility Form {self.suffix}",
+            slug=f"responsibility-form-{self.suffix}",
+            blueprint_draft={"meta": {"title": "Responsibility Form"}},
+            version=0,
+            status=FormStatus.DRAFT,
+            is_public=False,
+        )
+        self.db.add(form)
+        self.db.commit()
+
+        response = self.client.put(
+            f"/api/v1/forms/{form.id}/responsibility",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "lead_accessor_id": str(self.admin_user.id),
+                "lead_accessor_type": "user",
+                "assigned_accessor_id": str(self.member_user.id),
+                "assigned_accessor_type": "user",
+                "guest_accessor_id": str(self.member_user.id),
+                "guest_accessor_type": "user",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["lead_accessor_id"], str(self.admin_user.id))
+        self.assertEqual(payload["assigned_accessor_id"], str(self.member_user.id))
+        self.assertEqual(payload["guest_accessor_id"], str(self.member_user.id))
+
+    def test_admin_can_create_update_and_list_project_reports(self):
+        create_response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/reports",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "title": "Field Readout",
+                "description": "Summary of field activity.",
+                "content": [{"id": "summary", "type": "narrative", "label": "Executive Summary", "content": "Launch overview"}],
+            },
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        created = create_response.json()
+        self.assertEqual(created["title"], "Field Readout")
+        self.assertEqual(created["status"], "draft")
+        self.assertEqual(created["content"][0]["label"], "Executive Summary")
+
+        update_response = self.client.patch(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/reports/{created['id']}",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "content": [{"id": "summary", "type": "narrative", "label": "Executive Summary", "content": "Published report body"}],
+                "status": "published",
+                "lead_accessor_id": str(self.admin_user.id),
+                "lead_accessor_type": "user",
+                "assigned_accessor_id": str(self.member_user.id),
+                "assigned_accessor_type": "user",
+                "guest_accessor_id": str(self.member_user.id),
+                "guest_accessor_type": "user",
+            },
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        updated = update_response.json()
+        self.assertEqual(updated["status"], "published")
+        self.assertEqual(updated["content"][0]["content"], "Published report body")
+        self.assertEqual(updated["lead_accessor_id"], str(self.admin_user.id))
+        self.assertEqual(updated["assigned_accessor_id"], str(self.member_user.id))
+        self.assertEqual(updated["guest_accessor_id"], str(self.member_user.id))
+
+        list_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/reports",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()), 1)
+
+        detail_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/reports/{created['id']}",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["id"], created["id"])
+        self.assertEqual(detail_response.json()["content"][0]["content"], "Published report body")
 
 
 if __name__ == "__main__":

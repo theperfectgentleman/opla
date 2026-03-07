@@ -8,15 +8,22 @@ from app.api.schemas.organization import (
     TeamCreate,
     TeamOut,
     OrgMemberDetailOut,
+    OrgMemberOut,
     OrgRoleCreate,
     OrgRoleOut,
     OrgRoleUpdate,
     OrgRoleCatalogOut,
     OrgRoleAssignmentCreate,
     OrgRoleAssignmentOut,
-    OrgRoleAssignmentView
+    OrgRoleAssignmentView,
+    InternalInvitationCreate,
+    InvitationAcceptRequest,
+    InvitationAcceptResponse,
+    InvitationOut,
 )
 from app.services.organization_service import OrganizationService
+from app.services.invitation_service import InvitationService
+from app.api.presenters.invitation_presenter import serialize_invitation
 from app.models.user import User
 from app.models.project_access import AccessorType
 from app.models.team import Team
@@ -92,6 +99,7 @@ def list_org_members(
             id=member.id,
             user_id=member.user_id,
             global_role=member.global_role,
+            member_type=member.member_type,
             invitation_status=member.invitation_status,
             joined_at=member.joined_at,
             user=member.user,
@@ -296,3 +304,84 @@ def validate_role_assignment(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"success": True}
+
+
+@router.get("/{org_id}/invitations", response_model=List[InvitationOut])
+def list_invitations(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    invitations = InvitationService.list_invitations(db, org_id=org_id, requested_by=current_user.id)
+    return [serialize_invitation(invitation) for invitation in invitations]
+
+
+@router.post("/{org_id}/invitations/internal", response_model=InvitationOut, status_code=status.HTTP_201_CREATED)
+def create_internal_invitation(
+    org_id: uuid.UUID,
+    invitation_in: InternalInvitationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    invitation = InvitationService.create_internal_invitation(
+        db,
+        org_id=org_id,
+        created_by=current_user.id,
+        invited_email=invitation_in.invited_email,
+        delivery_mode=invitation_in.delivery_mode,
+    )
+    return serialize_invitation(invitation)
+
+
+@router.post("/{org_id}/invitations/{invitation_id}/approve", response_model=InvitationOut)
+def approve_invitation(
+    org_id: uuid.UUID,
+    invitation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    invitation = InvitationService.approve_invitation(
+        db,
+        org_id=org_id,
+        invitation_id=invitation_id,
+        approved_by=current_user.id,
+    )
+    return serialize_invitation(invitation)
+
+
+@router.delete("/{org_id}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invitation(
+    org_id: uuid.UUID,
+    invitation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    InvitationService.revoke_invitation(
+        db,
+        org_id=org_id,
+        invitation_id=invitation_id,
+        revoked_by=current_user.id,
+    )
+    return None
+
+
+@router.post("/invitations/accept", response_model=InvitationAcceptResponse)
+def accept_invitation(
+    request: InvitationAcceptRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result, invitation, membership = InvitationService.accept_invitation(
+        db,
+        user=current_user,
+        token=request.token,
+        pin_code=request.pin_code,
+    )
+    membership_out = None
+    if membership:
+        membership_out = OrgMemberOut.model_validate(membership)
+    return InvitationAcceptResponse(
+        status=result,
+        invitation=serialize_invitation(invitation),
+        membership=membership_out,
+    )

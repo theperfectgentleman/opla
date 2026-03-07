@@ -10,6 +10,11 @@ class GlobalRole(str, enum.Enum):
     ADMIN = "admin"
     MEMBER = "member"
 
+
+class MemberType(str, enum.Enum):
+    INTERNAL = "internal"
+    CONTRACTOR = "contractor"
+
 class InvitationStatus(str, enum.Enum):
     PENDING = "pending"
     ACCEPTED = "accepted"
@@ -21,6 +26,7 @@ class OrgMember(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
     global_role = Column(Enum(GlobalRole, name="global_role", values_callable=lambda obj: [e.value for e in obj]), default=GlobalRole.MEMBER, nullable=False)
+    member_type = Column(Enum(MemberType, name="member_type", values_callable=lambda obj: [e.value for e in obj]), default=MemberType.INTERNAL, nullable=False)
     invited_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     invitation_status = Column(Enum(InvitationStatus, name="invitation_status", values_callable=lambda obj: [e.value for e in obj]), default=InvitationStatus.PENDING, nullable=False)
     joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -146,6 +146,29 @@ export const orgAPI = {
         const response = await apiClient.get(`/organizations/${orgId}/members`);
         return response.data;
     },
+    listInvitations: async (orgId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/invitations`);
+        return response.data;
+    },
+    createInternalInvitation: async (
+        orgId: string,
+        data: { invited_email?: string; delivery_mode: 'email' | 'short_link' },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/invitations/internal`, data);
+        return response.data;
+    },
+    approveInvitation: async (orgId: string, invitationId: string) => {
+        const response = await apiClient.post(`/organizations/${orgId}/invitations/${invitationId}/approve`);
+        return response.data;
+    },
+    revokeInvitation: async (orgId: string, invitationId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/invitations/${invitationId}`);
+        return response.data;
+    },
+    acceptInvitation: async (data: { token?: string; pin_code?: string }) => {
+        const response = await apiClient.post('/organizations/invitations/accept', data);
+        return response.data;
+    },
     createTeam: async (orgId: string, data: { name: string; description?: string }) => {
         const response = await apiClient.post(`/organizations/${orgId}/teams`, data);
         return response.data;
@@ -186,6 +209,14 @@ export const teamAPI = {
     },
     removeMember: async (orgId: string, teamId: string, userId: string) => {
         const response = await apiClient.delete(`/organizations/${orgId}/teams/${teamId}/members/${userId}`);
+        return response.data;
+    },
+    createContractorInvitation: async (
+        orgId: string,
+        teamId: string,
+        data: { delivery_mode: 'generated_link' | 'pin_code'; approval_mode: 'auto' | 'review' },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/teams/${teamId}/invitations/contractor`, data);
         return response.data;
     },
 };
@@ -296,6 +327,47 @@ export const projectAPI = {
         );
         return response.data;
     },
+    listTasks: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/tasks`);
+        return response.data;
+    },
+    createTask: async (
+        orgId: string,
+        projectId: string,
+        data: {
+            title: string;
+            description?: string;
+            starts_at?: string;
+            due_at?: string;
+            assigned_accessor_id?: string;
+            assigned_accessor_type?: 'user' | 'team';
+        },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/tasks`, data);
+        return response.data;
+    },
+    updateTask: async (
+        orgId: string,
+        projectId: string,
+        taskId: string,
+        data: {
+            title?: string;
+            description?: string;
+            status?: 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
+            starts_at?: string;
+            due_at?: string;
+            assigned_accessor_id?: string;
+            assigned_accessor_type?: 'user' | 'team';
+            clear_assignment?: boolean;
+        },
+    ) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`, data);
+        return response.data;
+    },
+    deleteTask: async (orgId: string, projectId: string, taskId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`);
+        return response.data;
+    },
 };
 
 // ============= Form API Methods =============
@@ -303,6 +375,20 @@ export const projectAPI = {
 export const formAPI = {
     create: async (projectId: string, data: { title: string; blueprint?: any; is_public?: boolean }) => {
         const response = await apiClient.post(`/projects/${projectId}/forms`, data);
+        return response.data;
+    },
+    updateResponsibility: async (
+        formId: string,
+        data: {
+            lead_accessor_id?: string | null;
+            lead_accessor_type?: 'user' | 'team' | null;
+            assigned_accessor_id?: string | null;
+            assigned_accessor_type?: 'user' | 'team' | null;
+            guest_accessor_id?: string | null;
+            guest_accessor_type?: 'user' | 'team' | null;
+        },
+    ) => {
+        const response = await apiClient.put(`/forms/${formId}/responsibility`, data);
         return response.data;
     },
     updateBlueprint: async (formId: string, blueprint: any, targetSlot: number = 1) => {
@@ -327,6 +413,45 @@ export const formAPI = {
     },
     list: async (projectId: string) => {
         const response = await apiClient.get(`/projects/${projectId}/forms`);
+        return response.data;
+    },
+};
+
+export const reportAPI = {
+    list: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/reports`);
+        return response.data;
+    },
+    get: async (orgId: string, projectId: string, reportId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/reports/${reportId}`);
+        return response.data;
+    },
+    create: async (orgId: string, projectId: string, data: { title: string; description?: string; content?: Array<Record<string, any>> }) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/reports`, data);
+        return response.data;
+    },
+    update: async (
+        orgId: string,
+        projectId: string,
+        reportId: string,
+        data: {
+            title?: string;
+            description?: string | null;
+            content?: Array<Record<string, any>>;
+            status?: 'draft' | 'published' | 'archived';
+            lead_accessor_id?: string | null;
+            lead_accessor_type?: 'user' | 'team' | null;
+            assigned_accessor_id?: string | null;
+            assigned_accessor_type?: 'user' | 'team' | null;
+            guest_accessor_id?: string | null;
+            guest_accessor_type?: 'user' | 'team' | null;
+        },
+    ) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}/reports/${reportId}`, data);
+        return response.data;
+    },
+    delete: async (orgId: string, projectId: string, reportId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/projects/${projectId}/reports/${reportId}`);
         return response.data;
     },
 };

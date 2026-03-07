@@ -1,0 +1,10 @@
+﻿src/pages/ProjectWorkspace.tsx(112,7): error TS6133: 'projectStatuses' is declared but its value is never read.
+src/pages/ProjectWorkspace.tsx(122,7): error TS6133: 'businessRolePriority' is declared but its value is never read.
+src/pages/ProjectWorkspace.tsx(138,9): error TS6133: 'updateProject' is declared but its value is never read.
+src/pages/ProjectWorkspace.tsx(192,13): error TS2304: Cannot find name 'accessorType'.
+src/pages/ProjectWorkspace.tsx(200,9): error TS2304: Cannot find name 'accessorType'.
+src/pages/ProjectWorkspace.tsx(225,11): error TS6133: 'liveFormsCount' is declared but its value is never read.
+src/pages/ProjectWorkspace.tsx(226,11): error TS6133: 'completedTasksCount' is declared but its value is never read.
+src/pages/ProjectWorkspace.tsx(233,11): error TS6133: 'getRoleTemplateOptionLabel' is declared but its value is never read.
+src/pages/ProjectWorkspace.tsx(269,32): error TS2304: Cannot find name 'accessorType'.
+src/pages/ProjectWorkspace.tsx(649,72): error TS2552: Cannot find name 'handleDeleteReport'. Did you mean 'handleCreateReport'?

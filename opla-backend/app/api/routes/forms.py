@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from app.api.dependencies import get_current_user, get_db
-from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, PublishFormIn
+from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, PublishFormIn, FormResponsibilityUpdateIn
 from app.services.form_service import FormService
 from app.services.project_access_service import ProjectAccessService
 from app.models.project import ProjectStatus
@@ -147,3 +147,26 @@ def publish_form(
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     return form
+
+
+@router.put("/{form_id}/responsibility", response_model=FormOut)
+def update_form_responsibility(
+    form_id: uuid.UUID,
+    payload: FormResponsibilityUpdateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    return FormService.update_responsibility(
+        db,
+        form,
+        lead_accessor_id=payload.lead_accessor_id,
+        lead_accessor_type=payload.lead_accessor_type,
+        assigned_accessor_id=payload.assigned_accessor_id,
+        assigned_accessor_type=payload.assigned_accessor_type,
+        guest_accessor_id=payload.guest_accessor_id,
+        guest_accessor_type=payload.guest_accessor_type,
+    )

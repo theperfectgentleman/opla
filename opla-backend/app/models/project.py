@@ -33,3 +33,4 @@ class Project(Base):
     
     organization = relationship("Organization", backref="projects")
     forms = relationship("Form", back_populates="project", cascade="all, delete-orphan")
+    reports = relationship("ProjectReport", back_populates="project", cascade="all, delete-orphan")

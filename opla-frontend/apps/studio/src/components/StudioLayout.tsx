@@ -6,6 +6,7 @@ import ThemeToggle from './ThemeToggle';
 import {
     Layout,
     Folder,
+    CheckSquare,
     Users,
     Settings,
     Search,
@@ -13,24 +14,33 @@ import {
     Target,
     BarChart3,
     FileBarChart2,
+    MessageSquare,
+    Paperclip,
     ChevronDown,
     LogOut,
     PanelLeftClose,
     PanelLeftOpen,
+    Database,
 } from 'lucide-react';
 
 type StudioNavKey =
     | 'projects'
+    | 'tasks'
     | 'forms'
+    | 'datasets'
     | 'members'
     | 'audience'
     | 'analysis'
+    | 'threads'
+    | 'assets'
     | 'reports'
     | 'settings';
 
 type NavCounts = {
     projects?: number;
+    tasks?: number;
     forms?: number;
+    datasets?: number;
     members?: number;
 };
 
@@ -46,9 +56,13 @@ type StudioLayoutProps = {
 const navItems: Array<{ key: StudioNavKey; label: string; icon: React.ReactNode; countKey?: keyof NavCounts }> = [
     { key: 'projects', label: 'Projects', icon: <Folder className="w-5 h-5" />, countKey: 'projects' },
     { key: 'forms', label: 'All Forms', icon: <Layout className="w-5 h-5" />, countKey: 'forms' },
+    { key: 'datasets', label: 'Datasets', icon: <Database className="w-5 h-5" />, countKey: 'datasets' },
     { key: 'members', label: 'Teams', icon: <Users className="w-5 h-5" />, countKey: 'members' },
+    { key: 'tasks', label: 'Tasks', icon: <CheckSquare className="w-5 h-5" />, countKey: 'tasks' },
     { key: 'audience', label: 'Audience', icon: <Target className="w-5 h-5" /> },
-    { key: 'analysis', label: 'Analysis', icon: <BarChart3 className="w-5 h-5" /> },
+    { key: 'analysis', label: 'Analytics', icon: <BarChart3 className="w-5 h-5" /> },
+    { key: 'threads', label: 'Threads', icon: <MessageSquare className="w-5 h-5" /> },
+    { key: 'assets', label: 'Assets', icon: <Paperclip className="w-5 h-5" /> },
     { key: 'reports', label: 'Reports', icon: <FileBarChart2 className="w-5 h-5" /> },
     { key: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
 ];
@@ -182,62 +196,62 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
 
                         <div className={`${alignRightRail ? 'h-full w-80 border-l border-[hsl(var(--border))] px-4 md:px-6 flex items-center justify-end' : 'pl-3 md:pl-4 border-l border-[hsl(var(--border))]'} `}>
                             <div ref={profileMenuRef} className="relative">
-                            <button
-                                onClick={() => setIsProfileMenuOpen(prev => !prev)}
-                                className={`flex items-center justify-end space-x-2 min-w-[190px] md:min-w-[220px] ${alignRightRail ? 'pl-2 pr-1 md:pr-2' : 'pr-1 md:pr-2'}`}
-                            >
-                                <div className="text-right hidden md:block">
-                                    <p className="text-sm font-semibold">{user?.full_name}</p>
-                                    <p className="text-xs text-[hsl(var(--text-tertiary))]">Account</p>
-                                </div>
-                                <div className="w-10 h-10 bg-gradient-to-br from-[hsl(var(--accent-1))] to-[hsl(var(--accent-2))] rounded-xl shadow-lg"></div>
-                                <ChevronDown className={`w-4 h-4 text-[hsl(var(--text-tertiary))] transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-
-                            {isProfileMenuOpen && (
-                                <div className="absolute right-0 mt-3 w-[22rem] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-xl p-4 z-[60]">
-                                    <div className="mb-4 pb-4 border-b border-[hsl(var(--border))]">
+                                <button
+                                    onClick={() => setIsProfileMenuOpen(prev => !prev)}
+                                    className={`flex items-center justify-end space-x-2 min-w-[190px] md:min-w-[220px] ${alignRightRail ? 'pl-2 pr-1 md:pr-2' : 'pr-1 md:pr-2'}`}
+                                >
+                                    <div className="text-right hidden md:block">
                                         <p className="text-sm font-semibold">{user?.full_name}</p>
-                                        <p className="text-xs text-[hsl(var(--text-tertiary))]">{user?.email}</p>
+                                        <p className="text-xs text-[hsl(var(--text-tertiary))]">Account</p>
                                     </div>
+                                    <div className="w-10 h-10 bg-gradient-to-br from-[hsl(var(--accent-1))] to-[hsl(var(--accent-2))] rounded-xl shadow-lg"></div>
+                                    <ChevronDown className={`w-4 h-4 text-[hsl(var(--text-tertiary))] transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+                                </button>
 
-                                    <div className="mb-4">
-                                        <label className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-widest mb-2 block">
-                                            Organization
-                                        </label>
-                                        <select
-                                            value={currentOrg?.id ?? ''}
-                                            onChange={(e) => handleOrganizationSwitch(e.target.value)}
-                                            className="w-full bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[hsl(var(--primary))] transition-all cursor-pointer"
+                                {isProfileMenuOpen && (
+                                    <div className="absolute right-0 mt-3 w-[22rem] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-xl p-4 z-[60]">
+                                        <div className="mb-4 pb-4 border-b border-[hsl(var(--border))]">
+                                            <p className="text-sm font-semibold">{user?.full_name}</p>
+                                            <p className="text-xs text-[hsl(var(--text-tertiary))]">{user?.email}</p>
+                                        </div>
+
+                                        <div className="mb-4">
+                                            <label className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-widest mb-2 block">
+                                                Organization
+                                            </label>
+                                            <select
+                                                value={currentOrg?.id ?? ''}
+                                                onChange={(e) => handleOrganizationSwitch(e.target.value)}
+                                                className="w-full bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[hsl(var(--primary))] transition-all cursor-pointer"
+                                            >
+                                                {organizations.map(org => (
+                                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileMenuOpen(false);
+                                                navigate('/welcome');
+                                            }}
+                                            className="w-full flex items-center justify-center px-3 py-2.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface))] text-[hsl(var(--text-primary))] font-semibold transition-all mb-3"
                                         >
-                                            {organizations.map(org => (
-                                                <option key={org.id} value={org.id}>{org.name}</option>
-                                            ))}
-                                        </select>
+                                            + Create Organization
+                                        </button>
+
+                                        <button
+                                            onClick={() => { logout(); navigate('/login'); }}
+                                            className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--error))] transition-all"
+                                        >
+                                            <LogOut className="w-4 h-4" />
+                                            <span className="font-medium">Logout</span>
+                                        </button>
                                     </div>
-
-                                    <button
-                                        onClick={() => {
-                                            setIsProfileMenuOpen(false);
-                                            navigate('/welcome');
-                                        }}
-                                        className="w-full flex items-center justify-center px-3 py-2.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface))] text-[hsl(var(--text-primary))] font-semibold transition-all mb-3"
-                                    >
-                                        + Create Organization
-                                    </button>
-
-                                    <button
-                                        onClick={() => { logout(); navigate('/login'); }}
-                                        className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--error))] transition-all"
-                                    >
-                                        <LogOut className="w-4 h-4" />
-                                        <span className="font-medium">Logout</span>
-                                    </button>
-                                </div>
-                            )}
-                            </div>
+                                )}
                             </div>
                         </div>
+                    </div>
                 </header>
 
                 <div className={contentClassName}>{children}</div>

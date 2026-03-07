@@ -26,6 +26,8 @@ interface UIField {
     lookup_separator?: string;
     lookup_label_column?: number;
     lookup_value_column?: number;
+    min_label?: string;
+    max_label?: string;
 }
 
 interface LogicCondition {
@@ -364,7 +366,7 @@ const FormSimulator: React.FC = () => {
 
     if (isLoading) return <div className="min-h-screen bg-[hsl(var(--background))] flex items-center justify-center text-[hsl(var(--text-primary))]">Loading Simulator...</div>;
 
-    const handleShellNavSelect = (key: 'projects' | 'forms' | 'members' | 'audience' | 'analysis' | 'reports' | 'settings') => {
+    const handleShellNavSelect = (key: 'projects' | 'tasks' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
         navigate(`/dashboard?tab=${key}`);
     };
 
@@ -374,336 +376,362 @@ const FormSimulator: React.FC = () => {
             onSelectNav={handleShellNavSelect}
             contentClassName="flex-1 overflow-auto"
         >
-        <div className="h-full bg-[hsl(var(--background))] flex items-center justify-center p-8">
-            <div className="flex flex-col items-center">
-                {/* Simulator Controls */}
-                <div className="mb-8 flex space-x-4 items-center">
-                    <button
-                        onClick={() => navigate(-1)}
-                        className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
-                    >
-                        <ChevronLeft className="w-6 h-6" />
-                    </button>
-                    <button
-                        onClick={() => { setFormData({}); setStatus('idle'); }}
-                        className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
-                    >
-                        <RotateCcw className="w-6 h-6" />
-                    </button>
-                </div>
-
-                {/* Device Frame */}
-                <div className="relative w-[380px] h-[780px] bg-[hsl(var(--surface))] rounded-[60px] border-[8px] border-[hsl(var(--border))] shadow-[0_30px_80px_rgba(0,0,0,0.2)] overflow-hidden">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-8 bg-[hsl(var(--surface-elevated))] rounded-b-3xl z-20"></div>
-
-                    <div className="absolute inset-0 bg-[hsl(var(--surface))] overflow-y-auto">
-                        <header className="pt-16 pb-6 px-6 bg-[hsl(var(--surface))] border-b border-[hsl(var(--border))] sticky top-0 z-10">
-                            <h1 className="text-2xl font-bold text-[hsl(var(--text-primary))] leading-tight">{blueprint?.meta?.title || 'Simulator Preview'}</h1>
-                            <p className="text-[hsl(var(--text-tertiary))] text-xs font-medium uppercase tracking-wider mt-1">Submission Draft</p>
-                        </header>
-
-                        <div className="p-6 space-y-6">
-                            {(blueprint?.ui[currentSectionIndex]?.children || [])
-                                .filter(field => isFieldVisible(field.bind))
-                                .map((field, idx) => (
-                                    <div key={idx} className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                        <label className="text-sm font-bold text-[hsl(var(--text-secondary))] block">
-                                            {field.label}
-                                        </label>
-
-                                        {field.type === 'gps_capture' ? (
-                                            <button
-                                                onClick={captureGPS}
-                                                className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--success))]/10 border-[hsl(var(--success))] text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}
-                                            >
-                                                <div className="flex items-center space-x-3">
-                                                    <MapPin className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
-                                                    <span className="font-semibold text-sm">
-                                                        {formData[field.bind] ? `Location Captured` : `Click to capture GPS`}
-                                                    </span>
-                                                </div>
-                                                {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />}
-                                            </button>
-                                        ) : field.type === 'photo_capture' ? (
-                                            <div className="relative">
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={(e) => handlePhotoUpload(e, field.bind)}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                                />
-                                                <div className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--info))]/10 border-[hsl(var(--info))] text-[hsl(var(--info))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}>
-                                                    <div className="flex items-center space-x-3">
-                                                        <CameraIcon className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--info))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
-                                                        <span className="font-semibold text-sm">
-                                                            {formData[field.bind] ? `Photo Attached` : `Tap to take photo`}
-                                                        </span>
-                                                    </div>
-                                                    {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--info))]" />}
-                                                </div>
-                                            </div>
-                                        ) : field.type === 'file_upload' || field.type === 'audio_recorder' ? (
-                                            <input
-                                                type="file"
-                                                accept={field.type === 'audio_recorder' ? 'audio/*' : undefined}
-                                                onChange={(e) => handleInputChange(field.bind, e.target.files?.[0]?.name)}
-                                                className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
-                                            />
-                                        ) : field.type === 'signature_pad' ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleInputChange(field.bind, 'signed')}
-                                                className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]"
-                                            >
-                                                <span className="font-semibold text-sm">Tap to sign</span>
-                                                {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />}
-                                            </button>
-                                        ) : field.type === 'dropdown' ? (
-                                            <div className="space-y-2">
-                                                <select
-                                                    value={formData[field.bind] || ''}
-                                                    onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all"
-                                                >
-                                                    <option value="" disabled>Select an option</option>
-                                                    {(field.options || []).map((opt, i) => (
-                                                        <option key={`${getOptionValue(opt)}-${i}`} value={getOptionValue(opt)}>{getOptionLabel(opt)}</option>
-                                                    ))}
-                                                </select>
-                                                {isOtherSelected(formData[field.bind]) && (
-                                                    <input
-                                                        type="text"
-                                                        value={formData[field.bind + '_other'] || ''}
-                                                        onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
-                                                        className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
-                                                        placeholder="Please specify..."
-                                                    />
-                                                )}
-                                            </div>
-                                        ) : field.type === 'radio_group' ? (
-                                            <div className="space-y-2">
-                                                {(field.options || []).map((opt, i) => (
-                                                    <label key={`${getOptionValue(opt)}-${i}`} className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
-                                                        <input
-                                                            type="radio"
-                                                            name={field.bind}
-                                                            value={getOptionValue(opt)}
-                                                            checked={formData[field.bind] === getOptionValue(opt)}
-                                                            onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                                        />
-                                                        {getOptionLabel(opt)}
-                                                    </label>
-                                                ))}
-                                                {isOtherSelected(formData[field.bind]) && (
-                                                    <input
-                                                        type="text"
-                                                        value={formData[field.bind + '_other'] || ''}
-                                                        onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
-                                                        className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
-                                                        placeholder="Please specify..."
-                                                    />
-                                                )}
-                                            </div>
-                                        ) : field.type === 'checkbox_group' ? (
-                                            <div className="space-y-2">
-                                                {(field.options || []).map((opt, i) => (
-                                                    <label key={`${getOptionValue(opt)}-${i}`} className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={(formData[field.bind] || []).includes(getOptionValue(opt))}
-                                                            onChange={(e) => toggleCheckboxValue(field.bind, getOptionValue(opt), e.target.checked)}
-                                                        />
-                                                        {getOptionLabel(opt)}
-                                                    </label>
-                                                ))}
-                                                {isOtherSelected(formData[field.bind]) && (
-                                                    <input
-                                                        type="text"
-                                                        value={formData[field.bind + '_other'] || ''}
-                                                        onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
-                                                        className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
-                                                        placeholder="Please specify..."
-                                                    />
-                                                )}
-                                            </div>
-                                        ) : field.type === 'toggle' ? (
-                                            <label className="flex items-center gap-3 text-sm text-[hsl(var(--text-secondary))]">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={!!formData[field.bind]}
-                                                    onChange={(e) => handleInputChange(field.bind, e.target.checked)}
-                                                />
-                                                Toggle
-                                            </label>
-                                        ) : field.type === 'textarea' ? (
-                                            <textarea
-                                                value={formData[field.bind] || ''}
-                                                onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                                className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium min-h-[120px]"
-                                                placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
-                                            />
-                                        ) : field.type === 'lookup_list' ? (
-                                            <LookupFieldRenderer
-                                                field={field}
-                                                value={formData[field.bind]}
-                                                onChange={(val: any) => handleInputChange(field.bind, val)}
-                                            />
-                                        ) : field.type === 'matrix_table' ? (
-                                            <div className="w-full max-h-[500px] overflow-auto hide-scrollbar rounded-2xl border border-[hsl(var(--border))] relative relative-z-0">
-                                                <table className="w-full text-xs text-left min-w-max">
-                                                    <thead className="bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] sticky top-0 z-10 shadow-sm">
-                                                        <tr>
-                                                            <th className="px-3 py-3 font-medium min-w-[120px]">&nbsp;</th>
-                                                            {(field.table_columns || []).map((col: any) => (
-                                                                <th key={col.id} className="px-2 py-3 font-medium text-center min-w-[80px]">{col.label}</th>
-                                                            ))}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {(field.table_rows || []).map((row: any, rIdx: number) => (
-                                                            <tr key={row.id} className={`border-t border-[hsl(var(--border))] ${rIdx % 2 === 0 ? 'bg-[hsl(var(--surface))]' : 'bg-[hsl(var(--surface-elevated))]'}`}>
-                                                                <td className="px-3 py-3 font-medium text-[hsl(var(--text-primary))]">{row.label}</td>
-                                                                {(field.table_columns || []).map((col: any) => {
-                                                                    const cellType = field.table_cell_type || 'radio';
-                                                                    const fieldData = formData[field.bind] || {};
-                                                                    const rowData = fieldData[row.id];
-
-                                                                    return (
-                                                                        <td key={col.id} className="px-2 py-3 text-center">
-                                                                            {cellType === 'radio' ? (
-                                                                                <input
-                                                                                    type="radio"
-                                                                                    name={`${field.bind}_${row.id}`}
-                                                                                    checked={rowData === col.id}
-                                                                                    onChange={() => handleInputChange(field.bind, { ...fieldData, [row.id]: col.id })}
-                                                                                    className="w-4 h-4 text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                                                />
-                                                                            ) : cellType === 'checkbox' ? (
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    checked={(rowData || []).includes(col.id)}
-                                                                                    onChange={(e) => {
-                                                                                        const currentArr = rowData || [];
-                                                                                        const nextArr = e.target.checked
-                                                                                            ? [...currentArr, col.id]
-                                                                                            : currentArr.filter((id: string) => id !== col.id);
-                                                                                        handleInputChange(field.bind, { ...fieldData, [row.id]: nextArr });
-                                                                                    }}
-                                                                                    className="w-4 h-4 rounded text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                                                />
-                                                                            ) : cellType === 'text' || cellType === 'number' ? (
-                                                                                <input
-                                                                                    type={cellType}
-                                                                                    value={rowData?.[col.id] || ''}
-                                                                                    onChange={(e) => {
-                                                                                        const currentRow = fieldData[row.id] || {};
-                                                                                        handleInputChange(field.bind, {
-                                                                                            ...fieldData,
-                                                                                            [row.id]: { ...currentRow, [col.id]: e.target.value }
-                                                                                        });
-                                                                                    }}
-                                                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded px-2 py-1.5 text-center text-xs"
-                                                                                />
-                                                                            ) : cellType === 'dropdown' ? (
-                                                                                <select
-                                                                                    value={rowData?.[col.id] || ''}
-                                                                                    onChange={(e) => {
-                                                                                        const currentRow = fieldData[row.id] || {};
-                                                                                        handleInputChange(field.bind, {
-                                                                                            ...fieldData,
-                                                                                            [row.id]: { ...currentRow, [col.id]: e.target.value }
-                                                                                        });
-                                                                                    }}
-                                                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded px-1 py-1 text-center text-xs text-[hsl(var(--text-primary))]"
-                                                                                >
-                                                                                    <option value=""></option>
-                                                                                    {(field.options || []).map((opt: any, oIdx: number) => (
-                                                                                        <option key={oIdx} value={getOptionValue(opt)}>{getOptionLabel(opt)}</option>
-                                                                                    ))}
-                                                                                </select>
-                                                                            ) : null}
-                                                                        </td>
-                                                                    );
-                                                                })}
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        ) : (
-                                            <input
-                                                type={field.type === 'input_number' ? 'number' : field.type === 'email_input' ? 'email' : field.type === 'phone_input' ? 'tel' : field.type === 'date_picker' ? 'date' : field.type === 'time_picker' ? 'time' : 'text'}
-                                                value={formData[field.bind] || ''}
-                                                onChange={(e) => handleInputChange(field.bind, field.mask ? applyMask(e.target.value, field.mask) : e.target.value)}
-                                                className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
-                                                placeholder={field.placeholder || (field.mask ? field.mask : `Enter ${field.label.toLowerCase()}...`)}
-                                                min={field.min}
-                                                max={field.max}
-                                            />
-                                        )}
-                                    </div>
-                                ))}
-
-                            {/* Pagination Controls */}
-                            <div className="pt-6 flex gap-3">
-                                {currentSectionIndex > 0 && (
-                                    <button
-                                        onClick={() => setCurrentSectionIndex(prev => prev - 1)}
-                                        className="flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-primary))] border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface))]"
-                                    >
-                                        <span>Back</span>
-                                    </button>
-                                )}
-
-                                {currentSectionIndex < (blueprint?.ui.length || 1) - 1 ? (
-                                    <button
-                                        onClick={handleNext}
-                                        className="flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30"
-                                    >
-                                        <span>Next</span>
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={handleSubmit}
-                                        disabled={status === 'submitting' || status === 'success'}
-                                        className={`flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 ${status === 'success' ? 'bg-[hsl(var(--success))] text-white shadow-[hsl(var(--success))]/30' :
-                                            status === 'error' ? 'bg-[hsl(var(--error))] text-white shadow-[hsl(var(--error))]/30' :
-                                                'bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30'
-                                            }`}
-                                    >
-                                        {status === 'submitting' ? (
-                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        ) : status === 'success' ? (
-                                            <>
-                                                <CheckCircle2 className="w-5 h-5" />
-                                                <span>Sent Successfully</span>
-                                            </>
-                                        ) : status === 'error' ? (
-                                            <>
-                                                <AlertCircle className="w-5 h-5" />
-                                                <span>Submission Failed</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Send className="w-5 h-5" />
-                                                <span>Submit Data</span>
-                                            </>
-                                        )}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+            <div className="h-full bg-[hsl(var(--background))] flex items-center justify-center p-8">
+                <div className="flex flex-col items-center">
+                    {/* Simulator Controls */}
+                    <div className="mb-8 flex space-x-4 items-center">
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
+                        >
+                            <ChevronLeft className="w-6 h-6" />
+                        </button>
+                        <button
+                            onClick={() => { setFormData({}); setStatus('idle'); }}
+                            className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
+                        >
+                            <RotateCcw className="w-6 h-6" />
+                        </button>
                     </div>
 
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-[hsl(var(--border))] rounded-full z-20"></div>
-                </div>
+                    {/* Device Frame */}
+                    <div className="relative w-[380px] h-[780px] bg-[hsl(var(--surface))] rounded-[60px] border-[8px] border-[hsl(var(--border))] shadow-[0_30px_80px_rgba(0,0,0,0.2)] overflow-hidden">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-8 bg-[hsl(var(--surface-elevated))] rounded-b-3xl z-20"></div>
 
-                <div className="mt-8 flex items-center space-x-2 text-[hsl(var(--text-tertiary))]">
-                    <Smartphone className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-widest">Mobile Preview Engine v2.0</span>
+                        <div className="absolute inset-0 bg-[hsl(var(--surface))] overflow-y-auto">
+                            <header className="pt-16 pb-6 px-6 bg-[hsl(var(--surface))] border-b border-[hsl(var(--border))] sticky top-0 z-10">
+                                <h1 className="text-2xl font-bold text-[hsl(var(--text-primary))] leading-tight">{blueprint?.meta?.title || 'Simulator Preview'}</h1>
+                                <p className="text-[hsl(var(--text-tertiary))] text-xs font-medium uppercase tracking-wider mt-1">Submission Draft</p>
+                            </header>
+
+                            <div className="p-6 space-y-6">
+                                {(blueprint?.ui[currentSectionIndex]?.children || [])
+                                    .filter(field => isFieldVisible(field.bind))
+                                    .map((field, idx) => (
+                                        <div key={idx} className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                            <label className="text-sm font-bold text-[hsl(var(--text-secondary))] block">
+                                                {field.label}
+                                            </label>
+
+                                            {field.type === 'gps_capture' ? (
+                                                <button
+                                                    onClick={captureGPS}
+                                                    className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--success))]/10 border-[hsl(var(--success))] text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}
+                                                >
+                                                    <div className="flex items-center space-x-3">
+                                                        <MapPin className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
+                                                        <span className="font-semibold text-sm">
+                                                            {formData[field.bind] ? `Location Captured` : `Click to capture GPS`}
+                                                        </span>
+                                                    </div>
+                                                    {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />}
+                                                </button>
+                                            ) : field.type === 'photo_capture' ? (
+                                                <div className="relative">
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={(e) => handlePhotoUpload(e, field.bind)}
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                    />
+                                                    <div className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--info))]/10 border-[hsl(var(--info))] text-[hsl(var(--info))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}>
+                                                        <div className="flex items-center space-x-3">
+                                                            <CameraIcon className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--info))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
+                                                            <span className="font-semibold text-sm">
+                                                                {formData[field.bind] ? `Photo Attached` : `Tap to take photo`}
+                                                            </span>
+                                                        </div>
+                                                        {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--info))]" />}
+                                                    </div>
+                                                </div>
+                                            ) : field.type === 'file_upload' || field.type === 'audio_recorder' ? (
+                                                <input
+                                                    type="file"
+                                                    accept={field.type === 'audio_recorder' ? 'audio/*' : undefined}
+                                                    onChange={(e) => handleInputChange(field.bind, e.target.files?.[0]?.name)}
+                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
+                                                />
+                                            ) : field.type === 'signature_pad' ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInputChange(field.bind, 'signed')}
+                                                    className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]"
+                                                >
+                                                    <span className="font-semibold text-sm">Tap to sign</span>
+                                                    {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />}
+                                                </button>
+                                            ) : field.type === 'dropdown' ? (
+                                                <div className="space-y-2">
+                                                    <select
+                                                        value={formData[field.bind] || ''}
+                                                        onChange={(e) => handleInputChange(field.bind, e.target.value)}
+                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all"
+                                                    >
+                                                        <option value="" disabled>Select an option</option>
+                                                        {(field.options || []).map((opt, i) => (
+                                                            <option key={`${getOptionValue(opt)}-${i}`} value={getOptionValue(opt)}>{getOptionLabel(opt)}</option>
+                                                        ))}
+                                                    </select>
+                                                    {isOtherSelected(formData[field.bind]) && (
+                                                        <input
+                                                            type="text"
+                                                            value={formData[field.bind + '_other'] || ''}
+                                                            onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
+                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
+                                                            placeholder="Please specify..."
+                                                        />
+                                                    )}
+                                                </div>
+                                            ) : field.type === 'radio_group' ? (
+                                                <div className="space-y-2">
+                                                    {(field.options || []).map((opt, i) => (
+                                                        <label key={`${getOptionValue(opt)}-${i}`} className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
+                                                            <input
+                                                                type="radio"
+                                                                name={field.bind}
+                                                                value={getOptionValue(opt)}
+                                                                checked={formData[field.bind] === getOptionValue(opt)}
+                                                                onChange={(e) => handleInputChange(field.bind, e.target.value)}
+                                                            />
+                                                            {getOptionLabel(opt)}
+                                                        </label>
+                                                    ))}
+                                                    {isOtherSelected(formData[field.bind]) && (
+                                                        <input
+                                                            type="text"
+                                                            value={formData[field.bind + '_other'] || ''}
+                                                            onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
+                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
+                                                            placeholder="Please specify..."
+                                                        />
+                                                    )}
+                                                </div>
+                                            ) : field.type === 'rating_scale' ? (
+                                                <div className="space-y-4">
+                                                    <div className="flex justify-between text-[11px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider px-1">
+                                                        <span>{field.min_label || 'Min'}</span>
+                                                        <span>{field.max_label || 'Max'}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between gap-1.5">
+                                                        {Array.from({ length: (Number(field.max) || 5) - (Number(field.min) || 1) + 1 }).map((_, i) => {
+                                                            const val = (Number(field.min) || 1) + i;
+                                                            const isSelected = formData[field.bind] === String(val);
+                                                            return (
+                                                                <button
+                                                                    key={i}
+                                                                    type="button"
+                                                                    onClick={() => handleInputChange(field.bind, String(val))}
+                                                                    className={`flex-1 h-12 rounded-2xl border-2 transition-all flex items-center justify-center text-sm font-bold ${isSelected
+                                                                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-lg shadow-[hsl(var(--primary))]/20 scale-105 active:scale-95'
+                                                                        : 'border-transparent bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] active:scale-95'
+                                                                        }`}
+                                                                >
+                                                                    {val}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ) : field.type === 'checkbox_group' ? (
+                                                <div className="space-y-2">
+                                                    {(field.options || []).map((opt, i) => (
+                                                        <label key={`${getOptionValue(opt)}-${i}`} className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={(formData[field.bind] || []).includes(getOptionValue(opt))}
+                                                                onChange={(e) => toggleCheckboxValue(field.bind, getOptionValue(opt), e.target.checked)}
+                                                            />
+                                                            {getOptionLabel(opt)}
+                                                        </label>
+                                                    ))}
+                                                    {isOtherSelected(formData[field.bind]) && (
+                                                        <input
+                                                            type="text"
+                                                            value={formData[field.bind + '_other'] || ''}
+                                                            onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
+                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
+                                                            placeholder="Please specify..."
+                                                        />
+                                                    )}
+                                                </div>
+                                            ) : field.type === 'toggle' ? (
+                                                <label className="flex items-center gap-3 text-sm text-[hsl(var(--text-secondary))]">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!formData[field.bind]}
+                                                        onChange={(e) => handleInputChange(field.bind, e.target.checked)}
+                                                    />
+                                                    Toggle
+                                                </label>
+                                            ) : field.type === 'textarea' ? (
+                                                <textarea
+                                                    value={formData[field.bind] || ''}
+                                                    onChange={(e) => handleInputChange(field.bind, e.target.value)}
+                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium min-h-[120px]"
+                                                    placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+                                                />
+                                            ) : field.type === 'lookup_list' ? (
+                                                <LookupFieldRenderer
+                                                    field={field}
+                                                    value={formData[field.bind]}
+                                                    onChange={(val: any) => handleInputChange(field.bind, val)}
+                                                />
+                                            ) : field.type === 'matrix_table' ? (
+                                                <div className="w-full max-h-[500px] overflow-auto hide-scrollbar rounded-2xl border border-[hsl(var(--border))] relative relative-z-0">
+                                                    <table className="w-full text-xs text-left min-w-max">
+                                                        <thead className="bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] sticky top-0 z-10 shadow-sm">
+                                                            <tr>
+                                                                <th className="px-3 py-3 font-medium min-w-[120px]">&nbsp;</th>
+                                                                {(field.table_columns || []).map((col: any) => (
+                                                                    <th key={col.id} className="px-2 py-3 font-medium text-center min-w-[80px]">{col.label}</th>
+                                                                ))}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {(field.table_rows || []).map((row: any, rIdx: number) => (
+                                                                <tr key={row.id} className={`border-t border-[hsl(var(--border))] ${rIdx % 2 === 0 ? 'bg-[hsl(var(--surface))]' : 'bg-[hsl(var(--surface-elevated))]'}`}>
+                                                                    <td className="px-3 py-3 font-medium text-[hsl(var(--text-primary))]">{row.label}</td>
+                                                                    {(field.table_columns || []).map((col: any) => {
+                                                                        const cellType = field.table_cell_type || 'radio';
+                                                                        const fieldData = formData[field.bind] || {};
+                                                                        const rowData = fieldData[row.id];
+
+                                                                        return (
+                                                                            <td key={col.id} className="px-2 py-3 text-center">
+                                                                                {cellType === 'radio' ? (
+                                                                                    <input
+                                                                                        type="radio"
+                                                                                        name={`${field.bind}_${row.id}`}
+                                                                                        checked={rowData === col.id}
+                                                                                        onChange={() => handleInputChange(field.bind, { ...fieldData, [row.id]: col.id })}
+                                                                                        className="w-4 h-4 text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                                                    />
+                                                                                ) : cellType === 'checkbox' ? (
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={(rowData || []).includes(col.id)}
+                                                                                        onChange={(e) => {
+                                                                                            const currentArr = rowData || [];
+                                                                                            const nextArr = e.target.checked
+                                                                                                ? [...currentArr, col.id]
+                                                                                                : currentArr.filter((id: string) => id !== col.id);
+                                                                                            handleInputChange(field.bind, { ...fieldData, [row.id]: nextArr });
+                                                                                        }}
+                                                                                        className="w-4 h-4 rounded text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                                                    />
+                                                                                ) : cellType === 'text' || cellType === 'number' ? (
+                                                                                    <input
+                                                                                        type={cellType}
+                                                                                        value={rowData?.[col.id] || ''}
+                                                                                        onChange={(e) => {
+                                                                                            const currentRow = fieldData[row.id] || {};
+                                                                                            handleInputChange(field.bind, {
+                                                                                                ...fieldData,
+                                                                                                [row.id]: { ...currentRow, [col.id]: e.target.value }
+                                                                                            });
+                                                                                        }}
+                                                                                        className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded px-2 py-1.5 text-center text-xs"
+                                                                                    />
+                                                                                ) : cellType === 'dropdown' ? (
+                                                                                    <select
+                                                                                        value={rowData?.[col.id] || ''}
+                                                                                        onChange={(e) => {
+                                                                                            const currentRow = fieldData[row.id] || {};
+                                                                                            handleInputChange(field.bind, {
+                                                                                                ...fieldData,
+                                                                                                [row.id]: { ...currentRow, [col.id]: e.target.value }
+                                                                                            });
+                                                                                        }}
+                                                                                        className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded px-1 py-1 text-center text-xs text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        <option value=""></option>
+                                                                                        {(field.options || []).map((opt: any, oIdx: number) => (
+                                                                                            <option key={oIdx} value={getOptionValue(opt)}>{getOptionLabel(opt)}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                ) : null}
+                                                                            </td>
+                                                                        );
+                                                                    })}
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <input
+                                                    type={field.type === 'input_number' ? 'number' : field.type === 'email_input' ? 'email' : field.type === 'phone_input' ? 'tel' : field.type === 'date_picker' ? 'date' : field.type === 'time_picker' ? 'time' : 'text'}
+                                                    value={formData[field.bind] || ''}
+                                                    onChange={(e) => handleInputChange(field.bind, field.mask ? applyMask(e.target.value, field.mask) : e.target.value)}
+                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
+                                                    placeholder={field.placeholder || (field.mask ? field.mask : `Enter ${field.label.toLowerCase()}...`)}
+                                                    min={field.min}
+                                                    max={field.max}
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+
+                                {/* Pagination Controls */}
+                                <div className="pt-6 flex gap-3">
+                                    {currentSectionIndex > 0 && (
+                                        <button
+                                            onClick={() => setCurrentSectionIndex(prev => prev - 1)}
+                                            className="flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-primary))] border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface))]"
+                                        >
+                                            <span>Back</span>
+                                        </button>
+                                    )}
+
+                                    {currentSectionIndex < (blueprint?.ui.length || 1) - 1 ? (
+                                        <button
+                                            onClick={handleNext}
+                                            className="flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30"
+                                        >
+                                            <span>Next</span>
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={handleSubmit}
+                                            disabled={status === 'submitting' || status === 'success'}
+                                            className={`flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 ${status === 'success' ? 'bg-[hsl(var(--success))] text-white shadow-[hsl(var(--success))]/30' :
+                                                status === 'error' ? 'bg-[hsl(var(--error))] text-white shadow-[hsl(var(--error))]/30' :
+                                                    'bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30'
+                                                }`}
+                                        >
+                                            {status === 'submitting' ? (
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                            ) : status === 'success' ? (
+                                                <>
+                                                    <CheckCircle2 className="w-5 h-5" />
+                                                    <span>Sent Successfully</span>
+                                                </>
+                                            ) : status === 'error' ? (
+                                                <>
+                                                    <AlertCircle className="w-5 h-5" />
+                                                    <span>Submission Failed</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Send className="w-5 h-5" />
+                                                    <span>Submit Data</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-[hsl(var(--border))] rounded-full z-20"></div>
+                    </div>
+
+                    <div className="mt-8 flex items-center space-x-2 text-[hsl(var(--text-tertiary))]">
+                        <Smartphone className="w-4 h-4" />
+                        <span className="text-xs font-bold uppercase tracking-widest">Mobile Preview Engine v2.0</span>
+                    </div>
                 </div>
             </div>
-        </div>
         </StudioLayout>
     );
 };

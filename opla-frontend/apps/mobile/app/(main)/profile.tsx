@@ -1,16 +1,30 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Animated } from 'react-native';
-import { Settings, Shield } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Animated, ActivityIndicator, Image } from 'react-native';
+import { Settings, Shield, Building2, KeyRound, ChevronRight } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../contexts/AppThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import { orgAPI } from '../../services/api';
+import { Organization } from '@opla/types';
 
 export default function ProfileScreen() {
     const { mode, setMode } = useAppTheme();
     const { status, user } = useAuth();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
+    const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
+
+    useEffect(() => {
+        if (status === 'authenticated') {
+            setIsLoadingOrgs(true);
+            orgAPI.list()
+                .then(data => setOrganizations(data))
+                .catch(err => console.error("Failed to load orgs", err))
+                .finally(() => setIsLoadingOrgs(false));
+        }
+    }, [status]);
 
     const handleToggleMode = () => {
         if (mode === 'pulse') {
@@ -95,6 +109,61 @@ export default function ProfileScreen() {
                         <Text className={`text-2xl font-black ${mode === 'pro' ? 'text-lime-400' : (isPulse ? 'text-emerald-900' : 'text-white')}`}>$84.50</Text>
                     </View>
                 </View>
+
+                {/* Organizations Section */}
+                {mode === 'pro' && (
+                    <View className="mt-8">
+                        <Text className="text-xl font-black text-white mb-4">Organizations</Text>
+                        {isLoadingOrgs ? (
+                            <ActivityIndicator size="small" color="#22d3ee" className="mt-4" />
+                        ) : organizations.length === 0 ? (
+                            <View className="p-6 rounded-[32px] bg-slate-800/30 border border-slate-700/50 items-center justify-center">
+                                <Building2 size={32} color="#64748b" />
+                                <Text className="text-slate-400 mt-3 font-medium text-center">No organizations yet</Text>
+                            </View>
+                        ) : (
+                            <View className="space-y-3">
+                                {organizations.map((org) => (
+                                    <View key={org.id} className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/50 flex-row items-center">
+                                        {org.logo_url ? (
+                                            <Image source={{ uri: org.logo_url }} className="w-12 h-12 rounded-xl mr-4 bg-slate-800" />
+                                        ) : (
+                                            <View className="w-12 h-12 rounded-xl mr-4 bg-slate-800 items-center justify-center border-t border-slate-700">
+                                                <Building2 size={24} color="#94a3b8" />
+                                            </View>
+                                        )}
+                                        <View className="flex-1">
+                                            <Text className="text-white font-bold text-lg">{org.name}</Text>
+                                            <Text className="text-slate-400 text-sm">Agent Access</Text>
+                                        </View>
+                                        <View className="w-2 h-2 rounded-full bg-cyan-500" />
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                {mode === 'pro' && status === 'authenticated' && (
+                    <View className="mt-8">
+                        <Text className="text-xl font-black text-white mb-4">Contractor Access</Text>
+                        <TouchableOpacity
+                            activeOpacity={0.85}
+                            onPress={() => router.push('./join-team')}
+                            className="p-5 rounded-[28px] bg-slate-800/30 border border-slate-700/50 flex-row items-center"
+                        >
+                            <View className="w-12 h-12 rounded-2xl bg-cyan-500/15 items-center justify-center mr-4 border border-cyan-400/20">
+                                <KeyRound size={22} color="#22d3ee" />
+                            </View>
+                            <View className="flex-1">
+                                <Text className="text-white font-bold text-lg">Join Team by PIN</Text>
+                                <Text className="text-slate-400 text-sm mt-1">Enter a contractor PIN to join a team from mobile.</Text>
+                            </View>
+                            <ChevronRight size={18} color="#94a3b8" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 <View className="h-20" />
             </ScrollView>
         </View>

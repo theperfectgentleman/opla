@@ -1,0 +1,4 @@
+﻿src/pages/ProjectWorkspace.tsx(360,13): error TS2322: Type '(key: "projects" | "forms" | "members" | "audience" | "analysis" | "reports" | "settings") => void' is not assignable to type '(key: StudioNavKey) => void'.
+  Types of parameters 'key' and 'key' are incompatible.
+    Type 'StudioNavKey' is not assignable to type '"projects" | "members" | "forms" | "audience" | "analysis" | "reports" | "settings"'.
+      Type '"tasks"' is not assignable to type '"projects" | "members" | "forms" | "audience" | "analysis" | "reports" | "settings"'.

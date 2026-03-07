@@ -2,7 +2,14 @@ from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, List
-from app.models.org_member import GlobalRole, InvitationStatus
+from pydantic import model_validator
+from app.models.org_member import GlobalRole, InvitationStatus, MemberType
+from app.models.invitation import (
+    InvitationApprovalMode,
+    InvitationDeliveryMode,
+    InvitationLifecycleStatus,
+    InvitationType,
+)
 from app.models.project_access import AccessorType
 from app.api.schemas.auth import UserResponse
 
@@ -27,8 +34,79 @@ class OrgMemberOut(BaseModel):
     id: UUID
     user_id: UUID
     global_role: GlobalRole
+    member_type: MemberType
     invitation_status: InvitationStatus
     joined_at: datetime
+
+
+class InternalInvitationCreate(BaseModel):
+    invited_email: Optional[str] = None
+    delivery_mode: InvitationDeliveryMode
+
+    @model_validator(mode="after")
+    def validate_internal_invitation(self):
+        if self.delivery_mode not in {InvitationDeliveryMode.EMAIL, InvitationDeliveryMode.SHORT_LINK}:
+            raise ValueError("Internal invitations support email or short_link delivery only")
+        if self.delivery_mode == InvitationDeliveryMode.EMAIL and not self.invited_email:
+            raise ValueError("Email delivery requires invited_email")
+        return self
+
+
+class TeamInvitationCreate(BaseModel):
+    delivery_mode: InvitationDeliveryMode
+    approval_mode: InvitationApprovalMode = InvitationApprovalMode.AUTO
+
+    @model_validator(mode="after")
+    def validate_team_invitation(self):
+        if self.delivery_mode not in {InvitationDeliveryMode.GENERATED_LINK, InvitationDeliveryMode.PIN_CODE}:
+            raise ValueError("Team invitations support generated_link or pin_code delivery only")
+        return self
+
+
+class InvitationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    org_id: UUID
+    org_name: Optional[str] = None
+    team_id: Optional[UUID] = None
+    team_name: Optional[str] = None
+    invitation_type: InvitationType
+    member_type: MemberType
+    delivery_mode: InvitationDeliveryMode
+    approval_mode: InvitationApprovalMode
+    status: InvitationLifecycleStatus
+    invited_email: Optional[str] = None
+    token: Optional[str] = None
+    pin_code: Optional[str] = None
+    created_by: UUID
+    claimed_by: Optional[UUID] = None
+    approved_by: Optional[UUID] = None
+    accepted_by: Optional[UUID] = None
+    claimed_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class InvitationAcceptRequest(BaseModel):
+    token: Optional[str] = None
+    pin_code: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_locator(self):
+        if bool(self.token) == bool(self.pin_code):
+            raise ValueError("Provide exactly one of token or pin_code")
+        return self
+
+
+class InvitationAcceptResponse(BaseModel):
+    status: str
+    invitation: InvitationOut
+    membership: Optional[OrgMemberOut] = None
 
 class OrgRoleBase(BaseModel):
     name: str

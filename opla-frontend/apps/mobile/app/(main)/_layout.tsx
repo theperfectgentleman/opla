@@ -96,6 +96,7 @@ export default function MainLayout() {
       <Tabs.Screen name="(yard)" />
       <Tabs.Screen name="(desk)" />
       <Tabs.Screen name="profile" />
+      <Tabs.Screen name="join-team" options={{ href: null }} />
     </Tabs>
   );
 }

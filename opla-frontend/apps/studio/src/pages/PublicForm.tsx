@@ -17,6 +17,10 @@ interface PublicFormBlueprint {
             bind: string;
             placeholder?: string;
             options?: string[];
+            min?: string | number;
+            max?: string | number;
+            min_label?: string;
+            max_label?: string;
         }>;
     }>;
 }
@@ -213,6 +217,32 @@ const PublicForm: React.FC = () => {
                                                 {opt}
                                             </label>
                                         ))}
+                                    </div>
+                                ) : field.type === 'rating_scale' ? (
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                                            <span>{field.min_label || 'Min'}</span>
+                                            <span>{field.max_label || 'Max'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-1.5">
+                                            {Array.from({ length: (Number(field.max) || 5) - (Number(field.min) || 1) + 1 }).map((_, i) => {
+                                                const val = (Number(field.min) || 1) + i;
+                                                const isSelected = formData[field.bind] === String(val);
+                                                return (
+                                                    <button
+                                                        key={i}
+                                                        type="button"
+                                                        onClick={() => handleInputChange(field.bind, String(val))}
+                                                        className={`flex-1 h-16 rounded-2xl border-2 transition-all flex items-center justify-center text-xl font-bold ${isSelected
+                                                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-xl shadow-indigo-200 scale-105 active:scale-95'
+                                                            : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-white hover:border-indigo-100 active:scale-95'
+                                                            }`}
+                                                    >
+                                                        {val}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 ) : field.type === 'checkbox_group' ? (
                                     <div className="space-y-3">

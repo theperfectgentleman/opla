@@ -8,10 +8,12 @@ Base = declarative_base()
 from app.models.user import User  # noqa: F401
 from app.models.organization import Organization  # noqa: F401
 from app.models.org_member import OrgMember  # noqa: F401
+from app.models.invitation import Invitation  # noqa: F401
 from app.models.team import Team  # noqa: F401
 from app.models.team_member import TeamMember  # noqa: F401
 from app.models.project import Project  # noqa: F401
 from app.models.project_access import ProjectAccess  # noqa: F401
+from app.models.project_task import ProjectTask  # noqa: F401
 from app.models.form import Form  # noqa: F401
 from app.models.submission import Submission  # noqa: F401
 
@@ -20,10 +22,12 @@ __all__ = [
     "User", 
     "Organization", 
     "OrgMember", 
+    "Invitation",
     "Team", 
     "TeamMember", 
     "Project", 
     "ProjectAccess", 
+    "ProjectTask",
     "Form",
     "Submission"
 ]

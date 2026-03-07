@@ -1,9 +1,10 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from uuid import UUID
 from datetime import datetime
 from typing import List, Optional
 from app.models.project import ProjectStatus
 from app.models.project_access import AccessorType, ProjectRole
+from app.models.project_task import ProjectTaskStatus
 
 class ProjectBase(BaseModel):
     name: str
@@ -77,5 +78,60 @@ class ProjectRoleTemplateOut(BaseModel):
     priority: int
     is_system: bool
     assignment_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectTaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    starts_at: Optional[datetime] = None
+    due_at: Optional[datetime] = None
+    assigned_accessor_id: Optional[UUID] = None
+    assigned_accessor_type: Optional[AccessorType] = None
+
+    @model_validator(mode="after")
+    def validate_task(self):
+        if self.starts_at and self.due_at and self.due_at < self.starts_at:
+            raise ValueError("Task due date must be after the start date")
+        if bool(self.assigned_accessor_id) != bool(self.assigned_accessor_type):
+            raise ValueError("Assigned accessor id and type must be provided together")
+        return self
+
+
+class ProjectTaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[ProjectTaskStatus] = None
+    starts_at: Optional[datetime] = None
+    due_at: Optional[datetime] = None
+    assigned_accessor_id: Optional[UUID] = None
+    assigned_accessor_type: Optional[AccessorType] = None
+    clear_assignment: bool = False
+
+    @model_validator(mode="after")
+    def validate_task(self):
+        if self.starts_at and self.due_at and self.due_at < self.starts_at:
+            raise ValueError("Task due date must be after the start date")
+        if not self.clear_assignment and (self.assigned_accessor_id is not None or self.assigned_accessor_type is not None):
+            if bool(self.assigned_accessor_id) != bool(self.assigned_accessor_type):
+                raise ValueError("Assigned accessor id and type must be provided together")
+        return self
+
+
+class ProjectTaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    title: str
+    description: Optional[str] = None
+    status: ProjectTaskStatus
+    starts_at: Optional[datetime] = None
+    due_at: Optional[datetime] = None
+    assigned_accessor_id: Optional[UUID] = None
+    assigned_accessor_type: Optional[AccessorType] = None
+    completed_at: Optional[datetime] = None
+    created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime

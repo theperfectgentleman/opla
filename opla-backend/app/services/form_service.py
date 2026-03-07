@@ -4,10 +4,13 @@ from app.models.project import ProjectStatus
 from app.models.form import Form, FormStatus
 from app.models.form_version import FormVersion, FormVersionKind
 from app.models.project_access import ProjectAccess, ProjectRole, AccessorType
+from app.models.org_member import OrgMember
+from app.models.team import Team
 import uuid
 from typing import List, Optional, Dict
 import re
 from datetime import datetime
+from fastapi import HTTPException
 
 def slugify(text: str) -> str:
     text = text.lower()
@@ -88,6 +91,38 @@ class ProjectService:
 
 class FormService:
     DRAFT_SLOTS = (1, 2, 3)
+
+    @staticmethod
+    def _validate_accessor(
+        db: Session,
+        project: Project,
+        accessor_id: uuid.UUID | None,
+        accessor_type: AccessorType | None,
+        label: str,
+    ) -> None:
+        if accessor_id is None and accessor_type is None:
+            return
+
+        if accessor_id is None or accessor_type is None:
+            raise HTTPException(status_code=400, detail=f"{label} accessor id and type must be provided together")
+
+        if accessor_type == AccessorType.USER:
+            membership = (
+                db.query(OrgMember)
+                .filter(OrgMember.org_id == project.org_id, OrgMember.user_id == accessor_id)
+                .first()
+            )
+            if not membership:
+                raise HTTPException(status_code=400, detail=f"{label} user is not a member of this organization")
+            return
+
+        team = (
+            db.query(Team)
+            .filter(Team.id == accessor_id, Team.org_id == project.org_id)
+            .first()
+        )
+        if not team:
+            raise HTTPException(status_code=400, detail=f"{label} team was not found in this organization")
 
     @staticmethod
     def _next_version_number(db: Session, form_id: uuid.UUID) -> int:
@@ -319,3 +354,31 @@ class FormService:
     @staticmethod
     def get_project_forms(db: Session, project_id: uuid.UUID) -> List[Form]:
         return db.query(Form).filter(Form.project_id == project_id).all()
+
+    @staticmethod
+    def update_responsibility(
+        db: Session,
+        form: Form,
+        *,
+        lead_accessor_id: uuid.UUID | None,
+        lead_accessor_type: AccessorType | None,
+        assigned_accessor_id: uuid.UUID | None,
+        assigned_accessor_type: AccessorType | None,
+        guest_accessor_id: uuid.UUID | None,
+        guest_accessor_type: AccessorType | None,
+    ) -> Form:
+        project = form.project
+        FormService._validate_accessor(db, project, lead_accessor_id, lead_accessor_type, "Lead")
+        FormService._validate_accessor(db, project, assigned_accessor_id, assigned_accessor_type, "Assigned")
+        FormService._validate_accessor(db, project, guest_accessor_id, guest_accessor_type, "Guest")
+
+        form.lead_accessor_id = lead_accessor_id
+        form.lead_accessor_type = lead_accessor_type
+        form.assigned_accessor_id = assigned_accessor_id
+        form.assigned_accessor_type = assigned_accessor_type
+        form.guest_accessor_id = guest_accessor_id
+        form.guest_accessor_type = guest_accessor_type
+
+        db.commit()
+        db.refresh(form)
+        return form

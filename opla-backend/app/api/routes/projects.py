@@ -7,6 +7,9 @@ from app.api.schemas.project import (
     ProjectAccessOut,
     ProjectCreate,
     ProjectOut,
+    ProjectTaskCreate,
+    ProjectTaskOut,
+    ProjectTaskUpdate,
     ProjectRoleTemplateCreate,
     ProjectRoleTemplateOut,
     ProjectRoleTemplateUpdate,
@@ -16,6 +19,7 @@ from app.services.form_service import ProjectService
 from app.services.organization_service import OrganizationService
 from app.services.project_access_service import ProjectAccessService
 from app.services.project_role_service import ProjectRoleService
+from app.services.project_task_service import ProjectTaskService
 from app.models.project_access import AccessorType
 from app.models.user import User
 import uuid
@@ -261,4 +265,85 @@ def revoke_project_access(
     if project.org_id != org_id:
         raise HTTPException(status_code=404, detail="Project not found")
     ProjectAccessService.revoke_access(db, project_id, accessor_id, accessor_type)
+    return None
+
+
+@router.get("/{project_id}/tasks", response_model=List[ProjectTaskOut])
+def list_project_tasks(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectTaskService.list_tasks(db, project_id)
+
+
+@router.post("/{project_id}/tasks", response_model=ProjectTaskOut, status_code=status.HTTP_201_CREATED)
+def create_project_task(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    payload: ProjectTaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectTaskService.create_task(
+        db,
+        project,
+        title=payload.title,
+        description=payload.description,
+        starts_at=payload.starts_at,
+        due_at=payload.due_at,
+        assigned_accessor_id=payload.assigned_accessor_id,
+        assigned_accessor_type=payload.assigned_accessor_type,
+        created_by=current_user.id,
+    )
+
+
+@router.patch("/{project_id}/tasks/{task_id}", response_model=ProjectTaskOut)
+def update_project_task(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    task_id: uuid.UUID,
+    payload: ProjectTaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = ProjectTaskService.get_task_or_404(db, project_id, task_id)
+    project = ProjectTaskService.ensure_can_update_task(db, current_user.id, project_id, task)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectTaskService.update_task(
+        db,
+        project,
+        task,
+        title=payload.title,
+        description=payload.description,
+        status=payload.status,
+        starts_at=payload.starts_at,
+        due_at=payload.due_at,
+        assigned_accessor_id=None if payload.clear_assignment else payload.assigned_accessor_id,
+        assigned_accessor_type=None if payload.clear_assignment else payload.assigned_accessor_type,
+        replace_assignment=payload.clear_assignment or payload.assigned_accessor_id is not None or payload.assigned_accessor_type is not None,
+    )
+
+
+@router.delete("/{project_id}/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_task(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    task_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = ProjectTaskService.get_task_or_404(db, project_id, task_id)
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    ProjectTaskService.delete_task(db, project, task)
     return None

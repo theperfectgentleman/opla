@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
 from app.models.base import Base
+from app.models.project_access import AccessorType
 import enum
 
 class FormStatus(str, enum.Enum):
@@ -25,6 +26,21 @@ class Form(Base):
     status = Column(Enum(FormStatus, name="form_status", values_callable=lambda obj: [e.value for e in obj]), default=FormStatus.DRAFT, nullable=False)
     published_version = Column(Integer, nullable=True)
     published_at = Column(DateTime, nullable=True)
+    lead_accessor_id = Column(UUID(as_uuid=True), nullable=True)
+    lead_accessor_type = Column(
+        Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=True,
+    )
+    assigned_accessor_id = Column(UUID(as_uuid=True), nullable=True)
+    assigned_accessor_type = Column(
+        Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=True,
+    )
+    guest_accessor_id = Column(UUID(as_uuid=True), nullable=True)
+    guest_accessor_type = Column(
+        Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=True,
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

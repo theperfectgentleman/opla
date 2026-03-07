@@ -15,7 +15,7 @@ export function NumberInputField({ field, value, error, onChange }: NumberInputF
             <TextInput
                 value={value || ''}
                 onChangeText={onChange}
-                placeholder={field.title}
+                placeholder={field.placeholder || field.label}
                 placeholderTextColor="#64748b"
                 keyboardType="numeric"
                 style={{

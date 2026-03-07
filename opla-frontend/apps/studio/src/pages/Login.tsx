@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Phone, Lock, Eye, EyeOff, Loader2, RefreshCw } from 'lucide-react';
 import OTPInput from '../components/OTPInput';
@@ -23,6 +23,8 @@ const Login: React.FC = () => {
 
     const { login, loginWithOTP, requestOTP, error, clearError } = useAuth();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const redirectTarget = searchParams.get('redirect') || '/dashboard';
 
     // Resend timer countdown
     useEffect(() => {
@@ -74,7 +76,7 @@ const Login: React.FC = () => {
         try {
             setIsLoading(true);
             await login(formData.email, formData.password);
-            navigate('/dashboard');
+            navigate(redirectTarget);
         } catch (err) {
             // Error handled by context
         } finally {
@@ -112,7 +114,7 @@ const Login: React.FC = () => {
         try {
             setIsLoading(true);
             await loginWithOTP(formData.phone, otp);
-            navigate('/dashboard');
+            navigate(redirectTarget);
         } catch (err) {
             // Error handled by context
         } finally {

@@ -37,6 +37,14 @@ export async function saveSession(session: AuthSession): Promise<void> {
   await SecureStore.setItemAsync(KEYS.SESSION, JSON.stringify(session));
 }
 
+export async function updateSessionOrgIds(orgIds: string[]): Promise<AuthSession | null> {
+  const session = await loadSession();
+  if (!session) return null;
+  const updatedSession: AuthSession = { ...session, orgIds };
+  await saveSession(updatedSession);
+  return updatedSession;
+}
+
 export async function loadSession(): Promise<AuthSession | null> {
   try {
     const raw = await SecureStore.getItemAsync(KEYS.SESSION);

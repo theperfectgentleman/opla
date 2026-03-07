@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.api.dependencies import get_current_user, require_org_admin
+from app.api.presenters.invitation_presenter import serialize_invitation
 from app.api.schemas.team import TeamCreate, TeamUpdate, TeamOut, TeamMemberAdd, TeamMemberOut
+from app.api.schemas.organization import TeamInvitationCreate, InvitationOut
+from app.services.invitation_service import InvitationService
 from app.services.team_service import TeamService
 from app.models.user import User
 from typing import List
@@ -124,3 +127,22 @@ def remove_team_member(
     if not success:
         raise HTTPException(status_code=404, detail="Member not found in team")
     return {"message": "Member removed from team successfully"}
+
+
+@router.post("/{team_id}/invitations/contractor", response_model=InvitationOut)
+def create_contractor_team_invitation(
+    org_id: UUID,
+    team_id: UUID,
+    invitation_data: TeamInvitationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    invitation = InvitationService.create_contractor_invitation(
+        db,
+        org_id=org_id,
+        team_id=team_id,
+        created_by=current_user.id,
+        delivery_mode=invitation_data.delivery_mode,
+        approval_mode=invitation_data.approval_mode,
+    )
+    return serialize_invitation(invitation)

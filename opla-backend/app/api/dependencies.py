@@ -174,7 +174,7 @@ async def require_org_admin(
             detail="You are not a member of this organization"
         )
     
-    if membership.role != "admin":
+    if membership.global_role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Organization admin permissions required"

@@ -12,6 +12,8 @@ import FormBuilder from './pages/FormBuilder';
 import FormSimulator from './pages/FormSimulator';
 import PublicForm from './pages/PublicForm';
 import ProjectWorkspace from './pages/ProjectWorkspace';
+import InvitationAccept from './pages/InvitationAccept';
+import ReportDetail from './pages/ReportDetail';
 
 function App() {
   useEffect(() => {
@@ -54,6 +56,22 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ProjectWorkspace />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/invitations/accept"
+                element={
+                  <ProtectedRoute>
+                    <InvitationAccept />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/reports/:reportId"
+                element={
+                  <ProtectedRoute>
+                    <ReportDetail />
                   </ProtectedRoute>
                 }
               />

@@ -1,6 +1,7 @@
 from app.models.base import Base
 from app.models.user import User
 from app.models.organization import Organization
+from app.models.invitation import Invitation
 from app.models.org_member import OrgMember
 from app.models.project import Project
 from app.models.project_role_template import ProjectRoleTemplate
@@ -11,6 +12,8 @@ from app.models.form_version import FormVersion
 from app.models.submission import Submission
 from app.models.section_template import SectionTemplate
 from app.models.project_access import ProjectAccess
+from app.models.project_task import ProjectTask
+from app.models.project_report import ProjectReport
 
 # OrgRole and OrgRoleAssignment are defined in role_template.py according to service imports
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType

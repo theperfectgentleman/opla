@@ -1,0 +1,31 @@
+﻿src/pages/FormBuilder.tsx(863,13): error TS2322: Type '(key: "projects" | "tasks" | "forms" | "members" | "audience" | "analysis" | "reports" | "settings") => void' is not assignable to type '(key: StudioNavKey) => void'.
+  Types of parameters 'key' and 'key' are incompatible.
+    Type 'StudioNavKey' is not assignable to type '"projects" | "members" | "tasks" | "forms" | "audience" | "analysis" | "reports" | "settings"'.
+      Type '"datasets"' is not assignable to type '"projects" | "members" | "tasks" | "forms" | "audience" | "analysis" | "reports" | "settings"'.
+src/pages/FormSimulator.tsx(374,13): error TS2322: Type '(key: "projects" | "tasks" | "forms" | "members" | "audience" | "analysis" | "reports" | "settings") => void' is not assignable to type '(key: StudioNavKey) => void'.
+  Types of parameters 'key' and 'key' are incompatible.
+    Type 'StudioNavKey' is not assignable to type '"projects" | "members" | "tasks" | "forms" | "audience" | "analysis" | "reports" | "settings"'.
+      Type '"datasets"' is not assignable to type '"projects" | "members" | "tasks" | "forms" | "audience" | "analysis" | "reports" | "settings"'.
+src/pages/ReportDetail.tsx(157,13): error TS2322: Type '(key: "projects" | "tasks" | "forms" | "members" | "audience" | "analysis" | "reports" | "settings") => void' is not assignable to type '(key: StudioNavKey) => void'.
+  Types of parameters 'key' and 'key' are incompatible.
+    Type 'StudioNavKey' is not assignable to type '"projects" | "members" | "tasks" | "forms" | "audience" | "analysis" | "reports" | "settings"'.
+      Type '"datasets"' is not assignable to type '"projects" | "members" | "tasks" | "forms" | "audience" | "analysis" | "reports" | "settings"'.
+node.exe : npm notice
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" 
+"C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecifi 
+   ed: (npm notice:String) [], RemoteEx  
+  ception
+    + FullyQualifiedErrorId : NativeComm 
+   andError
+ 
+npm notice New minor version of npm 
+available! 11.6.2 -> 11.11.0
+npm notice Changelog: https://github.com/
+npm/cli/releases/tag/v11.11.0
+npm notice To update run: npm install -g 
+npm@11.11.0
+npm notice

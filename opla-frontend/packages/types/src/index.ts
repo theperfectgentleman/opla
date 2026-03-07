@@ -48,7 +48,8 @@ export type FieldType =
   | 'barcode_scanner'
   | 'audio_recorder'
   | 'matrix_table'
-  | 'lookup_list';
+  | 'lookup_list'
+  | 'rating_scale';
 
 export type Platform = 'mobile' | 'web' | 'ussd';
 export type FormArea = 'yard' | 'desk'; // which app area can use this form
@@ -86,12 +87,20 @@ export interface FormField {
   table_cell_type?: TableCellType;
   table_allow_multiple?: boolean;
   // lookup
-  lookup_source_type?: 'preset' | 'custom';
+  lookup_source_type?: 'dataset' | 'preset' | 'custom';
   lookup_preset_id?: string;
+  lookup_dataset_id?: string;
+  lookup_dataset_label_field?: string;
+  lookup_dataset_value_field?: string;
+  lookup_sync_interval_minutes?: number;
+  lookup_allow_stale_cache?: boolean;
   lookup_custom_data?: string;
   lookup_separator?: string;
   lookup_label_column?: number;
   lookup_value_column?: number;
+  // rating scale
+  min_label?: string;
+  max_label?: string;
 }
 
 export type RenderMode = 'single' | 'list';

@@ -107,6 +107,7 @@ export default function YardFormScreen() {
         <FormRenderer
           blueprint={form}
           onSubmitSuccess={() => setSubmitted(true)}
+          extraBottomPad={72}
         />
       ) : null}
     </KeyboardAvoidingView>

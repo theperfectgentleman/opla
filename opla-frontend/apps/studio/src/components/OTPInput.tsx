@@ -99,7 +99,7 @@ const OTPInput: React.FC<OTPInputProps> = ({
             text-center text-2xl font-semibold
             bg-[hsl(var(--input-bg))]
             border-2 border-[hsl(var(--input-border))]
-            rounded-xl
+            rounded-md
             text-[hsl(var(--text-primary))]
             focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]
             focus:border-transparent

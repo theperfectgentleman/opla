@@ -245,7 +245,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                     {isAdmin && (
                         <button
                             onClick={() => openCreateModal('organization')}
-                            className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-black/10 transition-all"
+                            className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-md shadow-lg shadow-black/10 transition-all"
                         >
                             <Plus className="w-5 h-5" />
                             <span>Create Org Role</span>
@@ -255,10 +255,10 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {organizationRoles.map(role => (
-                        <div key={role.id} className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-3xl p-6 hover:border-[hsl(var(--border-hover))] transition-all shadow-sm">
+                        <div key={role.id} className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md p-6 hover:border-[hsl(var(--border-hover))] transition-all shadow-sm">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center space-x-3">
-                                    <div className={`p-3 rounded-2xl ${role.is_system ? 'bg-[hsl(var(--primary))]/10' : 'bg-[hsl(var(--accent-1))]/10'}`}>
+                                    <div className={`p-3 rounded-md ${role.is_system ? 'bg-[hsl(var(--primary))]/10' : 'bg-[hsl(var(--accent-1))]/10'}`}>
                                         {role.is_system ? (
                                             <Lock className="w-6 h-6 text-[hsl(var(--primary))]" />
                                         ) : (
@@ -276,7 +276,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => openEditOrganizationRole(role)}
-                                            className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-xl transition-all"
+                                            className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-md transition-all"
                                             title="Edit role"
                                         >
                                             <Pencil className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]" />
@@ -284,7 +284,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                         {!role.is_system && (
                                             <button
                                                 onClick={() => deleteOrganizationRole(role.id)}
-                                                className="p-2 hover:bg-[hsl(var(--error))]/10 rounded-xl transition-all"
+                                                className="p-2 hover:bg-[hsl(var(--error))]/10 rounded-md transition-all"
                                                 title="Delete role"
                                             >
                                                 <Trash2 className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))]" />
@@ -329,7 +329,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                     {isAdmin && (
                         <button
                             onClick={() => openCreateModal('project')}
-                            className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-black/10 transition-all"
+                            className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-md shadow-lg shadow-black/10 transition-all"
                         >
                             <Plus className="w-5 h-5" />
                             <span>Create Project Role</span>
@@ -339,10 +339,10 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {projectRoles.map(role => (
-                        <div key={role.id} className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-3xl p-6 hover:border-[hsl(var(--border-hover))] transition-all shadow-sm">
+                        <div key={role.id} className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md p-6 hover:border-[hsl(var(--border-hover))] transition-all shadow-sm">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center space-x-3">
-                                    <div className={`p-3 rounded-2xl ${role.is_system ? 'bg-[hsl(var(--primary))]/10' : 'bg-[hsl(var(--accent-1))]/10'}`}>
+                                    <div className={`p-3 rounded-md ${role.is_system ? 'bg-[hsl(var(--primary))]/10' : 'bg-[hsl(var(--accent-1))]/10'}`}>
                                         {role.is_system ? (
                                             <Lock className="w-6 h-6 text-[hsl(var(--primary))]" />
                                         ) : (
@@ -360,7 +360,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => openEditProjectRole(role)}
-                                            className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-xl transition-all"
+                                            className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-md transition-all"
                                             title="Edit project role"
                                         >
                                             <Pencil className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]" />
@@ -369,7 +369,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                             <button
                                                 onClick={() => deleteProjectRole(role)}
                                                 disabled={(role.assignment_count || 0) > 0}
-                                                className="p-2 hover:bg-[hsl(var(--error))]/10 rounded-xl transition-all disabled:opacity-40"
+                                                className="p-2 hover:bg-[hsl(var(--error))]/10 rounded-md transition-all disabled:opacity-40"
                                                 title="Delete project role"
                                             >
                                                 <Trash2 className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))]" />
@@ -489,7 +489,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
 
                             <div>
                                 <label className="label mb-3">Permissions</label>
-                                <div className="max-h-[340px] overflow-y-auto p-4 bg-[hsl(var(--surface-elevated))] rounded-2xl border border-[hsl(var(--border))] space-y-5">
+                                <div className="max-h-[340px] overflow-y-auto p-4 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] space-y-5">
                                     {Object.entries(permissionsByCategory).map(([category, permissions]) => (
                                         <div key={category}>
                                             <div className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
@@ -497,7 +497,7 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                             </div>
                                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                                 {permissions.map(permission => (
-                                                    <label key={permission.key} className="flex items-start space-x-3 p-3 hover:bg-[hsl(var(--surface))] rounded-xl cursor-pointer transition-all">
+                                                    <label key={permission.key} className="flex items-start space-x-3 p-3 hover:bg-[hsl(var(--surface))] rounded-md cursor-pointer transition-all">
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedPermissions.includes(permission.key)}
@@ -520,14 +520,14 @@ const RolesManagement: React.FC<RolesManagementProps> = ({ orgId, isAdmin }) => 
                                 <button
                                     type="button"
                                     onClick={closeRoleModal}
-                                    className="flex-1 px-6 py-3 rounded-2xl border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
+                                    className="flex-1 px-6 py-3 rounded-md border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={loading || selectedPermissions.length === 0 || !roleName.trim() || (roleScope === 'organization' && !editingRoleId && !roleSlug.trim())}
-                                    className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-2xl shadow-lg shadow-black/10 transition-all disabled:opacity-50"
+                                    className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-md shadow-lg shadow-black/10 transition-all disabled:opacity-50"
                                 >
                                     {loading ? (editingRoleId ? 'Saving...' : 'Creating...') : (editingRoleId ? 'Save Role' : 'Create Role')}
                                 </button>

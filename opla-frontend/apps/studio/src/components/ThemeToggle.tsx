@@ -35,7 +35,7 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ iconOnly = false, className =
             type="button"
             onClick={toggleTheme}
             className={iconOnly
-                ? `p-2 rounded-xl text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all ${className}`
+                ? `p-2 rounded-md text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all ${className}`
                 : `inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] shadow-sm hover:border-[hsl(var(--border-hover))] hover:text-[hsl(var(--text-primary))] transition-all ${className}`}
             aria-label="Toggle theme"
         >

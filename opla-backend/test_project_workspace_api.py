@@ -6,19 +6,22 @@ from fastapi.testclient import TestClient
 from app.core.database import SessionLocal
 from app.main import app
 from app.models.form import Form, FormStatus
+from app.models.form_dataset import FormDataset, FormDatasetField, FormDatasetSchemaVersion
 from app.models.form_version import FormVersion
 from app.models.org_member import GlobalRole, InvitationStatus, OrgMember
 from app.models.organization import Organization
 from app.models.project import Project, ProjectStatus
 from app.models.project_access import AccessorType, ProjectAccess, ProjectRole
+from app.models.project_asset import ProjectAsset, ProjectAssetKind
 from app.models.project_report import ProjectReport
 from app.models.project_role_template import ProjectRoleTemplate
+from app.models.project_thread import ProjectThread
 from app.models.project_task import ProjectTask, ProjectTaskStatus
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType as RoleAccessorType
 from app.models.submission import Submission
 from app.models.user import User
 from app.services.auth_service import auth_service
-from app.services.form_service import ProjectService
+from app.services.form_service import FormService, ProjectService
 from app.services.organization_service import OrganizationService
 from app.services.project_role_service import ProjectRoleService
 
@@ -156,15 +159,22 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         project_ids = [self.open_project.id, self.restricted_project.id, self.paused_project.id]
         org_id = self.organization.id
         user_ids = [self.admin_user.id, self.member_user.id]
+        form_ids = self.db.query(Form.id).filter(Form.project_id.in_(project_ids))
+        dataset_ids = self.db.query(FormDataset.id).filter(FormDataset.form_id.in_(form_ids))
 
         self.db.query(Submission).filter(Submission.form_id.in_(
-            self.db.query(Form.id).filter(Form.project_id.in_(project_ids))
+            form_ids
         )).delete(synchronize_session=False)
+        self.db.query(FormDatasetField).filter(FormDatasetField.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        self.db.query(FormDatasetSchemaVersion).filter(FormDatasetSchemaVersion.dataset_id.in_(dataset_ids)).delete(synchronize_session=False)
+        self.db.query(FormDataset).filter(FormDataset.form_id.in_(form_ids)).delete(synchronize_session=False)
         self.db.query(FormVersion).filter(FormVersion.form_id.in_(
-            self.db.query(Form.id).filter(Form.project_id.in_(project_ids))
+            form_ids
         )).delete(synchronize_session=False)
         self.db.query(Form).filter(Form.project_id.in_(project_ids)).delete(synchronize_session=False)
+        self.db.query(ProjectAsset).filter(ProjectAsset.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectReport).filter(ProjectReport.project_id.in_(project_ids)).delete(synchronize_session=False)
+        self.db.query(ProjectThread).filter(ProjectThread.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectTask).filter(ProjectTask.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectAccess).filter(ProjectAccess.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectRoleTemplate).filter(ProjectRoleTemplate.org_id == org_id).delete(synchronize_session=False)
@@ -311,6 +321,46 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(len(list_response.json()), 1)
 
+    def test_admin_can_view_form_dataset_details(self):
+        form = FormService.create_form(
+            self.db,
+            project_id=self.open_project.id,
+            title=f"Dataset Form {self.suffix}",
+            blueprint={
+                "meta": {"title": "Dataset Form"},
+                "schema": [
+                    {"key": "customer_name", "type": "string", "required": True},
+                    {"key": "region", "type": "string", "required": False},
+                ],
+                "ui": [
+                    {
+                        "id": "screen_1",
+                        "type": "screen",
+                        "title": "Section 1",
+                        "children": [
+                            {"type": "input_text", "bind": "customer_name", "label": "Customer Name", "required": True},
+                            {"type": "input_text", "bind": "region", "label": "Region", "required": False},
+                        ],
+                    }
+                ],
+                "logic": [],
+            },
+        )
+        FormService.publish_form(self.db, form.id, published_by=self.admin_user.id)
+
+        response = self.client.get(
+            f"/api/v1/forms/{form.id}/dataset",
+            headers=self.auth_headers(self.admin_user),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["form_id"], str(form.id))
+        self.assertEqual(payload["current_schema_version_number"], 1)
+        self.assertEqual(len(payload["fields"]), 2)
+        self.assertEqual(payload["fields"][0]["field_identifier"], "customer_name")
+        self.assertEqual(len(payload["schema_versions"]), 1)
+
     def test_assigned_member_can_update_task_status(self):
         task = ProjectTask(
             project_id=self.open_project.id,
@@ -421,6 +471,99 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertEqual(detail_response.json()["id"], created["id"])
         self.assertEqual(detail_response.json()["content"][0]["content"], "Published report body")
+
+    def test_admin_can_create_update_and_list_project_assets(self):
+        create_response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/assets",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "title": "Field briefing deck",
+                "kind": "document",
+                "summary": "Launch support deck for field supervisors.",
+                "source_url": "https://example.com/briefing",
+            },
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        created = create_response.json()
+        self.assertEqual(created["title"], "Field briefing deck")
+        self.assertEqual(created["kind"], ProjectAssetKind.DOCUMENT.value)
+
+        update_response = self.client.patch(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/assets/{created['id']}",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "kind": "audio",
+                "summary": "Updated asset summary for briefing playback.",
+            },
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        updated = update_response.json()
+        self.assertEqual(updated["kind"], ProjectAssetKind.AUDIO.value)
+        self.assertEqual(updated["summary"], "Updated asset summary for briefing playback.")
+
+        list_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/assets",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()), 1)
+
+        detail_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/assets/{created['id']}",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["id"], created["id"])
+
+    def test_admin_can_create_update_and_list_project_threads(self):
+        create_response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "title": "Launch thread",
+                "summary": "Operational launch notices and escalations.",
+                "reply_count": 4,
+            },
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        created = create_response.json()
+        self.assertEqual(created["title"], "Launch thread")
+        self.assertEqual(created["reply_count"], 4)
+
+        update_response = self.client.patch(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads/{created['id']}",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "summary": "Pinned notices and follow-up actions.",
+                "reply_count": 6,
+            },
+        )
+
+        self.assertEqual(update_response.status_code, 200)
+        updated = update_response.json()
+        self.assertEqual(updated["summary"], "Pinned notices and follow-up actions.")
+        self.assertEqual(updated["reply_count"], 6)
+
+        list_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()), 1)
+
+        detail_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads/{created['id']}",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["id"], created["id"])
 
 
 if __name__ == "__main__":

@@ -17,6 +17,8 @@ class SubmissionOut(BaseModel):
     id: UUID
     form_id: UUID
     user_id: Optional[UUID] = None
+    dataset_id: Optional[UUID] = None
+    dataset_schema_version_id: Optional[UUID] = None
     form_version_number: Optional[int] = None
     data: Dict
     metadata_json: Optional[Dict] = None

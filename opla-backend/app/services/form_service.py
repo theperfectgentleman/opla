@@ -2,6 +2,13 @@ from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.project import ProjectStatus
 from app.models.form import Form, FormStatus
+from app.models.form_dataset import (
+    FormDataset,
+    FormDatasetField,
+    FormDatasetFieldStatus,
+    FormDatasetSchemaVersion,
+    FormDatasetStatus,
+)
 from app.models.form_version import FormVersion, FormVersionKind
 from app.models.project_access import ProjectAccess, ProjectRole, AccessorType
 from app.models.org_member import OrgMember
@@ -91,6 +98,301 @@ class ProjectService:
 
 class FormService:
     DRAFT_SLOTS = (1, 2, 3)
+
+    @staticmethod
+    def _normalize_identifier(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = re.sub(r"[^a-zA-Z0-9_]+", "_", str(value).strip())
+        normalized = normalized.strip("_")
+        return normalized or None
+
+    @staticmethod
+    def _generate_field_identifier(seed: Optional[str] = None) -> str:
+        normalized_seed = FormService._normalize_identifier(seed)
+        if normalized_seed:
+            return normalized_seed
+        return f"field_{uuid.uuid4().hex[:12]}"
+
+    @staticmethod
+    def _normalize_blueprint(blueprint: Optional[Dict]) -> Dict:
+        payload = dict(blueprint or {})
+        schema = payload.get("schema")
+        ui = payload.get("ui")
+
+        normalized_schema = []
+        field_identifiers_by_key: Dict[str, str] = {}
+        used_identifiers: set[str] = set()
+
+        if isinstance(schema, list):
+            for index, raw_entry in enumerate(schema):
+                entry = dict(raw_entry) if isinstance(raw_entry, dict) else {"type": "string"}
+                raw_key = entry.get("key")
+                normalized_key = FormService._normalize_identifier(raw_key) or f"field_{index + 1}"
+                identifier = FormService._normalize_identifier(
+                    entry.get("id") or entry.get("field_id") or entry.get("dataset_field_id") or normalized_key
+                )
+                if not identifier or identifier in used_identifiers:
+                    identifier = FormService._generate_field_identifier(normalized_key)
+                    while identifier in used_identifiers:
+                        identifier = FormService._generate_field_identifier()
+
+                entry["key"] = normalized_key
+                entry["id"] = identifier
+                entry["field_id"] = identifier
+                entry["dataset_field_id"] = identifier
+                normalized_schema.append(entry)
+                field_identifiers_by_key[normalized_key] = identifier
+                used_identifiers.add(identifier)
+
+        if isinstance(ui, list):
+            normalized_ui = []
+            for section_index, raw_section in enumerate(ui):
+                section = dict(raw_section) if isinstance(raw_section, dict) else {}
+                section_id = FormService._normalize_identifier(section.get("id")) or f"screen_{section_index + 1}"
+                section["id"] = section_id
+
+                children = section.get("children") or []
+                normalized_children = []
+                for child_index, raw_child in enumerate(children):
+                    child = dict(raw_child) if isinstance(raw_child, dict) else {}
+                    raw_bind = child.get("bind") or child.get("key") or child.get("field_id") or child.get("id")
+                    normalized_bind = FormService._normalize_identifier(raw_bind) or f"field_{child_index + 1}"
+                    identifier = field_identifiers_by_key.get(normalized_bind)
+                    if not identifier:
+                        identifier = FormService._normalize_identifier(child.get("field_id") or child.get("id"))
+                    if not identifier or identifier in used_identifiers and field_identifiers_by_key.get(normalized_bind) != identifier:
+                        identifier = FormService._generate_field_identifier(normalized_bind)
+                        while identifier in used_identifiers:
+                            identifier = FormService._generate_field_identifier()
+
+                    child["bind"] = normalized_bind
+                    child["id"] = identifier
+                    child["field_id"] = identifier
+                    child["dataset_field_id"] = identifier
+                    normalized_children.append(child)
+
+                    if normalized_bind not in field_identifiers_by_key:
+                        field_identifiers_by_key[normalized_bind] = identifier
+                        normalized_schema.append(
+                            {
+                                "key": normalized_bind,
+                                "id": identifier,
+                                "field_id": identifier,
+                                "dataset_field_id": identifier,
+                                "type": child.get("type") or "string",
+                                "required": bool(child.get("required")),
+                            }
+                        )
+                    used_identifiers.add(identifier)
+
+                section["children"] = normalized_children
+                normalized_ui.append(section)
+
+            payload["ui"] = normalized_ui
+
+        payload["schema"] = normalized_schema
+        return payload
+
+    @staticmethod
+    def _extract_schema_fields(blueprint: Optional[Dict]) -> List[Dict]:
+        schema = (blueprint or {}).get("schema") or []
+        extracted: List[Dict] = []
+        if not isinstance(schema, list):
+            return extracted
+
+        for index, field in enumerate(schema):
+            if not isinstance(field, dict):
+                continue
+
+            identifier = (
+                field.get("id")
+                or field.get("field_id")
+                or field.get("dataset_field_id")
+                or field.get("key")
+            )
+            if not identifier:
+                identifier = f"field_{index + 1}"
+
+            extracted.append(
+                {
+                    "identifier": str(identifier),
+                    "key": field.get("key") or str(identifier),
+                    "label": field.get("label") or field.get("title") or field.get("key") or str(identifier),
+                    "field_type": field.get("type"),
+                    "definition": field,
+                }
+            )
+
+        return extracted
+
+    @staticmethod
+    def _build_schema_change_summary(
+        previous_schema: Optional[Dict],
+        current_schema: Optional[Dict],
+    ) -> Dict:
+        previous_fields = {
+            field["identifier"]: field for field in FormService._extract_schema_fields(previous_schema)
+        }
+        current_fields = {
+            field["identifier"]: field for field in FormService._extract_schema_fields(current_schema)
+        }
+
+        previous_ids = set(previous_fields)
+        current_ids = set(current_fields)
+
+        modified = []
+        for identifier in sorted(previous_ids & current_ids):
+            old_definition = previous_fields[identifier].get("definition") or {}
+            new_definition = current_fields[identifier].get("definition") or {}
+            if old_definition != new_definition:
+                modified.append(
+                    {
+                        "field_identifier": identifier,
+                        "previous_key": previous_fields[identifier].get("key"),
+                        "current_key": current_fields[identifier].get("key"),
+                    }
+                )
+
+        return {
+            "added": sorted(current_ids - previous_ids),
+            "removed": sorted(previous_ids - current_ids),
+            "modified": modified,
+        }
+
+    @staticmethod
+    def _sync_dataset_fields(
+        db: Session,
+        dataset: FormDataset,
+        schema_version_number: int,
+        blueprint: Optional[Dict],
+    ) -> None:
+        current_fields = FormService._extract_schema_fields(blueprint)
+        current_by_identifier = {field["identifier"]: field for field in current_fields}
+        existing_fields = (
+            db.query(FormDatasetField)
+            .filter(FormDatasetField.dataset_id == dataset.id)
+            .all()
+        )
+        existing_by_identifier = {field.field_identifier: field for field in existing_fields}
+
+        for identifier, field in current_by_identifier.items():
+            record = existing_by_identifier.get(identifier)
+            if record:
+                record.field_key = field.get("key")
+                record.label = field.get("label")
+                record.field_type = field.get("field_type")
+                record.status = FormDatasetFieldStatus.ACTIVE
+                record.retired_in_version_number = None
+                record.metadata_json = field.get("definition")
+                continue
+
+            db.add(
+                FormDatasetField(
+                    dataset_id=dataset.id,
+                    field_identifier=identifier,
+                    field_key=field.get("key"),
+                    label=field.get("label"),
+                    field_type=field.get("field_type"),
+                    status=FormDatasetFieldStatus.ACTIVE,
+                    introduced_in_version_number=schema_version_number,
+                    metadata_json=field.get("definition"),
+                )
+            )
+
+        for identifier, record in existing_by_identifier.items():
+            if identifier in current_by_identifier:
+                continue
+            record.status = FormDatasetFieldStatus.LEGACY
+            if record.retired_in_version_number is None:
+                record.retired_in_version_number = schema_version_number
+
+    @staticmethod
+    def ensure_live_dataset(
+        db: Session,
+        form: Form,
+        live_snapshot: Optional[FormVersion] = None,
+        changelog: Optional[str] = None,
+    ) -> tuple[Optional[FormDataset], Optional[FormDatasetSchemaVersion]]:
+        blueprint = form.blueprint_live
+        if not blueprint:
+            return None, None
+
+        dataset = (
+            db.query(FormDataset)
+            .filter(FormDataset.form_id == form.id)
+            .with_for_update(of=FormDataset)
+            .first()
+        )
+        if not dataset:
+            dataset = FormDataset(
+                form_id=form.id,
+                name=form.title,
+                slug=form.slug,
+                status=FormDatasetStatus.ACTIVE,
+                current_schema_version_number=0,
+                last_form_version_number=form.published_version or form.version,
+                metadata_json={"source": "form_publish"},
+            )
+            db.add(dataset)
+            db.flush()
+
+        dataset.name = form.title
+        dataset.slug = form.slug
+        dataset.status = FormDatasetStatus.ACTIVE
+        dataset.last_form_version_number = form.published_version or form.version
+
+        target_version_number = None
+        if live_snapshot and live_snapshot.version_number is not None:
+            target_version_number = live_snapshot.version_number
+        else:
+            target_version_number = form.published_version or form.version or 1
+
+        existing_version = (
+            db.query(FormDatasetSchemaVersion)
+            .filter(
+                FormDatasetSchemaVersion.dataset_id == dataset.id,
+                FormDatasetSchemaVersion.version_number == target_version_number,
+            )
+            .first()
+        )
+
+        latest_version = (
+            db.query(FormDatasetSchemaVersion)
+            .filter(FormDatasetSchemaVersion.dataset_id == dataset.id)
+            .order_by(FormDatasetSchemaVersion.version_number.desc())
+            .first()
+        )
+
+        previous_blueprint = latest_version.blueprint_snapshot if latest_version else None
+        change_summary = FormService._build_schema_change_summary(previous_blueprint, blueprint)
+        if changelog:
+            change_summary["changelog"] = changelog
+
+        if existing_version:
+            existing_version.form_version_id = live_snapshot.id if live_snapshot else existing_version.form_version_id
+            existing_version.schema_snapshot = blueprint.get("schema") or []
+            existing_version.blueprint_snapshot = blueprint
+            if existing_version.change_summary_json is None:
+                existing_version.change_summary_json = change_summary
+            existing_version.published_at = form.published_at or existing_version.published_at
+            schema_version = existing_version
+        else:
+            schema_version = FormDatasetSchemaVersion(
+                dataset_id=dataset.id,
+                form_version_id=live_snapshot.id if live_snapshot else None,
+                version_number=target_version_number,
+                schema_snapshot=blueprint.get("schema") or [],
+                blueprint_snapshot=blueprint,
+                change_summary_json=change_summary,
+                published_at=form.published_at,
+            )
+            db.add(schema_version)
+            db.flush()
+
+        dataset.current_schema_version_number = target_version_number
+        FormService._sync_dataset_fields(db, dataset, target_version_number, blueprint)
+        return dataset, schema_version
 
     @staticmethod
     def _validate_accessor(
@@ -213,6 +515,7 @@ class FormService:
 
     @staticmethod
     def create_form(db: Session, project_id: uuid.UUID, title: str, blueprint: Optional[Dict] = None) -> Form:
+        blueprint = FormService._normalize_blueprint(blueprint)
         base_slug = slugify(title)
         slug = base_slug
         counter = 1
@@ -247,6 +550,7 @@ class FormService:
     ) -> Form:
         form = db.query(Form).filter(Form.id == form_id).first()
         if form:
+            blueprint = FormService._normalize_blueprint(blueprint)
             slot_index = FormService._ensure_slot(target_slot)
             form.blueprint_draft = blueprint
             if blueprint and "meta" in blueprint and "title" in blueprint["meta"]:
@@ -338,6 +642,7 @@ class FormService:
             is_active=True,
         )
         db.add(live_snapshot)
+        db.flush()
 
         form.blueprint_live = blueprint
         form.status = FormStatus.LIVE
@@ -346,14 +651,39 @@ class FormService:
         form.published_at = published_at
 
         FormService._ensure_active_draft_exists(db, form)
+        FormService.ensure_live_dataset(
+            db,
+            form=form,
+            live_snapshot=live_snapshot,
+            changelog=changelog,
+        )
 
         db.commit()
         db.refresh(form)
         return form
 
     @staticmethod
-    def get_project_forms(db: Session, project_id: uuid.UUID) -> List[Form]:
-        return db.query(Form).filter(Form.project_id == project_id).all()
+    def get_project_forms(db: Session, project_id: uuid.UUID, live_only: bool = False) -> List[Form]:
+        q = db.query(Form).filter(Form.project_id == project_id)
+        if live_only:
+            q = q.filter(Form.status == FormStatus.LIVE)
+        return q.all()
+
+    @staticmethod
+    def get_form_stats(db: Session, form_id: uuid.UUID, user_id: uuid.UUID) -> dict:
+        from app.models.submission import Submission
+        from sqlalchemy import func
+        total = db.query(func.count(Submission.id)).filter(
+            Submission.form_id == form_id
+        ).scalar() or 0
+        mine = db.query(func.count(Submission.id)).filter(
+            Submission.form_id == form_id,
+            Submission.user_id == user_id,
+        ).scalar() or 0
+        last_at = db.query(func.max(Submission.created_at)).filter(
+            Submission.form_id == form_id
+        ).scalar()
+        return {"total": total, "mine": mine, "last_submitted_at": last_at}
 
     @staticmethod
     def update_responsibility(

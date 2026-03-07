@@ -15,6 +15,7 @@ from app.models.project import Project  # noqa: F401
 from app.models.project_access import ProjectAccess  # noqa: F401
 from app.models.project_task import ProjectTask  # noqa: F401
 from app.models.form import Form  # noqa: F401
+from app.models.form_dataset import FormDataset, FormDatasetSchemaVersion, FormDatasetField  # noqa: F401
 from app.models.submission import Submission  # noqa: F401
 
 __all__ = [
@@ -29,5 +30,8 @@ __all__ = [
     "ProjectAccess", 
     "ProjectTask",
     "Form",
+    "FormDataset",
+    "FormDatasetSchemaVersion",
+    "FormDatasetField",
     "Submission"
 ]

@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { FormField } from '@opla/types';
 
@@ -13,8 +13,8 @@ export function RadioGroupField({ field, value, onChange, error }: Props) {
     const options = field.options || [];
 
     return (
-        <View style={{ marginBottom: 16 }}>
-            <View style={{ gap: 8 }}>
+        <View>
+            <View style={{ gap: 6 }}>
                 {options.map((opt) => {
                     const isSelected = value === opt.value;
                     return (
@@ -24,37 +24,38 @@ export function RadioGroupField({ field, value, onChange, error }: Props) {
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 12,
-                                backgroundColor: isSelected ? '#1e1b4b' : '#1e293b',
+                                gap: 10,
+                                backgroundColor: isSelected ? '#0d2b1e' : '#1e293b',
                                 borderWidth: 1.5,
-                                borderColor: isSelected ? '#6366f1' : '#334155',
-                                borderRadius: 12,
-                                padding: 14,
+                                borderColor: isSelected ? '#158754' : '#334155',
+                                borderRadius: 8,
+                                paddingVertical: 10,
+                                paddingHorizontal: 12,
                             }}
                         >
                             <View
                                 style={{
-                                    width: 20,
-                                    height: 20,
-                                    borderRadius: 10,
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: 9,
                                     borderWidth: 2,
-                                    borderColor: isSelected ? '#6366f1' : '#475569',
-                                    backgroundColor: isSelected ? '#6366f1' : 'transparent',
+                                    borderColor: isSelected ? '#158754' : '#475569',
+                                    backgroundColor: isSelected ? '#158754' : 'transparent',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                 }}
                             >
                                 {isSelected && (
-                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' }} />
+                                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' }} />
                                 )}
                             </View>
-                            <Text style={{ color: '#f1f5f9', fontSize: 16 }}>{opt.label}</Text>
+                            <Text style={{ color: '#f1f5f9', fontSize: 14 }}>{opt.label}</Text>
                         </TouchableOpacity>
                     );
                 })}
             </View>
             {error && (
-                <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{error}</Text>
+                <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</Text>
             )}
         </View>
     );

@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../../contexts/AuthContext';
 import { orgAPI } from '../../../services/api';
-import { Activity, Clock, Briefcase } from 'lucide-react-native';
+import { Activity, Clock, Building2, ChevronRight } from 'lucide-react-native';
 
 type Org = {
   id: string;
@@ -41,28 +41,54 @@ const proMissions = [
   }
 ];
 
-function OrgGigCard({ org, onPress }: { org: Org; onPress: () => void }) {
-  // Let's treat an org like a "Gig Board" available project for the UI aesthetics
-  // In reality this opens the org workspace.
-  const pay = '$' + (Math.floor(Math.random() * 80) + 20) + '.00';
-  const spotsLeft = Math.floor(Math.random() * 50) + 1;
+function OrgCard({ org, onPress }: { org: Org; onPress: () => void }) {
+  const accent = org.primary_color || '#158754';
+  const initials = org.name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <TouchableOpacity
-      activeOpacity={0.7}
+      activeOpacity={0.75}
       onPress={onPress}
-      className="bg-slate-800/30 border border-slate-700/30 rounded-2xl p-4 flex-col justify-between mb-4 w-full"
+      style={{
+        backgroundColor: '#1e293b',
+        borderRadius: 16,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#334155',
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        gap: 14,
+      }}
     >
-      <View>
-        <Text className="text-[10px] font-bold text-slate-500 uppercase">{org.slug ? `@${org.slug}` : 'Organization'}</Text>
-        <Text className="text-sm font-bold text-white mt-1 mb-3">{org.name}</Text>
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          backgroundColor: accent + '22',
+          borderWidth: 1,
+          borderColor: accent + '55',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: accent, fontSize: 15, fontWeight: '800' }}>{initials}</Text>
       </View>
-      <View className="flex-row items-end justify-between mt-auto relative z-10 w-full">
-        <Text className="font-black text-lime-400">{pay}</Text>
-        <View className="bg-slate-950 px-2 py-1 rounded-md border border-slate-800">
-          <Text className="text-[10px] text-slate-400 font-bold">{spotsLeft} slots</Text>
-        </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: '700', color: '#f1f5f9' }} numberOfLines={1}>
+          {org.name}
+        </Text>
+        {org.slug ? (
+          <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>@{org.slug}</Text>
+        ) : null}
       </View>
+      <ChevronRight size={16} color="#475569" />
     </TouchableOpacity>
   );
 }
@@ -180,33 +206,44 @@ export default function DeskIndexScreen() {
           ))}
         </View>
 
-        {/* Organizations wrapped as "Gig Board" */}
-        <View className="mb-8">
-          <View className="flex-row items-center mb-4">
-            <Briefcase size={16} color="#a3e635" />
-            <Text className="text-sm font-bold text-slate-400 uppercase tracking-widest ml-2">Gig Board (Orgs)</Text>
+        {/* My Organisations */}
+        <View style={{ marginBottom: 32 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <Building2 size={16} color="#158754" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 1.2, marginLeft: 8 }}>
+              My Organisations
+            </Text>
           </View>
 
           {loading ? (
-            <ActivityIndicator color="#22d3ee" size="large" />
+            <ActivityIndicator color="#158754" size="large" />
           ) : error ? (
-            <Text className="text-slate-400 text-center">{error}</Text>
+            <Text style={{ color: '#94a3b8', textAlign: 'center' }}>{error}</Text>
           ) : orgs.length === 0 ? (
-            <Text className="text-slate-500 text-center italic mt-4">No organizations mapped yet.</Text>
-          ) : (
-            <View className="flex-row flex-wrap justify-between">
-              {orgs.map((org) => (
-                <View key={org.id} style={{ width: '48%' }}>
-                  <OrgGigCard
-                    org={org}
-                    onPress={() => router.push({
-                      pathname: '/(main)/(desk)/org/[id]',
-                      params: { id: org.id, name: org.name, color: org.primary_color ?? '#06b6d4', owner: org.owner_id ?? '' },
-                    })}
-                  />
-                </View>
-              ))}
+            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <Building2 size={32} color="#334155" />
+              <Text style={{ color: '#475569', marginTop: 12, textAlign: 'center' }}>
+                You are not a member of any organisation yet.
+              </Text>
             </View>
+          ) : (
+            orgs.map((org) => (
+              <OrgCard
+                key={org.id}
+                org={org}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(main)/(desk)/org/[id]',
+                    params: {
+                      id: org.id,
+                      name: org.name,
+                      color: org.primary_color ?? '#158754',
+                      owner: org.owner_id ?? '',
+                    },
+                  })
+                }
+              />
+            ))
           )}
         </View>
         <View className="h-20" />

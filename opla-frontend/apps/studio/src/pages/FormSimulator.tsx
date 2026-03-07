@@ -154,10 +154,10 @@ const LookupFieldRenderer = ({ field, value, onChange }: any) => {
                 onFocus={() => setIsOpen(true)}
                 onBlur={() => setTimeout(() => setIsOpen(false), 200)}
                 placeholder={field.placeholder || "Search items..."}
-                className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
+                className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
             />
             {isOpen && matching.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-xl rounded-2xl max-h-60 overflow-y-auto z-50 p-2">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-xl rounded-md max-h-60 overflow-y-auto z-50 p-2">
                     {matching.slice(0, 50).map((m: any, i: number) => (
                         <div
                             key={i}
@@ -166,7 +166,7 @@ const LookupFieldRenderer = ({ field, value, onChange }: any) => {
                                 setSearch(m.label);
                                 setIsOpen(false);
                             }}
-                            className={`px-4 py-3 rounded-xl cursor-pointer transition-all ${m.value === value ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-bold' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
+                            className={`px-4 py-3 rounded-md cursor-pointer transition-all ${m.value === value ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-bold' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
                         >
                             {m.label}
                         </div>
@@ -382,13 +382,13 @@ const FormSimulator: React.FC = () => {
                     <div className="mb-8 flex space-x-4 items-center">
                         <button
                             onClick={() => navigate(-1)}
-                            className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
+                            className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
                         >
                             <ChevronLeft className="w-6 h-6" />
                         </button>
                         <button
                             onClick={() => { setFormData({}); setStatus('idle'); }}
-                            className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
+                            className="p-3 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] transition-all shadow-xl"
                         >
                             <RotateCcw className="w-6 h-6" />
                         </button>
@@ -416,7 +416,7 @@ const FormSimulator: React.FC = () => {
                                             {field.type === 'gps_capture' ? (
                                                 <button
                                                     onClick={captureGPS}
-                                                    className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--success))]/10 border-[hsl(var(--success))] text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}
+                                                    className={`w-full flex items-center justify-between px-5 py-4 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--success))]/10 border-[hsl(var(--success))] text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}
                                                 >
                                                     <div className="flex items-center space-x-3">
                                                         <MapPin className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
@@ -434,7 +434,7 @@ const FormSimulator: React.FC = () => {
                                                         onChange={(e) => handlePhotoUpload(e, field.bind)}
                                                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                                     />
-                                                    <div className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--info))]/10 border-[hsl(var(--info))] text-[hsl(var(--info))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}>
+                                                    <div className={`w-full flex items-center justify-between px-5 py-4 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--info))]/10 border-[hsl(var(--info))] text-[hsl(var(--info))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}>
                                                         <div className="flex items-center space-x-3">
                                                             <CameraIcon className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--info))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
                                                             <span className="font-semibold text-sm">
@@ -449,13 +449,13 @@ const FormSimulator: React.FC = () => {
                                                     type="file"
                                                     accept={field.type === 'audio_recorder' ? 'audio/*' : undefined}
                                                     onChange={(e) => handleInputChange(field.bind, e.target.files?.[0]?.name)}
-                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
+                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
                                                 />
                                             ) : field.type === 'signature_pad' ? (
                                                 <button
                                                     type="button"
                                                     onClick={() => handleInputChange(field.bind, 'signed')}
-                                                    className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 transition-all bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]"
+                                                    className="w-full flex items-center justify-between px-5 py-4 rounded-md border-2 transition-all bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]"
                                                 >
                                                     <span className="font-semibold text-sm">Tap to sign</span>
                                                     {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />}
@@ -465,7 +465,7 @@ const FormSimulator: React.FC = () => {
                                                     <select
                                                         value={formData[field.bind] || ''}
                                                         onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all"
+                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all"
                                                     >
                                                         <option value="" disabled>Select an option</option>
                                                         {(field.options || []).map((opt, i) => (
@@ -477,7 +477,7 @@ const FormSimulator: React.FC = () => {
                                                             type="text"
                                                             value={formData[field.bind + '_other'] || ''}
                                                             onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
-                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
+                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-md px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
                                                             placeholder="Please specify..."
                                                         />
                                                     )}
@@ -501,7 +501,7 @@ const FormSimulator: React.FC = () => {
                                                             type="text"
                                                             value={formData[field.bind + '_other'] || ''}
                                                             onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
-                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
+                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-md px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
                                                             placeholder="Please specify..."
                                                         />
                                                     )}
@@ -521,7 +521,7 @@ const FormSimulator: React.FC = () => {
                                                                     key={i}
                                                                     type="button"
                                                                     onClick={() => handleInputChange(field.bind, String(val))}
-                                                                    className={`flex-1 h-12 rounded-2xl border-2 transition-all flex items-center justify-center text-sm font-bold ${isSelected
+                                                                    className={`flex-1 h-12 rounded-md border-2 transition-all flex items-center justify-center text-sm font-bold ${isSelected
                                                                         ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-lg shadow-[hsl(var(--primary))]/20 scale-105 active:scale-95'
                                                                         : 'border-transparent bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] active:scale-95'
                                                                         }`}
@@ -549,25 +549,39 @@ const FormSimulator: React.FC = () => {
                                                             type="text"
                                                             value={formData[field.bind + '_other'] || ''}
                                                             onChange={(e) => handleInputChange(field.bind + '_other', e.target.value)}
-                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-2xl px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
+                                                            className="w-full mt-2 bg-[hsl(var(--surface-elevated))] border-2 border-dashed border-[hsl(var(--border))] focus:border-solid focus:border-[hsl(var(--primary))] rounded-md px-5 py-3 text-[hsl(var(--text-primary))] transition-all font-medium text-sm"
                                                             placeholder="Please specify..."
                                                         />
                                                     )}
                                                 </div>
                                             ) : field.type === 'toggle' ? (
-                                                <label className="flex items-center gap-3 text-sm text-[hsl(var(--text-secondary))]">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={!!formData[field.bind]}
-                                                        onChange={(e) => handleInputChange(field.bind, e.target.checked)}
-                                                    />
-                                                    Toggle
-                                                </label>
+                                                <div className="flex rounded-xl border-2 overflow-hidden transition-colors border-[hsl(var(--border))]">
+                                                    {[
+                                                        { val: true,  label: field.options?.find((o: any) => o.value === 'true')?.label  ?? 'Yes' },
+                                                        { val: false, label: field.options?.find((o: any) => o.value === 'false')?.label ?? 'No'  },
+                                                    ].map(({ val, label }, idx) => {
+                                                        const active = formData[field.bind] === val;
+                                                        return (
+                                                            <button
+                                                                key={String(val)}
+                                                                type="button"
+                                                                onClick={() => handleInputChange(field.bind, val)}
+                                                                className={`flex-1 py-4 text-sm font-bold transition-all ${
+                                                                    active
+                                                                        ? 'bg-[hsl(var(--primary))] text-white'
+                                                                        : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                } ${idx === 1 ? 'border-l-2 border-[hsl(var(--border))]' : ''}`}
+                                                            >
+                                                                {label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             ) : field.type === 'textarea' ? (
                                                 <textarea
                                                     value={formData[field.bind] || ''}
                                                     onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium min-h-[120px]"
+                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium min-h-[120px]"
                                                     placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
                                                 />
                                             ) : field.type === 'lookup_list' ? (
@@ -577,7 +591,7 @@ const FormSimulator: React.FC = () => {
                                                     onChange={(val: any) => handleInputChange(field.bind, val)}
                                                 />
                                             ) : field.type === 'matrix_table' ? (
-                                                <div className="w-full max-h-[500px] overflow-auto hide-scrollbar rounded-2xl border border-[hsl(var(--border))] relative relative-z-0">
+                                                <div className="w-full max-h-[500px] overflow-auto hide-scrollbar rounded-md border border-[hsl(var(--border))] relative relative-z-0">
                                                     <table className="w-full text-xs text-left min-w-max">
                                                         <thead className="bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] sticky top-0 z-10 shadow-sm">
                                                             <tr>
@@ -663,7 +677,7 @@ const FormSimulator: React.FC = () => {
                                                     type={field.type === 'input_number' ? 'number' : field.type === 'email_input' ? 'email' : field.type === 'phone_input' ? 'tel' : field.type === 'date_picker' ? 'date' : field.type === 'time_picker' ? 'time' : 'text'}
                                                     value={formData[field.bind] || ''}
                                                     onChange={(e) => handleInputChange(field.bind, field.mask ? applyMask(e.target.value, field.mask) : e.target.value)}
-                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-2xl px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
+                                                    className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all placeholder:text-[hsl(var(--text-tertiary))] font-medium"
                                                     placeholder={field.placeholder || (field.mask ? field.mask : `Enter ${field.label.toLowerCase()}...`)}
                                                     min={field.min}
                                                     max={field.max}
@@ -677,7 +691,7 @@ const FormSimulator: React.FC = () => {
                                     {currentSectionIndex > 0 && (
                                         <button
                                             onClick={() => setCurrentSectionIndex(prev => prev - 1)}
-                                            className="flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-primary))] border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface))]"
+                                            className="flex-1 font-bold py-4 rounded-md shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-primary))] border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface))]"
                                         >
                                             <span>Back</span>
                                         </button>
@@ -686,7 +700,7 @@ const FormSimulator: React.FC = () => {
                                     {currentSectionIndex < (blueprint?.ui.length || 1) - 1 ? (
                                         <button
                                             onClick={handleNext}
-                                            className="flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30"
+                                            className="flex-1 font-bold py-4 rounded-md shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30"
                                         >
                                             <span>Next</span>
                                         </button>
@@ -694,7 +708,7 @@ const FormSimulator: React.FC = () => {
                                         <button
                                             onClick={handleSubmit}
                                             disabled={status === 'submitting' || status === 'success'}
-                                            className={`flex-1 font-bold py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 ${status === 'success' ? 'bg-[hsl(var(--success))] text-white shadow-[hsl(var(--success))]/30' :
+                                            className={`flex-1 font-bold py-4 rounded-md shadow-xl transition-all flex items-center justify-center space-x-2 ${status === 'success' ? 'bg-[hsl(var(--success))] text-white shadow-[hsl(var(--success))]/30' :
                                                 status === 'error' ? 'bg-[hsl(var(--error))] text-white shadow-[hsl(var(--error))]/30' :
                                                     'bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30'
                                                 }`}

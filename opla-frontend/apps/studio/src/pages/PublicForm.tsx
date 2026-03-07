@@ -127,7 +127,7 @@ const PublicForm: React.FC = () => {
                     <div className="h-3 bg-indigo-600 w-full"></div>
                     <div className="p-8 md:p-12">
                         <div className="flex items-center space-x-3 mb-6">
-                            <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
+                            <div className="w-10 h-10 bg-slate-900 rounded-md flex items-center justify-center">
                                 <Layout className="w-6 h-6 text-white" />
                             </div>
                             <span className="font-bold text-slate-900">Opla Forms</span>
@@ -150,7 +150,7 @@ const PublicForm: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={captureGPS}
-                                        className={`w-full flex items-center justify-between px-6 py-5 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-600 hover:bg-slate-100'}`}
+                                        className={`w-full flex items-center justify-between px-6 py-5 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-600 hover:bg-slate-100'}`}
                                     >
                                         <div className="flex items-center space-x-4">
                                             <MapPin className={`w-6 h-6 ${formData[field.bind] ? 'text-emerald-500' : 'text-slate-400'}`} />
@@ -167,7 +167,7 @@ const PublicForm: React.FC = () => {
                                             onChange={(e) => handleInputChange(field.bind, e.target.files?.[0]?.name)}
                                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                         />
-                                        <div className={`w-full flex items-center justify-between px-6 py-5 rounded-2xl border-2 transition-all ${formData[field.bind] ? 'bg-purple-50 border-purple-500 text-purple-700' : 'bg-slate-50 border-slate-100 text-slate-600 group-hover:bg-slate-100'}`}>
+                                        <div className={`w-full flex items-center justify-between px-6 py-5 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-purple-50 border-purple-500 text-purple-700' : 'bg-slate-50 border-slate-100 text-slate-600 group-hover:bg-slate-100'}`}>
                                             <div className="flex items-center space-x-4">
                                                 <CameraIcon className={`w-6 h-6 ${formData[field.bind] ? 'text-purple-500' : 'text-slate-400'}`} />
                                                 <span className="font-bold text-lg">
@@ -181,13 +181,13 @@ const PublicForm: React.FC = () => {
                                         type="file"
                                         accept={field.type === 'audio_recorder' ? 'audio/*' : undefined}
                                         onChange={(e) => handleInputChange(field.bind, e.target.files?.[0]?.name)}
-                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-2xl px-6 py-5 text-slate-900 text-lg transition-all placeholder:text-slate-300 font-medium outline-none"
+                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all placeholder:text-slate-300 font-medium outline-none"
                                     />
                                 ) : field.type === 'signature_pad' ? (
                                     <button
                                         type="button"
                                         onClick={() => handleInputChange(field.bind, 'signed')}
-                                        className="w-full flex items-center justify-between px-6 py-5 rounded-2xl border-2 transition-all bg-slate-50 border-slate-100 text-slate-600 hover:bg-slate-100"
+                                        className="w-full flex items-center justify-between px-6 py-5 rounded-md border-2 transition-all bg-slate-50 border-slate-100 text-slate-600 hover:bg-slate-100"
                                     >
                                         <span className="font-bold text-lg">Tap to sign</span>
                                         {formData[field.bind] && <CheckCircle2 className="w-6 h-6 text-emerald-600" />}
@@ -196,7 +196,7 @@ const PublicForm: React.FC = () => {
                                     <select
                                         value={formData[field.bind] || ''}
                                         onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-2xl px-6 py-5 text-slate-900 text-lg transition-all outline-none"
+                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all outline-none"
                                     >
                                         <option value="" disabled>Select an option</option>
                                         {(field.options || []).map((opt) => (
@@ -233,7 +233,7 @@ const PublicForm: React.FC = () => {
                                                         key={i}
                                                         type="button"
                                                         onClick={() => handleInputChange(field.bind, String(val))}
-                                                        className={`flex-1 h-16 rounded-2xl border-2 transition-all flex items-center justify-center text-xl font-bold ${isSelected
+                                                        className={`flex-1 h-16 rounded-md border-2 transition-all flex items-center justify-center text-xl font-bold ${isSelected
                                                             ? 'border-indigo-600 bg-indigo-600 text-white shadow-xl shadow-indigo-200 scale-105 active:scale-95'
                                                             : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-white hover:border-indigo-100 active:scale-95'
                                                             }`}
@@ -270,7 +270,7 @@ const PublicForm: React.FC = () => {
                                     <textarea
                                         value={formData[field.bind] || ''}
                                         onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-2xl px-6 py-5 text-slate-900 text-lg transition-all placeholder:text-slate-300 font-medium outline-none min-h-[140px]"
+                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all placeholder:text-slate-300 font-medium outline-none min-h-[140px]"
                                         placeholder={field.placeholder || 'Type your answer here...'}
                                         required
                                     />
@@ -279,7 +279,7 @@ const PublicForm: React.FC = () => {
                                         type={field.type === 'input_number' ? 'number' : field.type === 'email_input' ? 'email' : field.type === 'phone_input' ? 'tel' : field.type === 'date_picker' ? 'date' : field.type === 'time_picker' ? 'time' : 'text'}
                                         value={formData[field.bind] || ''}
                                         onChange={(e) => handleInputChange(field.bind, e.target.value)}
-                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-2xl px-6 py-5 text-slate-900 text-lg transition-all placeholder:text-slate-300 font-medium outline-none"
+                                        className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all placeholder:text-slate-300 font-medium outline-none"
                                         placeholder={field.placeholder || 'Type your answer here...'}
                                         required
                                     />
@@ -292,7 +292,7 @@ const PublicForm: React.FC = () => {
                         <button
                             type="submit"
                             disabled={status === 'submitting'}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xl py-6 rounded-3xl shadow-2xl shadow-indigo-600/30 transition-all flex items-center justify-center space-x-3 disabled:opacity-50"
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xl py-6 rounded-md shadow-2xl shadow-indigo-600/30 transition-all flex items-center justify-center space-x-3 disabled:opacity-50"
                         >
                             {status === 'submitting' ? (
                                 <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>

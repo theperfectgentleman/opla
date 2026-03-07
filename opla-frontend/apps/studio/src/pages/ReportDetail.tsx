@@ -127,7 +127,7 @@ const ReportDetail: React.FC = () => {
             label: 'Team mention',
             kind: 'team' as const,
             title: team.name,
-            summary: team.description || 'Team available for mention targeting and review handoff.',
+            summary: 'Team available for mention targeting and review handoff.',
             detail: 'Team • Live organization lookup',
             icon: <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[hsl(var(--primary))]/10 text-[10px] font-bold text-[hsl(var(--primary))]">@</span>,
         }));
@@ -307,7 +307,7 @@ const ReportDetail: React.FC = () => {
                     <div className="h-10 w-10 animate-spin rounded-full border-4 border-[hsl(var(--primary))]/30 border-t-[hsl(var(--primary))]" />
                 </div>
             ) : error || !report ? (
-                <div className="rounded-3xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 p-8 text-[hsl(var(--text-primary))]">
+                <div className="rounded-md border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 p-8 text-[hsl(var(--text-primary))]">
                     <h2 className="text-lg font-semibold text-[hsl(var(--error))]">Report unavailable</h2>
                     <p className="mt-2 text-sm text-[hsl(var(--text-secondary))]">{error || 'Report not found.'}</p>
                 </div>
@@ -323,7 +323,7 @@ const ReportDetail: React.FC = () => {
                                 Back to Reports
                             </button>
                             <div className="mt-4 flex items-center gap-3">
-                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                     <FileBarChart2 className="h-5 w-5" />
                                 </div>
                                 <div>
@@ -359,14 +359,14 @@ const ReportDetail: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => navigate(`/projects/${projectId}`)}
-                                className="rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                className="rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                             >
                                 Open Project
                             </button>
                             <button
                                 onClick={handleDelete}
                                 disabled={deleting}
-                                className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-2 text-sm font-semibold text-[hsl(var(--error))] disabled:opacity-60"
+                                className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-2 text-sm font-semibold text-[hsl(var(--error))] disabled:opacity-60"
                             >
                                 <Trash2 className="h-4 w-4" />
                                 {deleting ? 'Removing...' : 'Delete'}
@@ -382,7 +382,7 @@ const ReportDetail: React.FC = () => {
                                     <input
                                         value={report.title}
                                         onChange={(event) => setReport(prev => prev ? { ...prev, title: event.target.value } : prev)}
-                                        className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     />
                                 </div>
 
@@ -391,7 +391,7 @@ const ReportDetail: React.FC = () => {
                                     <textarea
                                         value={report.description || ''}
                                         onChange={(event) => setReport(prev => prev ? { ...prev, description: event.target.value } : prev)}
-                                        className="min-h-[220px] w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                        className="min-h-[220px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                         placeholder="Capture what this report summarizes, who it is for, and the key decisions it should support."
                                     />
                                 </div>
@@ -410,7 +410,7 @@ const ReportDetail: React.FC = () => {
                                             setEditorSaveState(updated ? 'saved' : 'error');
                                         }}
                                         disabled={saving || !report.title.trim() || !isDirty}
-                                        className="inline-flex items-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-60"
+                                        className="inline-flex items-center gap-2 rounded-md bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-60"
                                     >
                                         <Save className="h-4 w-4" />
                                         {saving ? 'Saving...' : isDirty ? 'Save Changes' : 'Saved'}
@@ -432,9 +432,9 @@ const ReportDetail: React.FC = () => {
                                 <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Control whether this report is still being prepared, ready to share, or archived.</p>
                                 <select
                                     value={report.status}
-                                    onChange={(event) => updateReport({ status: event.target.value as ReportArtifact['status'] }, 'Status updated')}
+                                    onChange={(event) => updateReport({ status: event.target.value as ReportArtifact['status'] }, { successTitle: 'Status updated' })}
                                     disabled={saving}
-                                    className="mt-4 w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="mt-4 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                 >
                                     <option value="draft">Draft</option>
                                     <option value="published">Published</option>
@@ -452,7 +452,7 @@ const ReportDetail: React.FC = () => {
                                             value={getAccessorValue(report.lead_accessor_id, report.lead_accessor_type)}
                                             onChange={(event) => handleResponsibilityChange('lead', event.target.value)}
                                             disabled={saving}
-                                            className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                            className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                         >
                                             <option value="">Not set</option>
                                             {assignmentOptions.map(option => (
@@ -469,7 +469,7 @@ const ReportDetail: React.FC = () => {
                                             value={getAccessorValue(report.assigned_accessor_id, report.assigned_accessor_type)}
                                             onChange={(event) => handleResponsibilityChange('assigned', event.target.value)}
                                             disabled={saving}
-                                            className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                            className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                         >
                                             <option value="">Not assigned</option>
                                             {assignmentOptions.map(option => (
@@ -486,7 +486,7 @@ const ReportDetail: React.FC = () => {
                                             value={getAccessorValue(report.guest_accessor_id, report.guest_accessor_type)}
                                             onChange={(event) => handleResponsibilityChange('guest', event.target.value)}
                                             disabled={saving}
-                                            className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                            className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                         >
                                             <option value="">No guest</option>
                                             {assignmentOptions.map(option => (

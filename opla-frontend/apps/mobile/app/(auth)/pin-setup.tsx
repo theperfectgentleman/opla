@@ -21,8 +21,8 @@ function PinDots({ value, length = 4 }: { value: string; length?: number }) {
           key={i}
           style={{
             width: 18, height: 18, borderRadius: 9,
-            backgroundColor: i < value.length ? '#6366f1' : '#1e293b',
-            borderWidth: 2, borderColor: i < value.length ? '#6366f1' : '#334155',
+            backgroundColor: i < value.length ? '#158754' : '#1e293b',
+            borderWidth: 2, borderColor: i < value.length ? '#158754' : '#334155',
           }}
         />
       ))}
@@ -135,7 +135,7 @@ export default function PinSetupScreen() {
         ) : null}
 
         {loading
-          ? <ActivityIndicator color="#6366f1" size="large" style={{ marginTop: 20 }} />
+          ? <ActivityIndicator color="#158754" size="large" style={{ marginTop: 20 }} />
           : <Keypad onPress={handleKey} />
         }
 
@@ -144,7 +144,7 @@ export default function PinSetupScreen() {
           {(['create', 'confirm'] as Phase[]).map(p => (
             <View key={p} style={{
               width: 8, height: 8, borderRadius: 4,
-              backgroundColor: phase === p ? '#6366f1' : '#1e293b',
+              backgroundColor: phase === p ? '#158754' : '#1e293b',
             }} />
           ))}
         </View>

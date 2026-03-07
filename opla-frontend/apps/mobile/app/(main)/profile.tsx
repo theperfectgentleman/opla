@@ -124,7 +124,22 @@ export default function ProfileScreen() {
                         ) : (
                             <View className="space-y-3">
                                 {organizations.map((org) => (
-                                    <View key={org.id} className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/50 flex-row items-center">
+                                    <TouchableOpacity
+                                        key={org.id}
+                                        activeOpacity={0.75}
+                                        onPress={() =>
+                                            router.push({
+                                                pathname: '/(main)/(desk)/org/[id]',
+                                                params: {
+                                                    id: org.id,
+                                                    name: org.name,
+                                                    color: (org as any).primary_color ?? '#158754',
+                                                    owner: (org as any).owner_id ?? '',
+                                                },
+                                            })
+                                        }
+                                        className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/50 flex-row items-center"
+                                    >
                                         {org.logo_url ? (
                                             <Image source={{ uri: org.logo_url }} className="w-12 h-12 rounded-xl mr-4 bg-slate-800" />
                                         ) : (
@@ -134,10 +149,10 @@ export default function ProfileScreen() {
                                         )}
                                         <View className="flex-1">
                                             <Text className="text-white font-bold text-lg">{org.name}</Text>
-                                            <Text className="text-slate-400 text-sm">Agent Access</Text>
+                                            <Text className="text-slate-400 text-sm">Tap to open workspace</Text>
                                         </View>
-                                        <View className="w-2 h-2 rounded-full bg-cyan-500" />
-                                    </View>
+                                        <ChevronRight size={16} color="#475569" />
+                                    </TouchableOpacity>
                                 ))}
                             </View>
                         )}

@@ -494,4 +494,63 @@ export const sectionTemplateAPI = {
     },
 };
 
+export const analyticsAPI = {
+    listSources: async (orgId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/analytics/sources`);
+        return response.data;
+    },
+    runQuery: async (
+        orgId: string,
+        data: {
+            dataset_id: string;
+            select_fields?: string[];
+            filters?: unknown;
+            group_by?: string[];
+            aggregates?: Array<{ field: string; fn: string; alias?: string }>;
+            order_by?: Array<{ field: string; direction?: 'asc' | 'desc' }>;
+            limit?: number;
+            offset?: number;
+        },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/analytics/query`, data);
+        return response.data;
+    },
+    listQuestions: async (orgId: string, projectId?: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/analytics/questions`, {
+            params: projectId ? { project_id: projectId } : undefined,
+        });
+        return response.data;
+    },
+    createQuestion: async (orgId: string, data: Record<string, unknown>) => {
+        const response = await apiClient.post(`/organizations/${orgId}/analytics/questions`, data);
+        return response.data;
+    },
+    updateQuestion: async (orgId: string, questionId: string, data: Record<string, unknown>) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/analytics/questions/${questionId}`, data);
+        return response.data;
+    },
+    deleteQuestion: async (orgId: string, questionId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/analytics/questions/${questionId}`);
+        return response.data;
+    },
+    listDashboards: async (orgId: string, projectId?: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/analytics/dashboards`, {
+            params: projectId ? { project_id: projectId } : undefined,
+        });
+        return response.data;
+    },
+    createDashboard: async (orgId: string, data: Record<string, unknown>) => {
+        const response = await apiClient.post(`/organizations/${orgId}/analytics/dashboards`, data);
+        return response.data;
+    },
+    updateDashboard: async (orgId: string, dashboardId: string, data: Record<string, unknown>) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/analytics/dashboards/${dashboardId}`, data);
+        return response.data;
+    },
+    deleteDashboard: async (orgId: string, dashboardId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/analytics/dashboards/${dashboardId}`);
+        return response.data;
+    },
+};
+
 export default apiClient;

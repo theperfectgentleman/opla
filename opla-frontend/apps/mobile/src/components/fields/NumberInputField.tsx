@@ -11,7 +11,7 @@ interface NumberInputFieldProps {
 
 export function NumberInputField({ field, value, error, onChange }: NumberInputFieldProps) {
     return (
-        <View style={{ marginBottom: 16 }}>
+        <View>
             <TextInput
                 value={value || ''}
                 onChangeText={onChange}
@@ -22,15 +22,15 @@ export function NumberInputField({ field, value, error, onChange }: NumberInputF
                     backgroundColor: '#1e293b',
                     borderColor: error ? '#ef4444' : '#334155',
                     borderWidth: 1,
-                    borderRadius: 12,
-                    paddingHorizontal: 16,
-                    paddingVertical: 14,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
                     color: '#f1f5f9',
-                    fontSize: 16,
+                    fontSize: 14,
                 }}
             />
             {error && (
-                <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{error}</Text>
+                <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</Text>
             )}
         </View>
     );

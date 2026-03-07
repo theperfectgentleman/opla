@@ -83,7 +83,7 @@ export default function LoginScreen() {
         <View style={{ marginBottom: 40, alignItems: 'center' }}>
           <View style={{
             width: 64, height: 64, borderRadius: 20,
-            backgroundColor: '#6366f1', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: '#158754', alignItems: 'center', justifyContent: 'center',
             marginBottom: 16,
           }}>
             <Text style={{ fontSize: 28, fontWeight: '800', color: '#fff' }}>O</Text>
@@ -107,7 +107,7 @@ export default function LoginScreen() {
               onPress={() => { setTab(t); setError(''); setPhonePhase('input'); }}
               style={{
                 flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-                backgroundColor: tab === t ? '#6366f1' : 'transparent',
+                backgroundColor: tab === t ? '#158754' : 'transparent',
               }}
             >
               <Text style={{
@@ -162,7 +162,7 @@ export default function LoginScreen() {
               onPress={handleEmailLogin}
               disabled={loading}
               style={{
-                backgroundColor: '#6366f1', borderRadius: 12,
+                backgroundColor: '#158754', borderRadius: 12,
                 paddingVertical: 16, alignItems: 'center', marginTop: 4,
                 opacity: loading ? 0.7 : 1,
               }}
@@ -199,7 +199,7 @@ export default function LoginScreen() {
               onPress={handleRequestOtp}
               disabled={loading}
               style={{
-                backgroundColor: '#6366f1', borderRadius: 12,
+                backgroundColor: '#158754', borderRadius: 12,
                 paddingVertical: 16, alignItems: 'center',
                 opacity: loading ? 0.7 : 1,
               }}
@@ -237,7 +237,7 @@ export default function LoginScreen() {
               onPress={handleVerifyOtp}
               disabled={loading}
               style={{
-                backgroundColor: '#6366f1', borderRadius: 12,
+                backgroundColor: '#158754', borderRadius: 12,
                 paddingVertical: 16, alignItems: 'center',
                 opacity: loading ? 0.7 : 1,
               }}
@@ -248,7 +248,7 @@ export default function LoginScreen() {
               }
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { setPhonePhase('input'); setOtp(''); }}>
-              <Text style={{ color: '#6366f1', textAlign: 'center', fontSize: 14 }}>
+              <Text style={{ color: '#158754', textAlign: 'center', fontSize: 14 }}>
                 ← Change number
               </Text>
             </TouchableOpacity>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FormBlueprint, FormSection, FormField } from '@opla/types';
+import { FormBlueprint } from '@opla/types';
 import { isFieldVisible } from '../utils/logic';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TextInputField } from './fields/TextInputField';
@@ -11,9 +11,12 @@ import { CheckboxGroupField } from './fields/CheckboxGroupField';
 import { DropdownField } from './fields/DropdownField';
 import { MatrixTableField } from './fields/MatrixTableField';
 import { LookupListField } from './fields/LookupListField';
-import { publicFormAPI } from '../../services/api';
+import { RatingScaleField } from './fields/RatingScaleField';
+import { ToggleField } from './fields/ToggleField';
+import { deskFormAPI, publicFormAPI } from '../../services/api';
+import { syncAllLookupDatasets } from '../utils/lookupCache';
 
-function FieldRenderer({ field, value, onChange, error }: any) {
+function FieldRenderer({ field, value, onChange, error, lookupContext }: any) {
     switch (field.type) {
         case 'input_text':
         case 'email_input':
@@ -31,7 +34,11 @@ function FieldRenderer({ field, value, onChange, error }: any) {
         case 'matrix_table':
             return <MatrixTableField field={field} value={value} onChange={onChange} error={error} />;
         case 'lookup_list':
-            return <LookupListField field={field} value={value} onChange={onChange} error={error} />;
+            return <LookupListField field={field} value={value} onChange={onChange} error={error} lookupContext={lookupContext} />;
+        case 'rating_scale':
+            return <RatingScaleField field={field} value={value} onChange={onChange} error={error} />;
+        case 'toggle':
+            return <ToggleField field={field} value={value} onChange={onChange} error={error} />;
         default:
             // Fallback
             return (
@@ -40,17 +47,30 @@ function FieldRenderer({ field, value, onChange, error }: any) {
                     <Text style={{ color: '#94a3b8', fontSize: 12, marginTop: 4 }}>[Component Not Implemented]</Text>
                 </View>
             );
-    }
+    };
 }
 
 export function FormRenderer({
     blueprint,
     onSaveDraft,
-    onSubmitSuccess
+    onSubmitSuccess,
+    onSubmitAttempt,
+    lookupMode = 'public',
+    extraBottomPad = 0,
 }: {
     blueprint: FormBlueprint,
     onSaveDraft?: (responses: Record<string, any>) => void,
-    onSubmitSuccess?: () => void
+    onSubmitSuccess?: () => void,
+    /**
+     * When provided (desk mode with sync choice), this callback receives the
+     * raw form payload and the parent decides whether to sync immediately or
+     * queue offline. The parent is responsible for clearing the draft and
+     * navigating away after the user makes their choice.
+     */
+    onSubmitAttempt?: (formId: string, data: Record<string, any>, metadata: Record<string, any>) => void,
+    lookupMode?: 'public' | 'desk',
+    /** Height of any persistent UI (e.g. tab bar) that overlaps this view from the bottom. */
+    extraBottomPad?: number,
 }) {
     const insets = useSafeAreaInsets();
     const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
@@ -58,8 +78,14 @@ export function FormRenderer({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
     const [loadingDraft, setLoadingDraft] = useState(true);
+    const [syncingLookups, setSyncingLookups] = useState(false);
 
     const draftKey = `draft_${blueprint.meta.form_id}`;
+    const lookupContext = {
+        mode: lookupMode,
+        formId: blueprint.meta.form_id,
+        slug: blueprint.meta.slug,
+    };
 
     useEffect(() => {
         // Load draft on mount
@@ -95,7 +121,7 @@ export function FormRenderer({
 
 
     if (loadingDraft) {
-        return <ActivityIndicator style={{ flex: 1 }} color="#6366f1" size="large" />;
+        return <ActivityIndicator style={{ flex: 1 }} color="#158754" size="large" />;
     }
 
     const sections = blueprint.ui || [];
@@ -142,7 +168,17 @@ export function FormRenderer({
     const submitForm = async () => {
         setSubmitting(true);
         try {
-            await publicFormAPI.submit(blueprint.meta.slug, responses, { source: 'mobile_yard' });
+            if (onSubmitAttempt && lookupMode === 'desk') {
+                // Hand off to parent — parent shows sync-choice modal.
+                // Parent clears draft and navigates when done.
+                onSubmitAttempt(blueprint.meta.form_id, responses, { source: 'mobile_desk' });
+                // Keep submitting=true until parent dismisses us; don't reset here.
+                return;
+            } else if (lookupMode === 'desk') {
+                await deskFormAPI.submit(blueprint.meta.form_id, responses, { source: 'mobile_desk' });
+            } else {
+                await publicFormAPI.submit(blueprint.meta.slug, responses, { source: 'mobile_yard' });
+            }
             await AsyncStorage.removeItem(draftKey); // Clear draft on success
             if (onSubmitSuccess) onSubmitSuccess();
         } catch (e: any) {
@@ -152,15 +188,44 @@ export function FormRenderer({
         }
     }
 
+    const handleManualLookupSync = async () => {
+        setSyncingLookups(true);
+        try {
+            const synced = await syncAllLookupDatasets(blueprint, lookupContext);
+            Alert.alert('Lookup data synced', synced > 0 ? `Updated ${synced} dataset source${synced === 1 ? '' : 's'}.` : 'No dataset-backed lookup fields were found on this form.');
+        } catch {
+            Alert.alert('Sync failed', 'Could not refresh lookup data right now. Cached data remains available on this device.');
+        } finally {
+            setSyncingLookups(false);
+        }
+    };
 
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 100 }}>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + extraBottomPad + 80 }}>
                 {currentSection.title && (
-                    <Text style={{ fontSize: 24, fontWeight: '700', color: '#f1f5f9', marginBottom: 8 }}>{currentSection.title}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f1f5f9', flex: 1, paddingRight: 12 }}>{currentSection.title}</Text>
+                        <TouchableOpacity
+                            onPress={handleManualLookupSync}
+                            disabled={syncingLookups}
+                            style={{
+                                paddingHorizontal: 10,
+                                paddingVertical: 7,
+                                borderRadius: 8,
+                                backgroundColor: '#1e293b',
+                                borderWidth: 1,
+                                borderColor: '#334155',
+                            }}
+                        >
+                            <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '700' }}>
+                                {syncingLookups ? 'Syncing...' : 'Sync Data'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
                 {currentSection.description && (
-                    <Text style={{ fontSize: 16, color: '#94a3b8', marginBottom: 24 }}>{currentSection.description}</Text>
+                    <Text style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16 }}>{currentSection.description}</Text>
                 )}
 
                 {currentSection.children.map(field => {
@@ -168,8 +233,8 @@ export function FormRenderer({
                     if (!visible) return null;
 
                     return (
-                        <View key={field.id} style={{ marginBottom: 24 }}>
-                            <Text style={{ fontSize: 16, fontWeight: '600', color: '#e2e8f0', marginBottom: 8 }}>
+                        <View key={field.id} style={{ marginBottom: 16 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: '#e2e8f0', marginBottom: 5 }}>
                                 {field.label} {field.required && <Text style={{ color: '#ef4444' }}>*</Text>}
                             </Text>
                             <FieldRenderer
@@ -177,6 +242,7 @@ export function FormRenderer({
                                 value={responses[field.id]}
                                 onChange={(val: any) => setResponses({ ...responses, [field.id]: val })}
                                 error={errors[field.id]}
+                                lookupContext={lookupContext}
                             />
                             {errors[field.id] && (
                                 <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{errors[field.id]}</Text>
@@ -186,37 +252,37 @@ export function FormRenderer({
                 })}
             </ScrollView>
 
-            {/* Footer Navigation */}
+            {/* Footer Navigation — sits above the tab bar */}
             <View style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0,
+                position: 'absolute', bottom: extraBottomPad, left: 0, right: 0,
                 backgroundColor: '#0f172a', borderTopWidth: 1, borderTopColor: '#1e293b',
-                paddingHorizontal: 20, paddingBottom: insets.bottom + 16, paddingTop: 16,
+                paddingHorizontal: 16, paddingBottom: insets.bottom + 12, paddingTop: 12,
                 flexDirection: 'row', justifyContent: 'space-between'
             }}>
                 <TouchableOpacity
                     onPress={handleBack}
                     disabled={currentSectionIndex === 0 || submitting}
                     style={{
-                        paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12,
+                        paddingVertical: 11, paddingHorizontal: 20, borderRadius: 8,
                         backgroundColor: currentSectionIndex === 0 ? '#1e293b' : '#334155',
-                        opacity: currentSectionIndex === 0 ? 0.5 : 1
+                        opacity: currentSectionIndex === 0 ? 0.4 : 1
                     }}
                 >
-                    <Text style={{ color: '#f1f5f9', fontWeight: '600' }}>Back</Text>
+                    <Text style={{ color: '#f1f5f9', fontWeight: '600', fontSize: 14 }}>Back</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                     onPress={handleNext}
                     disabled={submitting}
                     style={{
-                        paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12,
-                        backgroundColor: '#6366f1', flexDirection: 'row', alignItems: 'center'
+                        paddingVertical: 11, paddingHorizontal: 28, borderRadius: 8,
+                        backgroundColor: '#158754', flexDirection: 'row', alignItems: 'center'
                     }}
                 >
                     {submitting ? (
                         <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />
                     ) : null}
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
                         {currentSectionIndex === sections.length - 1 ? 'Submit' : 'Next'}
                     </Text>
                 </TouchableOpacity>

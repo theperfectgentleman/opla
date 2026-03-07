@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from app.api.dependencies import get_current_user, get_db
-from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, PublishFormIn, FormResponsibilityUpdateIn
+from app.api.schemas.dataset import FormDatasetOut, FormDatasetUpdateIn, LookupDatasetSourceOut, LookupOptionsOut
+from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, FormStatsOut, PublishFormIn, FormResponsibilityUpdateIn
+from app.services.dataset_service import DatasetService
 from app.services.form_service import FormService
 from app.services.project_access_service import ProjectAccessService
 from app.models.project import ProjectStatus
@@ -30,11 +32,34 @@ def create_form(
 @project_router.get("", response_model=List[FormOut])
 def list_project_forms(
     project_id: uuid.UUID,
+    live_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
-    return FormService.get_project_forms(db, project_id)
+    return FormService.get_project_forms(db, project_id, live_only=live_only)
+
+@router.get("/{form_id}/stats", response_model=FormStatsOut)
+def get_form_stats(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    stats = FormService.get_form_stats(db, form_id, current_user.id)
+    return FormStatsOut(
+        form_id=form.id,
+        title=form.title,
+        status=form.status,
+        version=form.version,
+        submission_count=stats["total"],
+        my_submission_count=stats["mine"],
+        last_submitted_at=stats["last_submitted_at"],
+    )
+
 
 @router.get("/{form_id}", response_model=FormOut)
 def get_form(
@@ -117,6 +142,82 @@ def list_form_versions(
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
     return FormService.get_form_versions(db, form_id)
+
+
+@router.get("/{form_id}/dataset", response_model=FormDatasetOut)
+def get_form_dataset(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+
+    dataset = DatasetService.get_form_dataset(db, form_id)
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found for this form")
+    return dataset
+
+
+@router.patch("/{form_id}/dataset", response_model=FormDatasetOut)
+def update_form_dataset(
+    form_id: uuid.UUID,
+    payload: FormDatasetUpdateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    return DatasetService.update_form_dataset(
+        db,
+        form=form,
+        lookup_enabled=payload.lookup_enabled,
+        public_lookup_enabled=payload.public_lookup_enabled,
+    )
+
+
+@router.get("/{form_id}/lookup-sources", response_model=List[LookupDatasetSourceOut])
+def list_form_lookup_sources(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    return DatasetService.list_lookup_sources_for_form(db, form)
+
+
+@router.get("/{form_id}/lookup-sources/{dataset_id}/options", response_model=LookupOptionsOut)
+def get_form_lookup_options(
+    form_id: uuid.UUID,
+    dataset_id: uuid.UUID,
+    label_field: str,
+    value_field: str,
+    search: str | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    bounded_limit = max(1, min(limit, 500))
+    return DatasetService.get_lookup_options(
+        db,
+        form=form,
+        dataset_id=dataset_id,
+        label_field=label_field,
+        value_field=value_field,
+        search=search,
+        limit=bounded_limit,
+    )
 
 @router.post("/{form_id}/publish", response_model=FormOut)
 def publish_form(

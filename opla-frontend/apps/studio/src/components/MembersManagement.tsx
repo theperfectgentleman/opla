@@ -255,7 +255,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                 {isAdmin ? (
                     <button
                         onClick={() => setShowInviteModal(true)}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-6 py-3 font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))]"
+                        className="inline-flex items-center gap-2 rounded-md bg-[hsl(var(--primary))] px-6 py-3 font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))]"
                     >
                         <UserPlus className="h-5 w-5" />
                         Invite Internal Member
@@ -264,7 +264,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
             </div>
 
             {error ? (
-                <div className="rounded-2xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-3 text-sm text-[hsl(var(--error))]">
+                <div className="rounded-md border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-3 text-sm text-[hsl(var(--error))]">
                     {error}
                 </div>
             ) : null}
@@ -299,7 +299,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                             value={searchTerm}
                             onChange={(event) => setSearchTerm(event.target.value)}
                             placeholder="Search by name, email, or phone"
-                            className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                            className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                         />
                     </div>
                 </div>
@@ -309,12 +309,12 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                         <div className="h-8 w-8 animate-spin rounded-full border-4 border-[hsl(var(--primary))] border-t-transparent" />
                     </div>
                 ) : filteredMembers.length === 0 ? (
-                    <div className="mt-6 rounded-3xl border border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
+                    <div className="mt-6 rounded-md border border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
                         <Users className="mx-auto mb-4 h-12 w-12 opacity-20" />
                         <p>{normalizedSearch ? 'No members match that search.' : 'No members yet.'}</p>
                     </div>
                 ) : (
-                    <div className="mt-6 overflow-hidden rounded-3xl border border-[hsl(var(--border))]">
+                    <div className="mt-6 overflow-hidden rounded-md border border-[hsl(var(--border))]">
                         <table className="w-full">
                             <thead className="bg-[hsl(var(--surface-elevated))] text-left text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
                                 <tr>
@@ -376,7 +376,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                                                     handleAssignRole(member.user_id, value);
                                                                 }
                                                             }}
-                                                            className="min-w-[180px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
+                                                            className="min-w-[180px] rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
                                                         >
                                                             <option value="">Select role...</option>
                                                             {roles.map(role => (
@@ -386,7 +386,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                                         {directUserAssignment ? (
                                                             <button
                                                                 onClick={() => handleRemoveAssignment(member.user_id)}
-                                                                className="rounded-xl border border-[hsl(var(--border))] p-2 text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--error))]"
+                                                                className="rounded-md border border-[hsl(var(--border))] p-2 text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--error))]"
                                                                 title="Remove direct role assignment"
                                                             >
                                                                 <X className="h-4 w-4" />
@@ -417,11 +417,11 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
 
                 <div className="mt-6 space-y-4">
                     {invitations.length === 0 ? (
-                        <div className="rounded-3xl border border-dashed border-[hsl(var(--border))] p-10 text-center text-sm text-[hsl(var(--text-tertiary))]">
+                        <div className="rounded-md border border-dashed border-[hsl(var(--border))] p-10 text-center text-sm text-[hsl(var(--text-tertiary))]">
                             No internal invitations yet.
                         </div>
                     ) : invitations.map(invitation => (
-                        <div key={invitation.id} className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5">
+                        <div key={invitation.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5">
                             <div className="flex flex-wrap items-start justify-between gap-4">
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-2">
@@ -448,7 +448,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                         const mobileLink = buildMobileInvitationAcceptLink(invitation.token);
                                         return (
                                         <>
-                                            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                                            <div className="mt-4 flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
                                                 <span className="font-semibold text-[hsl(var(--text-primary))]">Web link:</span>
                                                 <span className="truncate font-mono">{webLink}</span>
                                                 <button
@@ -459,7 +459,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                                     <Copy className="h-3.5 w-3.5" />
                                                 </button>
                                             </div>
-                                            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                                            <div className="mt-3 flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
                                                 <span className="font-semibold text-[hsl(var(--text-primary))]">Mobile app:</span>
                                                 <span className="truncate font-mono">{mobileLink}</span>
                                                 <button
@@ -481,7 +481,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                             <button
                                                 onClick={() => handleApproveInvitation(invitation.id)}
                                                 disabled={actingInvitationId === invitation.id}
-                                                className="rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
+                                                className="rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
                                             >
                                                 Approve
                                             </button>
@@ -490,7 +490,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                             <button
                                                 onClick={() => handleRevokeInvitation(invitation.id)}
                                                 disabled={actingInvitationId === invitation.id}
-                                                className="rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
+                                                className="rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
                                             >
                                                 Revoke
                                             </button>
@@ -513,7 +513,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                             </div>
                             <button
                                 onClick={closeInviteModal}
-                                className="rounded-xl border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]"
+                                className="rounded-md border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]"
                             >
                                 <X className="h-5 w-5" />
                             </button>
@@ -524,7 +524,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                             const mobileLink = createdInvitation.token ? buildMobileInvitationAcceptLink(createdInvitation.token) : null;
                             return (
                                 <div className="mt-6 space-y-5">
-                                    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                                    <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-5">
                                         <div className="flex items-start gap-3">
                                             <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" />
                                             <div>
@@ -539,14 +539,14 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                     </div>
 
                                     {webLink ? (
-                                        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
                                             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Web invite link</p>
                                             <p className="mt-2 truncate font-mono text-[hsl(var(--text-secondary))]">{webLink}</p>
                                             <div className="mt-4 flex gap-3">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopyValue(webLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <Copy className="h-4 w-4" />
                                                     Copy Web Link
@@ -554,7 +554,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                                 <button
                                                     type="button"
                                                     onClick={() => handleOpenLink(webLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <ExternalLink className="h-4 w-4" />
                                                     Open Web Invite
@@ -564,14 +564,14 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                     ) : null}
 
                                     {mobileLink ? (
-                                        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
                                             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Mobile app link</p>
                                             <p className="mt-2 truncate font-mono text-[hsl(var(--text-secondary))]">{mobileLink}</p>
                                             <div className="mt-4 flex gap-3">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopyValue(mobileLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <Copy className="h-4 w-4" />
                                                     Copy App Link
@@ -579,7 +579,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                                 <button
                                                     type="button"
                                                     onClick={() => handleOpenLink(mobileLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <ExternalLink className="h-4 w-4" />
                                                     Open In App
@@ -592,14 +592,14 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                         <button
                                             type="button"
                                             onClick={() => setCreatedInvitation(null)}
-                                            className="flex-1 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                            className="flex-1 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                         >
                                             Create Another Invite
                                         </button>
                                         <button
                                             type="button"
                                             onClick={closeInviteModal}
-                                            className="flex-1 rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10"
+                                            className="flex-1 rounded-md bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10"
                                         >
                                             Done
                                         </button>
@@ -613,7 +613,7 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                 <select
                                     value={inviteDeliveryMode}
                                     onChange={(event) => setInviteDeliveryMode(event.target.value as 'email' | 'short_link')}
-                                    className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                 >
                                     <option value="email">Email invite</option>
                                     <option value="short_link">24-hour short link</option>
@@ -629,12 +629,12 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                     value={inviteEmail}
                                     onChange={(event) => setInviteEmail(event.target.value)}
                                     placeholder="person@company.com"
-                                    className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     required={inviteDeliveryMode === 'email'}
                                 />
                             </div>
 
-                            <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm text-[hsl(var(--text-secondary))]">
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm text-[hsl(var(--text-secondary))]">
                                 <div className="flex items-start gap-3">
                                     <AlertCircle className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
                                     <div>
@@ -648,14 +648,14 @@ const MembersManagement: React.FC<MembersManagementProps> = ({ orgId, isAdmin })
                                 <button
                                     type="button"
                                     onClick={closeInviteModal}
-                                    className="flex-1 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                    className="flex-1 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={savingInvite || (inviteDeliveryMode === 'email' && !inviteEmail.trim())}
-                                    className="flex-1 rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50"
+                                    className="flex-1 rounded-md bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50"
                                 >
                                     {savingInvite ? 'Creating...' : 'Create Invite'}
                                 </button>

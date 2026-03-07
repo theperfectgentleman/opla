@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrg } from '../contexts/OrgContext';
 import { useToast } from '../contexts/ToastContext';
@@ -8,8 +8,11 @@ import MembersManagement from '../components/MembersManagement';
 import TeamsManagement from '../components/TeamsManagement';
 import RolesManagement from '../components/RolesManagement';
 import {
-    Plus, Settings, ChevronRight, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip
+    Plus, Settings, ChevronRight, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2
 } from 'lucide-react';
+import { AnalyticsHubSkeleton } from '../components/analytics/ui';
+
+const AnalyticsHub = lazy(() => import('../components/analytics/AnalyticsHub'));
 
 type DashboardTask = {
     id: string;
@@ -62,6 +65,18 @@ const taskTone: Record<DashboardTask['status'], string> = {
     blocked: 'bg-rose-500/10 text-rose-300 border border-rose-500/20',
     cancelled: 'bg-orange-500/10 text-orange-300 border border-orange-500/20',
 };
+
+function AnalyticsTabFallback() {
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
+                Loading analytics workspace...
+            </div>
+            <AnalyticsHubSkeleton />
+        </div>
+    );
+}
 
 const Dashboard: React.FC = () => {
     const { currentOrg, organizations, projects, members, createProject, isLoading, setCurrentProject } = useOrg();
@@ -474,7 +489,7 @@ const Dashboard: React.FC = () => {
                             </div>
                             <button
                                 onClick={() => setShowCreateForm(true)}
-                                className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-black/10 transition-all"
+                                className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-4 py-2.5 rounded-md shadow-lg shadow-black/10 transition-all"
                             >
                                 <Plus className="w-4 h-4" />
                                 <span>New Form</span>
@@ -483,7 +498,7 @@ const Dashboard: React.FC = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {forms.length === 0 ? (
-                                <div className="col-span-full border-2 border-dashed border-[hsl(var(--border))] rounded-3xl p-12 text-center text-[hsl(var(--text-tertiary))]">
+                                <div className="col-span-full border-2 border-dashed border-[hsl(var(--border))] rounded-md p-12 text-center text-[hsl(var(--text-tertiary))]">
                                     <Activity className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                     <p>No forms found. Create a project first.</p>
                                 </div>
@@ -491,11 +506,11 @@ const Dashboard: React.FC = () => {
                                 forms.map(form => (
                                     <div
                                         key={form.id}
-                                        className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] p-6 rounded-3xl hover:border-[hsl(var(--border-hover))] transition-all group cursor-pointer shadow-sm"
+                                        className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] p-6 rounded-md hover:border-[hsl(var(--border-hover))] transition-all group cursor-pointer shadow-sm"
                                         onClick={() => navigate(`/builder/${form.id}`)}
                                     >
                                         <div className="flex justify-between items-start mb-6">
-                                            <div className="p-3 bg-[hsl(var(--primary))]/10 rounded-2xl group-hover:bg-[hsl(var(--primary))]/20 transition-all">
+                                            <div className="p-3 bg-[hsl(var(--primary))]/10 rounded-md group-hover:bg-[hsl(var(--primary))]/20 transition-all">
                                                 <FileText className="w-6 h-6 text-[hsl(var(--primary))]" />
                                             </div>
                                             <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${form.status === 'live' ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
@@ -524,7 +539,7 @@ const Dashboard: React.FC = () => {
                             </div>
                             <button
                                 onClick={() => setShowCreateProject(true)}
-                                className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-2xl shadow-lg shadow-black/10 transition-all"
+                                className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-md shadow-lg shadow-black/10 transition-all"
                             >
                                 <Plus className="w-5 h-5" />
                                 <span>Create Project</span>
@@ -536,13 +551,13 @@ const Dashboard: React.FC = () => {
                                 <div
                                     key={project.id}
                                     onClick={() => openProjectWorkspace(project)}
-                                    className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-3xl overflow-hidden hover:border-[hsl(var(--border-hover))] transition-all shadow-sm flex flex-col cursor-pointer"
+                                    className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md overflow-hidden hover:border-[hsl(var(--border-hover))] transition-all shadow-sm flex flex-col cursor-pointer"
                                 >
                                     <div className="p-8 flex-1 flex flex-col">
                                         <div className="flex justify-between items-start mb-4">
                                             <h3 className="text-xl font-bold">{project.name}</h3>
                                             <div
-                                                className="p-2 bg-[hsl(var(--surface-elevated))] rounded-xl"
+                                                className="p-2 bg-[hsl(var(--surface-elevated))] rounded-md"
                                                 onClick={(event) => {
                                                     event.stopPropagation();
                                                     openProjectWorkspace(project);
@@ -559,10 +574,10 @@ const Dashboard: React.FC = () => {
                                                     <div
                                                         key={form.id}
                                                         onClick={() => navigate(`/builder/${form.id}`)}
-                                                        className="flex items-center justify-between p-3 bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-2xl hover:border-[hsl(var(--primary))] transition-all cursor-pointer group"
+                                                        className="flex items-center justify-between p-3 bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-md hover:border-[hsl(var(--primary))] transition-all cursor-pointer group"
                                                     >
                                                         <div className="flex items-center space-x-3 overflow-hidden">
-                                                            <div className="p-2 bg-[hsl(var(--primary))]/10 rounded-xl">
+                                                            <div className="p-2 bg-[hsl(var(--primary))]/10 rounded-md">
                                                                 <FileText className="w-4 h-4 text-[hsl(var(--primary))]" />
                                                             </div>
                                                             <span className="text-sm font-semibold truncate">{form.title}</span>
@@ -590,7 +605,7 @@ const Dashboard: React.FC = () => {
                                                     event.stopPropagation();
                                                     handleCreateForm(project.id);
                                                 }}
-                                                className="w-full bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))] font-semibold py-3 rounded-2xl border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 transition-all flex items-center justify-center space-x-2"
+                                                className="w-full bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))] font-semibold py-3 rounded-md border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 transition-all flex items-center justify-center space-x-2"
                                             >
                                                 <PlusCircle className="w-4 h-4" />
                                                 <span>New Form</span>
@@ -614,12 +629,12 @@ const Dashboard: React.FC = () => {
                                 <h2 className="text-3xl font-bold mb-2">Tasks</h2>
                                 <p className="text-[hsl(var(--text-secondary))]">Cross-project task overview. Create new tasks here and then manage execution from the relevant project workspace.</p>
                             </div>
-                            <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                 {tasks.length} tracked across {projects.length} projects
                             </div>
                         </div>
 
-                        <form onSubmit={handleCreateTask} className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
+                        <form onSubmit={handleCreateTask} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
                             <div className="flex items-center justify-between gap-4">
                                 <div>
                                     <h3 className="text-xl font-semibold">Create Task</h3>
@@ -633,7 +648,7 @@ const Dashboard: React.FC = () => {
                                     <select
                                         value={taskProjectId}
                                         onChange={(event) => setTaskProjectId(event.target.value)}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                     >
                                         {projects.map(project => (
                                             <option key={project.id} value={project.id}>{project.name}</option>
@@ -646,7 +661,7 @@ const Dashboard: React.FC = () => {
                                     <select
                                         value={taskAssigneeType}
                                         onChange={(event) => setTaskAssigneeType(event.target.value as 'user' | 'team')}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                     >
                                         <option value="user">Member</option>
                                         <option value="team">Team</option>
@@ -658,7 +673,7 @@ const Dashboard: React.FC = () => {
                                     <input
                                         value={taskTitle}
                                         onChange={(event) => setTaskTitle(event.target.value)}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                         placeholder="Coordinate briefing for field supervisors"
                                     />
                                 </div>
@@ -668,7 +683,7 @@ const Dashboard: React.FC = () => {
                                     <textarea
                                         value={taskDescription}
                                         onChange={(event) => setTaskDescription(event.target.value)}
-                                        className="min-h-[96px] w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="min-h-[96px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                         placeholder="Capture the deliverable, owner notes, or dependency"
                                     />
                                 </div>
@@ -679,7 +694,7 @@ const Dashboard: React.FC = () => {
                                         type="datetime-local"
                                         value={taskStartsAt}
                                         onChange={(event) => setTaskStartsAt(event.target.value)}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                     />
                                 </div>
 
@@ -689,7 +704,7 @@ const Dashboard: React.FC = () => {
                                         type="datetime-local"
                                         value={taskDueAt}
                                         onChange={(event) => setTaskDueAt(event.target.value)}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                     />
                                 </div>
 
@@ -698,7 +713,7 @@ const Dashboard: React.FC = () => {
                                     <select
                                         value={taskAssigneeId}
                                         onChange={(event) => setTaskAssigneeId(event.target.value)}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                     >
                                         <option value="">Unassigned</option>
                                         {taskAssignableAccessors.map(option => (
@@ -712,7 +727,7 @@ const Dashboard: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={savingTask || !taskProjectId || !taskTitle.trim()}
-                                    className="inline-flex items-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))] disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 rounded-md bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))] disabled:opacity-60"
                                 >
                                     <Plus className="h-4 w-4" />
                                     {savingTask ? 'Creating...' : 'Create Task'}
@@ -722,12 +737,12 @@ const Dashboard: React.FC = () => {
 
                         <div className="space-y-4">
                             {tasks.length === 0 ? (
-                                <div className="rounded-3xl border-2 border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
+                                <div className="rounded-md border-2 border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
                                     <CheckSquare className="mx-auto mb-4 h-12 w-12 opacity-20" />
                                     <p>No tasks found yet. Create the first one from this Tasks section.</p>
                                 </div>
                             ) : tasks.map(task => (
-                                <div key={task.id} className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
+                                <div key={task.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
                                     <div className="flex flex-wrap items-start justify-between gap-4">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-3">
@@ -757,7 +772,7 @@ const Dashboard: React.FC = () => {
                                                 }
                                                 navigate(`/projects/${task.project_id}`);
                                             }}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                         >
                                             Open Project
                                             <ChevronRight className="h-4 w-4" />
@@ -820,17 +835,10 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'analysis' && (
-                    <div className="space-y-8">
-                        <div>
-                            <h2 className="text-3xl font-bold mb-2">Analytics</h2>
-                            <p className="text-[hsl(var(--text-secondary))]">Run exploratory analytics across submissions, teams, and time windows before turning findings into reports.</p>
-                        </div>
-                        <div className="card border-dashed border-2">
-                            <h3 className="text-lg font-bold mb-2">Analytics Sections</h3>
-                            <p className="text-[hsl(var(--text-secondary))]">Configure descriptive, comparative, and trend analytics blocks for this organization.</p>
-                        </div>
-                    </div>
+                {activeTab === 'analysis' && currentOrg && (
+                    <Suspense fallback={<AnalyticsTabFallback />}>
+                        <AnalyticsHub orgId={currentOrg.id} projectId={undefined} forms={forms} />
+                    </Suspense>
                 )}
 
                 {activeTab === 'threads' && (
@@ -840,18 +848,18 @@ const Dashboard: React.FC = () => {
                                 <h2 className="text-3xl font-bold mb-2">Threads</h2>
                                 <p className="text-[hsl(var(--text-secondary))]">Project communication lanes for announcements, clarifications, and decision follow-up across teams.</p>
                             </div>
-                            <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                 {threadItems.length} starter threads across {Math.max(projects.length, 1)} projects
                             </div>
                         </div>
 
                         <div className="grid gap-4 lg:grid-cols-2">
                             {threadItems.map(thread => (
-                                <div key={thread.id} className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
+                                <div key={thread.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-3">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                                     <MessageSquare className="h-5 w-5" />
                                                 </div>
                                                 <div>
@@ -865,7 +873,7 @@ const Dashboard: React.FC = () => {
                                             {thread.reply_count} replies
                                         </span>
                                     </div>
-                                    <div className="mt-4 rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                                    <div className="mt-4 rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                         Thread UI placeholder: header, message feed, composer, and @mentions will live here.
                                     </div>
                                 </div>
@@ -881,18 +889,18 @@ const Dashboard: React.FC = () => {
                                 <h2 className="text-3xl font-bold mb-2">Assets</h2>
                                 <p className="text-[hsl(var(--text-secondary))]">Project-ready files, links, images, and audio that field teams can reference without leaving their workflow.</p>
                             </div>
-                            <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                 {assetItems.length} starter assets across {Math.max(projects.length, 1)} projects
                             </div>
                         </div>
 
                         <div className="grid gap-4 lg:grid-cols-2">
                             {assetItems.map(asset => (
-                                <div key={asset.id} className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
+                                <div key={asset.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-3">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                                     <Paperclip className="h-5 w-5" />
                                                 </div>
                                                 <div>
@@ -903,7 +911,7 @@ const Dashboard: React.FC = () => {
                                             <p className="mt-4 text-sm text-[hsl(var(--text-secondary))]">{asset.summary}</p>
                                         </div>
                                     </div>
-                                    <div className="mt-4 rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                                    <div className="mt-4 rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                         Asset browser placeholder: uploads, links, previews, and field-ready references will land here.
                                     </div>
                                 </div>
@@ -919,12 +927,12 @@ const Dashboard: React.FC = () => {
                                 <h2 className="text-3xl font-bold mb-2">Reports</h2>
                                 <p className="text-[hsl(var(--text-secondary))]">Curated narrative outputs that package analytics, assets, and operational context for review, sharing, and decisions.</p>
                             </div>
-                            <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                 {reports.length} saved across {projects.length} projects
                             </div>
                         </div>
 
-                        <form onSubmit={handleCreateReport} className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
+                        <form onSubmit={handleCreateReport} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
                             <div className="flex items-center justify-between gap-4">
                                 <div>
                                     <h3 className="text-xl font-semibold">Create Report</h3>
@@ -938,7 +946,7 @@ const Dashboard: React.FC = () => {
                                     <select
                                         value={reportProjectId}
                                         onChange={(event) => setReportProjectId(event.target.value)}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                     >
                                         {projects.map(project => (
                                             <option key={project.id} value={project.id}>{project.name}</option>
@@ -951,7 +959,7 @@ const Dashboard: React.FC = () => {
                                     <input
                                         value={reportTitle}
                                         onChange={(event) => setReportTitle(event.target.value)}
-                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                         placeholder="Weekly field readout"
                                     />
                                 </div>
@@ -961,7 +969,7 @@ const Dashboard: React.FC = () => {
                                     <textarea
                                         value={reportDescription}
                                         onChange={(event) => setReportDescription(event.target.value)}
-                                        className="min-h-[96px] w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
+                                        className="min-h-[96px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                         placeholder="What this report is meant to summarize and who it serves."
                                     />
                                 </div>
@@ -971,7 +979,7 @@ const Dashboard: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={savingReport || !reportProjectId || !reportTitle.trim()}
-                                    className="inline-flex items-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))] disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 rounded-md bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))] disabled:opacity-60"
                                 >
                                     <Plus className="h-4 w-4" />
                                     {savingReport ? 'Creating...' : 'Create Report'}
@@ -981,12 +989,12 @@ const Dashboard: React.FC = () => {
 
                         <div className="space-y-4">
                             {reports.length === 0 ? (
-                                <div className="rounded-3xl border-2 border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
+                                <div className="rounded-md border-2 border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
                                     <FileBarChart2 className="mx-auto mb-4 h-12 w-12 opacity-20" />
                                     <p>No reports found yet. Create the first one from this Reports section.</p>
                                 </div>
                             ) : reports.map(report => (
-                                <div key={report.id} className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
+                                <div key={report.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
                                     <div className="flex flex-wrap items-start justify-between gap-4">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-3">
@@ -1015,13 +1023,13 @@ const Dashboard: React.FC = () => {
                                                     }
                                                     navigate(`/projects/${report.project_id}`);
                                                 }}
-                                                className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                             >
                                                 Open Project
                                             </button>
                                             <button
                                                 onClick={() => navigate(`/projects/${report.project_id}/reports/${report.id}`)}
-                                                className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                             >
                                                 Open Report
                                                 <ChevronRight className="h-4 w-4" />
@@ -1067,13 +1075,13 @@ const Dashboard: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateProject(false)}
-                                    className="flex-1 px-6 py-3 rounded-2xl border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
+                                    className="flex-1 px-6 py-3 rounded-md border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-2xl shadow-lg shadow-black/10 transition-all"
+                                    className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-md shadow-lg shadow-black/10 transition-all"
                                 >
                                     Create
                                 </button>
@@ -1116,14 +1124,14 @@ const Dashboard: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateForm(false)}
-                                    className="flex-1 px-6 py-3 rounded-2xl border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
+                                    className="flex-1 px-6 py-3 rounded-md border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={savingForm || projects.length === 0}
-                                    className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-2xl shadow-lg shadow-black/10 transition-all disabled:opacity-50 flex items-center justify-center"
+                                    className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-md shadow-lg shadow-black/10 transition-all disabled:opacity-50 flex items-center justify-center"
                                 >
                                     {savingForm ? 'Creating...' : 'Create Form'}
                                 </button>

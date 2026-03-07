@@ -492,7 +492,7 @@ const ProjectWorkspace: React.FC = () => {
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-[hsl(var(--primary))]/30 border-t-[hsl(var(--primary))]" />
                 </div>
             ) : error ? (
-                <div className="rounded-2xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 p-6 text-[hsl(var(--text-primary))]">
+                <div className="rounded-md border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 p-6 text-[hsl(var(--text-primary))]">
                     <div className="mb-2 flex items-center gap-3 text-[hsl(var(--error))]">
                         <AlertCircle className="h-5 w-5" />
                         <h2 className="text-base font-semibold">Workspace unavailable</h2>
@@ -535,7 +535,7 @@ const ProjectWorkspace: React.FC = () => {
                             <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <FileText className="h-4 w-4" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Forms</h2>
@@ -547,9 +547,9 @@ const ProjectWorkspace: React.FC = () => {
                                 </div>
                                 <div className="flex flex-col gap-3 p-4 lg:p-5">
                                     {forms.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">No forms yet.</p>
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No forms yet.</p>
                                     ) : forms.map(form => (
-                                        <div key={form.id} className="group relative rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                        <div key={form.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
                                                     <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{form.title}</h3>
@@ -591,7 +591,7 @@ const ProjectWorkspace: React.FC = () => {
                             <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <Database className="h-4 w-4" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Datasets</h2>
@@ -603,9 +603,9 @@ const ProjectWorkspace: React.FC = () => {
                                 </div>
                                 <div className="flex flex-col gap-3 p-4 lg:p-5">
                                     {datasets.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">No datasets yet.</p>
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No datasets yet.</p>
                                     ) : datasets.map(dataset => (
-                                        <div key={dataset.id} className="group relative rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                        <div key={dataset.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
                                                     <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{dataset.name}</h3>
@@ -630,7 +630,7 @@ const ProjectWorkspace: React.FC = () => {
                             <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <Paperclip className="h-4 w-4" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Assets</h2>
@@ -642,9 +642,9 @@ const ProjectWorkspace: React.FC = () => {
                                 </div>
                                 <div className="flex flex-col gap-3 p-4 lg:p-5">
                                     {assets.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">No assets yet.</p>
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No assets yet.</p>
                                     ) : assets.map(asset => (
-                                        <div key={asset.id} className="group relative rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                        <div key={asset.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
                                                     <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{asset.title}</h3>
@@ -669,7 +669,7 @@ const ProjectWorkspace: React.FC = () => {
                             <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <SquareCheckBig className="h-4 w-4" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Tasks</h2>
@@ -681,9 +681,9 @@ const ProjectWorkspace: React.FC = () => {
                                 </div>
                                 <div className="flex flex-col gap-3 p-4 lg:p-5">
                                     {tasks.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">No tasks yet.</p>
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No tasks yet.</p>
                                     ) : tasks.map(task => (
-                                        <div key={task.id} className={`group relative rounded-xl border p-3 transition-shadow hover:shadow-md block ${task.status === 'done' ? 'border-[hsl(var(--border))] bg-[hsl(var(--background))]/50 opacity-75' : 'border-[hsl(var(--border))] bg-[hsl(var(--background))]'}`}>
+                                        <div key={task.id} className={`group relative rounded-md border p-3 transition-shadow hover:shadow-md block ${task.status === 'done' ? 'border-[hsl(var(--border))] bg-[hsl(var(--background))]/50 opacity-75' : 'border-[hsl(var(--border))] bg-[hsl(var(--background))]'}`}>
                                             <div className="flex items-start gap-3">
                                                 <input
                                                     type="checkbox"
@@ -728,7 +728,7 @@ const ProjectWorkspace: React.FC = () => {
                             <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <MessageSquare className="h-4 w-4" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Threads</h2>
@@ -740,9 +740,9 @@ const ProjectWorkspace: React.FC = () => {
                                 </div>
                                 <div className="flex flex-col gap-3 p-4 lg:p-5">
                                     {threads.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">No threads yet.</p>
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No threads yet.</p>
                                     ) : threads.map(thread => (
-                                        <div key={thread.id} className="group relative rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                        <div key={thread.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
                                                     <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{thread.title}</h3>
@@ -769,7 +769,7 @@ const ProjectWorkspace: React.FC = () => {
                             <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <FileBarChart2 className="h-4 w-4" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Reports</h2>
@@ -781,9 +781,9 @@ const ProjectWorkspace: React.FC = () => {
                                 </div>
                                 <div className="flex flex-col gap-3 p-4 lg:p-5">
                                     {reports.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">No reports yet.</p>
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No reports yet.</p>
                                     ) : reports.map(report => (
-                                        <div key={report.id} className="group relative rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                        <div key={report.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="min-w-0 pr-2">
                                                     <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))] truncate">{report.title}</h3>
@@ -824,7 +824,7 @@ const ProjectWorkspace: React.FC = () => {
                             <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                 <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                     <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <Users className="h-4 w-4" />
                                         </div>
                                         <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Members</h2>
@@ -835,7 +835,7 @@ const ProjectWorkspace: React.FC = () => {
                                         <select
                                             value={accessorId}
                                             onChange={(e) => setAccessorId(e.target.value)}
-                                            className="flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
+                                            className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
                                         >
                                             <option value="">Add member...</option>
                                             {selectableAccessors.map(opt => <option key={`add-mem-${opt.id}`} value={opt.id}>{opt.label}</option>)}
@@ -844,11 +844,11 @@ const ProjectWorkspace: React.FC = () => {
                                             <select
                                                 value={roleTemplateId}
                                                 onChange={(e) => setRoleTemplateId(e.target.value)}
-                                                className="flex-1 sm:w-20 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-2 text-[11px] text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
+                                                className="flex-1 sm:w-20 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-2 text-[11px] text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
                                             >
                                                 {roleTemplates.map(rt => <option key={`add-role-${rt.id}`} value={rt.id}>{businessRoleLabelBySlug[rt.slug] || rt.name}</option>)}
                                             </select>
-                                            <button type="submit" disabled={!accessorId || !roleTemplateId} className="w-14 sm:w-auto shrink-0 rounded-xl bg-[hsl(var(--primary))] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:bg-[hsl(var(--primary-hover))] shadow-sm">
+                                            <button type="submit" disabled={!accessorId || !roleTemplateId} className="w-14 sm:w-auto shrink-0 rounded-md bg-[hsl(var(--primary))] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:bg-[hsl(var(--primary-hover))] shadow-sm">
                                                 Add
                                             </button>
                                         </div>
@@ -858,7 +858,7 @@ const ProjectWorkspace: React.FC = () => {
                                         {accessRules.length === 0 ? (
                                             <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-2">No members.</p>
                                         ) : accessRules.map(rule => (
-                                            <div key={`member-rule-${rule.id}`} className="group flex items-center justify-between rounded-xl p-2.5 hover:bg-[hsl(var(--background))] transition-colors border border-transparent hover:border-[hsl(var(--border))]">
+                                            <div key={`member-rule-${rule.id}`} className="group flex items-center justify-between rounded-md p-2.5 hover:bg-[hsl(var(--background))] transition-colors border border-transparent hover:border-[hsl(var(--border))]">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
                                                         {resolveRuleLabel(rule).charAt(0).toUpperCase()}

@@ -1,34 +1,86 @@
-﻿import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView, TextInput } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView, TextInput, ActivityIndicator } from 'react-native';
 import { FormField } from '@opla/types';
+import { loadLookupOptions, LookupContext, LookupOption, resolveStaticLookupOptions } from '../../utils/lookupCache';
 
 interface Props {
     field: FormField;
     value: string;
     onChange: (value: string) => void;
     error?: string;
+    lookupContext: LookupContext;
 }
 
-export function LookupListField({ field, value, onChange, error }: Props) {
+export function LookupListField({ field, value, onChange, error, lookupContext }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [options, setOptions] = useState<LookupOption[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [lastSyncLabel, setLastSyncLabel] = useState<string | null>(null);
 
-    // Very basic CSV parsing for demo
-    // In a real app we'd fetch preset data from the API if it's a preset source.
-    const dataString = field.lookup_custom_data || '';
-    const separator = field.lookup_separator || ',';
-    const labelCol = field.lookup_label_column || 1;
-    const valueCol = field.lookup_value_column || 1;
+    const syncIntervalMinutes = field.lookup_sync_interval_minutes || 15;
 
-    // Assuming first row might be header, let's just parse all rows for simplicity
-    const rows = dataString.split('\n').filter(r => r.trim() !== '');
-    const options = rows.map((row, idx) => {
-        const cols = row.split(separator);
-        // 1-indexed column numbers
-        const rowLabel = cols[labelCol - 1] || `Row ${idx}`;
-        const rowValue = cols[valueCol - 1] || rowLabel;
-        return { label: rowLabel.trim(), value: rowValue.trim() };
-    });
+    const customOptions = useMemo(() => resolveStaticLookupOptions(field), [field]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const hydrateOptions = async (forceRefresh = false) => {
+            try {
+                setLoading(true);
+                const { options: nextOptions, syncedAt } = await loadLookupOptions(field, lookupContext, forceRefresh);
+
+                if (!cancelled) {
+                    setOptions(nextOptions);
+                    if (syncedAt) {
+                        setLastSyncLabel(new Date(syncedAt).toLocaleString());
+                    }
+                }
+            } catch {
+                // If refresh fails we keep the cached data and continue offline.
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        if (field.lookup_source_type === 'dataset') {
+            hydrateOptions();
+            const timer = setInterval(() => {
+                hydrateOptions(true);
+            }, syncIntervalMinutes * 60 * 1000);
+            return () => {
+                cancelled = true;
+                clearInterval(timer);
+            };
+        }
+
+        setOptions(customOptions);
+        setLastSyncLabel(null);
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        customOptions,
+        field.lookup_allow_stale_cache,
+        field.lookup_dataset_id,
+        field.lookup_dataset_label_field,
+        field.lookup_dataset_value_field,
+        field.lookup_source_type,
+        lookupContext.formId,
+        lookupContext.mode,
+        lookupContext.slug,
+        syncIntervalMinutes,
+    ]);
+
+    useEffect(() => {
+        if (field.lookup_source_type === 'preset') {
+            if (field.lookup_preset_id === 'global_countries') setOptions([{ label: 'Ghana', value: 'gh' }, { label: 'Nigeria', value: 'ng' }, { label: 'USA', value: 'us' }, { label: 'United Kingdom', value: 'uk' }]);
+            else if (field.lookup_preset_id === 'african_countries') setOptions([{ label: 'Ghana', value: 'gh' }, { label: 'Nigeria', value: 'ng' }, { label: 'Kenya', value: 'ke' }]);
+            else if (field.lookup_preset_id === 'us_states') setOptions([{ label: 'California', value: 'ca' }, { label: 'New York', value: 'ny' }, { label: 'Texas', value: 'tx' }]);
+            else setOptions([]);
+        }
+    }, [field.lookup_preset_id, field.lookup_source_type]);
 
     const selectedOption = options.find(o => o.value === value);
 
@@ -54,11 +106,16 @@ export function LookupListField({ field, value, onChange, error }: Props) {
                 <Text style={{ color: selectedOption ? '#f1f5f9' : '#475569', fontSize: 16 }}>
                     {selectedOption ? selectedOption.label : (field.placeholder || "Tap to search...")}
                 </Text>
-                <Text style={{ color: '#94a3b8' }}>🔍</Text>
+                <Text style={{ color: '#94a3b8' }}>??</Text>
             </TouchableOpacity>
 
             {error && (
                 <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{error}</Text>
+            )}
+            {!error && field.lookup_source_type === 'dataset' && lastSyncLabel && (
+                <Text style={{ color: '#64748b', fontSize: 12, marginTop: 6 }}>
+                    Cached lookup � last sync {lastSyncLabel}
+                </Text>
             )}
 
             <Modal visible={modalVisible} transparent={true} animationType="slide">
@@ -68,7 +125,7 @@ export function LookupListField({ field, value, onChange, error }: Props) {
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
                                 <Text style={{ color: '#f1f5f9', fontSize: 18, fontWeight: '700' }}>Search {field.label}</Text>
                                 <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                    <Text style={{ color: '#6366f1', fontSize: 16, fontWeight: '600' }}>Close</Text>
+                                    <Text style={{ color: '#158754', fontSize: 16, fontWeight: '600' }}>Close</Text>
                                 </TouchableOpacity>
                             </View>
                             <TextInput
@@ -86,6 +143,7 @@ export function LookupListField({ field, value, onChange, error }: Props) {
                                 }}
                             />
                         </View>
+                        {loading ? <ActivityIndicator color="#158754" style={{ marginTop: 16 }} /> : null}
                         <FlatList
                             data={filteredOptions}
                             keyExtractor={(item, idx) => `${item.value}-${idx}`}
@@ -103,10 +161,10 @@ export function LookupListField({ field, value, onChange, error }: Props) {
                                         justifyContent: 'space-between'
                                     }}
                                 >
-                                    <Text style={{ color: value === item.value ? '#6366f1' : '#f1f5f9', fontSize: 16, fontWeight: value === item.value ? '700' : '400' }}>
+                                    <Text style={{ color: value === item.value ? '#158754' : '#f1f5f9', fontSize: 16, fontWeight: value === item.value ? '700' : '400' }}>
                                         {item.label}
                                     </Text>
-                                    {value === item.value && <Text style={{ color: '#6366f1', fontSize: 16 }}>✓</Text>}
+                                    {value === item.value && <Text style={{ color: '#158754', fontSize: 16 }}>?</Text>}
                                 </TouchableOpacity>
                             )}
                             ListEmptyComponent={

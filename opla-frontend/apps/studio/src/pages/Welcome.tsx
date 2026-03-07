@@ -31,7 +31,7 @@ const Welcome: React.FC = () => {
                 </div>
                 <div className="card-glass rounded-[28px] p-8">
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-16 h-16 bg-[hsl(var(--primary))]/10 rounded-2xl mb-4 border border-[hsl(var(--primary))]/20">
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-[hsl(var(--primary))]/10 rounded-md mb-4 border border-[hsl(var(--primary))]/20">
                             <span className="text-3xl">👋</span>
                         </div>
                         <h1 className="text-3xl font-bold mb-2">Welcome, {user?.full_name}!</h1>
@@ -52,7 +52,7 @@ const Welcome: React.FC = () => {
                         </div>
 
                         {error && (
-                            <div className="bg-[hsl(var(--error))]/10 border border-[hsl(var(--error))]/30 text-[hsl(var(--error))] text-sm p-4 rounded-xl">
+                            <div className="bg-[hsl(var(--error))]/10 border border-[hsl(var(--error))]/30 text-[hsl(var(--error))] text-sm p-4 rounded-md">
                                 {error}
                             </div>
                         )}

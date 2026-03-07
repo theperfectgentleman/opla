@@ -268,14 +268,14 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => openInviteModal()}
-                            className="flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-5 py-3 font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                            className="flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-5 py-3 font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                         >
                             <UserPlus className="h-4 w-4" />
                             Invite Contractor
                         </button>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="flex items-center gap-2 rounded-2xl bg-[hsl(var(--primary))] px-6 py-3 font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))]"
+                            className="flex items-center gap-2 rounded-md bg-[hsl(var(--primary))] px-6 py-3 font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))]"
                         >
                             <Plus className="h-5 w-5" />
                             Create Team
@@ -285,7 +285,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
             </div>
 
             {error ? (
-                <div className="rounded-2xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-3 text-sm text-[hsl(var(--error))]">
+                <div className="rounded-md border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-3 text-sm text-[hsl(var(--error))]">
                     {error}
                 </div>
             ) : null}
@@ -297,7 +297,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
             ) : (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     {teams.length === 0 ? (
-                        <div className="col-span-full rounded-3xl border-2 border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
+                        <div className="col-span-full rounded-md border-2 border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
                             <Users className="mx-auto mb-4 h-12 w-12 opacity-20" />
                             <p>No teams yet. {isAdmin ? 'Create the first team to start contractor onboarding.' : 'Ask an admin to create teams.'}</p>
                         </div>
@@ -307,7 +307,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                             <div key={team.id} className="rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                             <Users className="h-6 w-6" />
                                         </div>
                                         <h3 className="mt-4 text-xl font-semibold">{team.name}</h3>
@@ -317,14 +317,14 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => openEditModal(team)}
-                                                className="rounded-xl border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]"
+                                                className="rounded-md border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]"
                                                 title="Edit team"
                                             >
                                                 <Edit2 className="h-4 w-4" />
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteTeam(team.id)}
-                                                className="rounded-xl border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]"
+                                                className="rounded-md border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]"
                                                 title="Delete team"
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -333,7 +333,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     ) : null}
                                 </div>
 
-                                <div className="mt-5 flex items-center justify-between rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                                <div className="mt-5 flex items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                     <span>{team.member_count} {team.member_count === 1 ? 'member' : 'members'}</span>
                                     <span>{teamInvitations.filter(invitation => invitation.status !== 'accepted' && invitation.status !== 'revoked').length} open contractor invites</span>
                                 </div>
@@ -342,7 +342,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     <div className="mt-4 flex justify-end">
                                         <button
                                             onClick={() => openInviteModal(team.id)}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                         >
                                             <UserPlus className="h-4 w-4" />
                                             Invite Contractor
@@ -352,11 +352,11 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
 
                                 <div className="mt-6 space-y-3">
                                     {teamInvitations.length === 0 ? (
-                                        <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] p-4 text-sm text-[hsl(var(--text-tertiary))]">
+                                        <div className="rounded-md border border-dashed border-[hsl(var(--border))] p-4 text-sm text-[hsl(var(--text-tertiary))]">
                                             No contractor invitations for this team yet.
                                         </div>
                                     ) : teamInvitations.map(invitation => (
-                                        <div key={invitation.id} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                                        <div key={invitation.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
                                             <div className="flex flex-wrap items-start justify-between gap-3">
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex flex-wrap items-center gap-2">
@@ -378,7 +378,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                         const mobileJoinLink = buildMobileJoinTeamLink(invitation.pin_code);
                                                         return (
                                                         <>
-                                                            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                                                            <div className="mt-3 flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
                                                                 <span className="font-semibold text-[hsl(var(--text-primary))]">PIN:</span>
                                                                 <span className="font-mono tracking-[0.18em]">{invitation.pin_code}</span>
                                                                 <button
@@ -389,7 +389,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                                     <Copy className="h-3.5 w-3.5" />
                                                                 </button>
                                                             </div>
-                                                            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                                                            <div className="mt-3 flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
                                                                 <span className="font-semibold text-[hsl(var(--text-primary))]">Mobile join:</span>
                                                                 <span className="truncate font-mono">{mobileJoinLink}</span>
                                                                 <button
@@ -408,7 +408,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                         const mobileLink = buildMobileInvitationAcceptLink(invitation.token);
                                                         return (
                                                         <>
-                                                            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                                                            <div className="mt-3 flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
                                                                 <span className="font-semibold text-[hsl(var(--text-primary))]">Web link:</span>
                                                                 <span className="truncate font-mono">{webLink}</span>
                                                                 <button
@@ -419,7 +419,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                                     <Copy className="h-3.5 w-3.5" />
                                                                 </button>
                                                             </div>
-                                                            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                                                            <div className="mt-3 flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
                                                                 <span className="font-semibold text-[hsl(var(--text-primary))]">Mobile app:</span>
                                                                 <span className="truncate font-mono">{mobileLink}</span>
                                                                 <button
@@ -441,7 +441,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                             <button
                                                                 onClick={() => handleApproveInvitation(invitation.id)}
                                                                 disabled={actingInvitationId === invitation.id}
-                                                                className="rounded-2xl border border-[hsl(var(--border))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
+                                                                className="rounded-md border border-[hsl(var(--border))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
                                                             >
                                                                 Approve
                                                             </button>
@@ -450,7 +450,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                             <button
                                                                 onClick={() => handleRevokeInvitation(invitation.id)}
                                                                 disabled={actingInvitationId === invitation.id}
-                                                                className="rounded-2xl border border-[hsl(var(--border))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
+                                                                className="rounded-md border border-[hsl(var(--border))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
                                                             >
                                                                 Revoke
                                                             </button>
@@ -472,7 +472,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                     <div className="w-full max-w-md rounded-[32px] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 shadow-2xl">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <h3 className="text-2xl font-bold">Create Team</h3>
-                            <button onClick={() => setShowCreateModal(false)} className="rounded-xl border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]">
+                            <button onClick={() => setShowCreateModal(false)} className="rounded-md border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]">
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
@@ -482,7 +482,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                 <input
                                     value={teamName}
                                     onChange={(event) => setTeamName(event.target.value)}
-                                    className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     placeholder="e.g. Field Agents"
                                     required
                                 />
@@ -492,15 +492,15 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                 <textarea
                                     value={teamDescription}
                                     onChange={(event) => setTeamDescription(event.target.value)}
-                                    className="min-h-[110px] w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="min-h-[110px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     placeholder="What is this team responsible for?"
                                 />
                             </div>
                             <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
+                                <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={loading} className="flex-1 rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50">
+                                <button type="submit" disabled={loading} className="flex-1 rounded-md bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50">
                                     {loading ? 'Creating...' : 'Create Team'}
                                 </button>
                             </div>
@@ -514,7 +514,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                     <div className="w-full max-w-md rounded-[32px] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 shadow-2xl">
                         <div className="mb-6 flex items-center justify-between gap-4">
                             <h3 className="text-2xl font-bold">Edit Team</h3>
-                            <button onClick={() => setShowEditModal(false)} className="rounded-xl border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]">
+                            <button onClick={() => setShowEditModal(false)} className="rounded-md border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]">
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
@@ -524,7 +524,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                 <input
                                     value={teamName}
                                     onChange={(event) => setTeamName(event.target.value)}
-                                    className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     required
                                 />
                             </div>
@@ -533,14 +533,14 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                 <textarea
                                     value={teamDescription}
                                     onChange={(event) => setTeamDescription(event.target.value)}
-                                    className="min-h-[110px] w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="min-h-[110px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                 />
                             </div>
                             <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
+                                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={loading} className="flex-1 rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50">
+                                <button type="submit" disabled={loading} className="flex-1 rounded-md bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50">
                                     {loading ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
@@ -557,7 +557,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                 <h3 className="text-2xl font-bold">Invite Contractor</h3>
                                 <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Contractors always join through a team. Choose how they receive access and whether the join requires review.</p>
                             </div>
-                            <button onClick={closeInviteModal} className="rounded-xl border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]">
+                            <button onClick={closeInviteModal} className="rounded-md border border-[hsl(var(--border))] p-2 hover:bg-[hsl(var(--surface-elevated))]">
                                 <X className="h-5 w-5" />
                             </button>
                         </div>
@@ -569,7 +569,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                             const mobileJoinLink = createdInvitation.pin_code ? buildMobileJoinTeamLink(createdInvitation.pin_code) : null;
                             return (
                                 <div className="mt-6 space-y-5">
-                                    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                                    <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-5">
                                         <div className="flex items-start gap-3">
                                             <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" />
                                             <div>
@@ -580,14 +580,14 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     </div>
 
                                     {createdInvitation.pin_code ? (
-                                        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
                                             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">PIN code</p>
                                             <p className="mt-2 font-mono text-lg tracking-[0.18em] text-[hsl(var(--text-primary))]">{createdInvitation.pin_code}</p>
                                             <div className="mt-4 flex gap-3">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopyValue(createdInvitation.pin_code)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <Copy className="h-4 w-4" />
                                                     Copy PIN
@@ -596,7 +596,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenLink(mobileJoinLink)}
-                                                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                     >
                                                         <ExternalLink className="h-4 w-4" />
                                                         Open In App
@@ -604,7 +604,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                 ) : null}
                                             </div>
                                             {mobileJoinLink ? (
-                                                <div className="mt-3 flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                                                <div className="mt-3 flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
                                                     <span className="font-semibold text-[hsl(var(--text-primary))]">Mobile join:</span>
                                                     <span className="truncate font-mono">{mobileJoinLink}</span>
                                                     <button
@@ -620,14 +620,14 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     ) : null}
 
                                     {webLink ? (
-                                        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
                                             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Web invite link</p>
                                             <p className="mt-2 truncate font-mono text-[hsl(var(--text-secondary))]">{webLink}</p>
                                             <div className="mt-4 flex gap-3">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopyValue(webLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <Copy className="h-4 w-4" />
                                                     Copy Web Link
@@ -635,7 +635,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                 <button
                                                     type="button"
                                                     onClick={() => handleOpenLink(webLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <ExternalLink className="h-4 w-4" />
                                                     Open Web Invite
@@ -645,14 +645,14 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     ) : null}
 
                                     {mobileLink ? (
-                                        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm">
                                             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Mobile app link</p>
                                             <p className="mt-2 truncate font-mono text-[hsl(var(--text-secondary))]">{mobileLink}</p>
                                             <div className="mt-4 flex gap-3">
                                                 <button
                                                     type="button"
                                                     onClick={() => handleCopyValue(mobileLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <Copy className="h-4 w-4" />
                                                     Copy App Link
@@ -660,7 +660,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                                 <button
                                                     type="button"
                                                     onClick={() => handleOpenLink(mobileLink)}
-                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <ExternalLink className="h-4 w-4" />
                                                     Open In App
@@ -670,10 +670,10 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     ) : null}
 
                                     <div className="flex gap-3 pt-2">
-                                        <button type="button" onClick={() => setCreatedInvitation(null)} className="flex-1 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
+                                        <button type="button" onClick={() => setCreatedInvitation(null)} className="flex-1 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
                                             Create Another Invite
                                         </button>
-                                        <button type="button" onClick={closeInviteModal} className="flex-1 rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10">
+                                        <button type="button" onClick={closeInviteModal} className="flex-1 rounded-md bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10">
                                             Done
                                         </button>
                                     </div>
@@ -686,7 +686,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                 <select
                                     value={inviteTeamId}
                                     onChange={(event) => setInviteTeamId(event.target.value)}
-                                    className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     required
                                 >
                                     {teams.map(team => (
@@ -700,7 +700,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     <select
                                         value={inviteDeliveryMode}
                                         onChange={(event) => setInviteDeliveryMode(event.target.value as 'generated_link' | 'pin_code')}
-                                        className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     >
                                         <option value="generated_link">Generated link</option>
                                         <option value="pin_code">PIN code</option>
@@ -711,7 +711,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                     <select
                                         value={inviteApprovalMode}
                                         onChange={(event) => setInviteApprovalMode(event.target.value as 'auto' | 'review')}
-                                        className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                     >
                                         <option value="auto">Auto approve</option>
                                         <option value="review">Admin review</option>
@@ -719,7 +719,7 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm text-[hsl(var(--text-secondary))]">
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm text-[hsl(var(--text-secondary))]">
                                 <div className="flex items-start gap-3">
                                     <AlertCircle className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
                                     <div>
@@ -730,10 +730,10 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ orgId, isAdmin }) => 
                             </div>
 
                             <div className="flex gap-3 pt-2">
-                                <button type="button" onClick={closeInviteModal} className="flex-1 rounded-2xl border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
+                                <button type="button" onClick={closeInviteModal} className="flex-1 rounded-md border border-[hsl(var(--border))] px-4 py-3 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={savingInvite || !inviteTeamId} className="flex-1 rounded-2xl bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50">
+                                <button type="submit" disabled={savingInvite || !inviteTeamId} className="flex-1 rounded-md bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50">
                                     {savingInvite ? 'Creating...' : 'Create Contractor Invite'}
                                 </button>
                             </div>

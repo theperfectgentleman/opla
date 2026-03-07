@@ -24,6 +24,8 @@
         "/^cd opla-backend; python -m uvicorn app\\.main:app --reload$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "npx tsc": true,
+        "npm install": true
     }
 }

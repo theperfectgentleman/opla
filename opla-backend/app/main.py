@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.routes import auth, organizations, projects, forms, submissions, roles, teams, section_templates, reports
+from app.api.routes import auth, organizations, projects, forms, submissions, roles, teams, section_templates, reports, assets, threads, analytics
 import app.models  # Ensure all models are loaded
 
 # Create FastAPI app
@@ -33,6 +33,9 @@ app.include_router(roles.router, prefix=settings.API_V1_STR)
 app.include_router(teams.router, prefix=settings.API_V1_STR)
 app.include_router(section_templates.router, prefix=settings.API_V1_STR)
 app.include_router(reports.router, prefix=settings.API_V1_STR)
+app.include_router(assets.router, prefix=settings.API_V1_STR)
+app.include_router(threads.router, prefix=settings.API_V1_STR)
+app.include_router(analytics.router, prefix=settings.API_V1_STR)
 # Root endpoint
 @app.get("/")
 def read_root():

@@ -10,9 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@syncfusion/ej2": "^32.2.8",
+    "@syncfusion/ej2-base": "^32.2.6",
+    "@syncfusion/ej2-react-base": "^32.2.3",
+    "@syncfusion/ej2-react-pivotview": "^32.2.6",
+    "@syncfusion/ej2-react-spreadsheet": "^32.2.5",
     "axios": "^1.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.6",
     "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.4",

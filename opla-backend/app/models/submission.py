@@ -11,6 +11,8 @@ class Submission(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     form_id = Column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True) # Null for public submissions
+    dataset_id = Column(UUID(as_uuid=True), ForeignKey("form_datasets.id"), nullable=True)
+    dataset_schema_version_id = Column(UUID(as_uuid=True), ForeignKey("form_dataset_schema_versions.id"), nullable=True)
     data = Column(JSONB, nullable=False) # The actual form response
     metadata_json = Column(JSONB, nullable=True) # Browser info, duration, etc.
     form_version_number = Column(Integer, nullable=True)
@@ -18,3 +20,5 @@ class Submission(Base):
     
     form = relationship("Form", backref="submissions")
     user = relationship("User", backref="submissions")
+    dataset = relationship("FormDataset", backref="submissions")
+    dataset_schema_version = relationship("FormDatasetSchemaVersion", backref="submissions")

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AudioLines,
     AtSign,
     BadgeCheck,
     CalendarClock,
@@ -185,7 +184,7 @@ const CanvasEditableSurface: React.FC<CanvasEditableSurfaceProps> = ({
                 onKeyUp={emitUpdate}
                 onMouseUp={emitUpdate}
                 onBlur={onBlur}
-                className="min-h-[140px] whitespace-pre-wrap rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm leading-7 outline-none focus:border-[hsl(var(--primary))] focus:ring-2 focus:ring-[hsl(var(--primary))]/15"
+                className="min-h-[140px] whitespace-pre-wrap rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm leading-7 outline-none focus:border-[hsl(var(--primary))] focus:ring-2 focus:ring-[hsl(var(--primary))]/15"
             />
         </div>
     );
@@ -450,11 +449,11 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <div className="inline-flex rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-1">
+                        <div className="inline-flex rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-1">
                             <button
                                 type="button"
                                 onClick={() => setMode('write')}
-                                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${mode === 'write' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'text-[hsl(var(--text-secondary))]'}`}
+                                className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-all ${mode === 'write' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'text-[hsl(var(--text-secondary))]'}`}
                             >
                                 <PenSquare className="h-4 w-4" />
                                 Write
@@ -462,7 +461,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                             <button
                                 type="button"
                                 onClick={() => setMode('read')}
-                                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${mode === 'read' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'text-[hsl(var(--text-secondary))]'}`}
+                                className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-all ${mode === 'read' ? 'bg-[hsl(var(--primary))] text-white shadow-lg shadow-black/10' : 'text-[hsl(var(--text-secondary))]'}`}
                             >
                                 <Eye className="h-4 w-4" />
                                 Read
@@ -471,7 +470,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                         <button
                             type="button"
                             onClick={() => addBlock('narrative')}
-                            className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                         >
                             <Plus className="h-4 w-4" />
                             Section
@@ -479,7 +478,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                         <button
                             type="button"
                             onClick={() => addBlock('callout')}
-                            className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                         >
                             <Lightbulb className="h-4 w-4" />
                             Insight
@@ -487,7 +486,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                         <button
                             type="button"
                             onClick={() => addBlock('artifact')}
-                            className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                         >
                             <Paperclip className="h-4 w-4" />
                             Embed
@@ -514,7 +513,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                             <input
                                                 value={block.label}
                                                 onChange={(event) => updateBlock(block.id, { label: event.target.value })}
-                                                className="mt-2 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-lg font-semibold"
+                                                className="mt-2 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-lg font-semibold"
                                             />
                                         ) : (
                                             <h3 className="mt-2 text-lg font-semibold">{block.label}</h3>
@@ -542,14 +541,14 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                             onBlur={() => setActiveCompletion(current => current?.blockId === block.id ? null : current)}
                                         />
                                     ) : (
-                                        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm leading-7 text-[hsl(var(--text-secondary))] whitespace-pre-wrap">
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm leading-7 text-[hsl(var(--text-secondary))] whitespace-pre-wrap">
                                             {renderInteractiveContent(block.content)}
                                         </div>
                                     )}
                                 </div>
 
                                 {mode === 'write' && activeCompletion?.blockId === block.id && inlineSuggestions.length > 0 ? (
-                                    <div className="mt-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 shadow-lg">
+                                    <div className="mt-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 shadow-lg">
                                         <div className="mb-2 px-2 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
                                             {activeCompletion.trigger === '#' ? 'Insert linked artifact' : 'Insert mention'}
                                         </div>
@@ -560,7 +559,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                                     type="button"
                                                     onMouseDown={(event) => event.preventDefault()}
                                                     onClick={() => injectToken(suggestion.token)}
-                                                    className="flex w-full items-center justify-between rounded-xl border border-transparent px-3 py-2 text-left hover:border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-elevated))]"
+                                                    className="flex w-full items-center justify-between rounded-md border border-transparent px-3 py-2 text-left hover:border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-elevated))]"
                                                 >
                                                     <span className="flex min-w-0 items-center gap-3 text-sm font-semibold text-[hsl(var(--text-primary))]">
                                                         <span className="text-[hsl(var(--primary))]">{suggestion.icon}</span>
@@ -595,9 +594,9 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                 ) : null}
 
                                 {block.type === 'artifact' && (
-                                    <div className="mt-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-4">
+                                    <div className="mt-4 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                                 <Paperclip className="h-5 w-5" />
                                             </div>
                                             <div className="min-w-0 flex-1">
@@ -605,7 +604,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                                     <input
                                                         value={block.reference || ''}
                                                         onChange={(event) => updateBlock(block.id, { reference: event.target.value })}
-                                                        className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-semibold"
+                                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-semibold"
                                                         placeholder="#Link an artifact"
                                                     />
                                                 ) : (
@@ -636,7 +635,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                     <p className="text-lg font-semibold">{selectedBlock.label}</p>
                                     <p className="text-sm text-[hsl(var(--text-secondary))]">{selectedBlock.type === 'narrative' ? 'Long-form writing area' : selectedBlock.type === 'callout' ? 'Highlight or recommendation block' : 'Embedded source context block'}</p>
                                 </div>
-                                <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-xs text-[hsl(var(--text-secondary))]">
+                                <div className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-xs text-[hsl(var(--text-secondary))]">
                                     Canvas state now follows the report payload. A later pass can add autosave, collaboration, and cursor-aware suggestions.
                                 </div>
                             </div>
@@ -646,18 +645,18 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                     <div className="mt-6 rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5">
                         <div className="flex items-center justify-between gap-3">
                             <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Reference helpers</h3>
-                            <div className="inline-flex rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1">
+                            <div className="inline-flex rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1">
                                 <button
                                     type="button"
                                     onClick={() => setReferenceFilter('#')}
-                                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${referenceFilter === '#' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--text-secondary))]'}`}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-semibold ${referenceFilter === '#' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--text-secondary))]'}`}
                                 >
                                     # Links
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setReferenceFilter('@')}
-                                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${referenceFilter === '@' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--text-secondary))]'}`}
+                                    className={`rounded-md px-3 py-1.5 text-xs font-semibold ${referenceFilter === '@' ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--text-secondary))]'}`}
                                 >
                                     @ Mentions
                                 </button>
@@ -669,7 +668,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                     key={suggestion.token}
                                     type="button"
                                     onClick={() => injectToken(suggestion.token)}
-                                    className="flex w-full items-center justify-between rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-left hover:bg-[hsl(var(--surface-elevated))]"
+                                    className="flex w-full items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-left hover:bg-[hsl(var(--surface-elevated))]"
                                 >
                                     <span className="flex items-center gap-3 text-sm font-semibold text-[hsl(var(--text-primary))]">
                                         <span className="text-[hsl(var(--primary))]">{suggestion.icon}</span>
@@ -716,15 +715,15 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                             <button
                                 type="button"
                                 onClick={() => setActivePreviewToken(null)}
-                                className="rounded-xl border border-[hsl(var(--border))] p-2 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]"
+                                className="rounded-md border border-[hsl(var(--border))] p-2 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]"
                             >
                                 <CircleX className="h-4 w-4" />
                             </button>
                         </div>
 
-                        <div className="mt-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                        <div className="mt-5 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
                             <div className="flex items-center gap-3 text-[hsl(var(--text-secondary))]">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                     {previewItem.kind === 'asset' ? <Paperclip className="h-5 w-5" /> : null}
                                     {previewItem.kind === 'dataset' ? <Database className="h-5 w-5" /> : null}
                                     {previewItem.kind === 'thread' ? <MessageSquare className="h-5 w-5" /> : null}

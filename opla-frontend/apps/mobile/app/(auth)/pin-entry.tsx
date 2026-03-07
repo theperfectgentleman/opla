@@ -21,11 +21,11 @@ function PinDots({ value, shake, length = 4 }: { value: string; shake: boolean; 
           style={{
             width: 18, height: 18, borderRadius: 9,
             backgroundColor: i < value.length
-              ? (shake ? '#ef4444' : '#6366f1')
+              ? (shake ? '#ef4444' : '#158754')
               : '#1e293b',
             borderWidth: 2,
             borderColor: i < value.length
-              ? (shake ? '#ef4444' : '#6366f1')
+              ? (shake ? '#ef4444' : '#158754')
               : '#334155',
           }}
         />
@@ -123,7 +123,7 @@ export default function PinEntryScreen() {
           marginTop: 12, backgroundColor: '#1e293b', borderRadius: 20,
           paddingHorizontal: 14, paddingVertical: 6,
         }}>
-          <Text style={{ fontSize: 12, color: '#6366f1', fontWeight: '600' }}>
+          <Text style={{ fontSize: 12, color: '#158754', fontWeight: '600' }}>
             PIN expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
           </Text>
         </View>
@@ -141,7 +141,7 @@ export default function PinEntryScreen() {
       ) : null}
 
       {loading
-        ? <ActivityIndicator color="#6366f1" size="large" />
+        ? <ActivityIndicator color="#158754" size="large" />
         : <Keypad onPress={handleKey} />
       }
 

@@ -43,6 +43,8 @@ class FormOut(FormBase):
     id: UUID
     project_id: UUID
     slug: str
+    dataset_id: Optional[UUID] = None
+    current_dataset_schema_version_number: Optional[int] = None
     blueprint_draft: Optional[Dict] = None
     blueprint_live: Optional[Dict] = None
     version: int
@@ -91,6 +93,16 @@ class FormRuntimeOut(BaseModel):
     blueprint_live: Dict
     published_version: Optional[int] = None
     published_at: Optional[datetime] = None
+
+
+class FormStatsOut(BaseModel):
+    form_id: UUID
+    title: str
+    status: FormStatus
+    version: int
+    submission_count: int
+    my_submission_count: int
+    last_submitted_at: Optional[datetime] = None
 
 
 class PublishFormIn(BaseModel):

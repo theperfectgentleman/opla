@@ -13,7 +13,7 @@ export function TextInputField({ field, value, error, onChange }: TextInputField
     const isTextArea = field.type === 'textarea';
 
     return (
-        <View style={{ marginBottom: 16 }}>
+        <View>
             <TextInput
                 value={value || ''}
                 onChangeText={onChange}
@@ -24,17 +24,17 @@ export function TextInputField({ field, value, error, onChange }: TextInputField
                     backgroundColor: '#1e293b',
                     borderColor: error ? '#ef4444' : '#334155',
                     borderWidth: 1.5,
-                    borderRadius: 12,
-                    paddingHorizontal: 16,
-                    paddingVertical: 14,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
                     color: '#f1f5f9',
-                    fontSize: 16,
-                    minHeight: isTextArea ? 100 : undefined,
+                    fontSize: 14,
+                    minHeight: isTextArea ? 80 : undefined,
                     textAlignVertical: isTextArea ? 'top' : 'center',
                 }}
             />
             {error && (
-                <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{error}</Text>
+                <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{error}</Text>
             )}
         </View>
     );

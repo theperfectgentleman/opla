@@ -39,7 +39,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 {toasts.map(toast => (
                     <div
                         key={toast.id}
-                        className="pointer-events-auto flex items-start gap-3 w-[400px] p-4 bg-[#1e2329] border border-[#2b313a] rounded-2xl shadow-2xl transition-all animate-in slide-in-from-right-8 fade-in duration-300 relative overflow-hidden"
+                        className="pointer-events-auto flex items-start gap-3 w-[400px] p-4 bg-[#1e2329] border border-[#2b313a] rounded-md shadow-2xl transition-all animate-in slide-in-from-right-8 fade-in duration-300 relative overflow-hidden"
                     >
                         <div className="mt-0.5 z-10">
                             {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-[#22c55e]" />}

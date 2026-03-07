@@ -177,7 +177,7 @@ const Register: React.FC = () => {
                     </div>
 
                     {/* Tab Switcher */}
-                    <div className="flex gap-2 mb-6 p-1 bg-[hsl(var(--surface-elevated))] rounded-xl">
+                    <div className="flex gap-2 mb-6 p-1 bg-[hsl(var(--surface-elevated))] rounded-md">
                         <button
                             type="button"
                             onClick={() => {
@@ -208,7 +208,7 @@ const Register: React.FC = () => {
 
                     {/* Error Display */}
                     {error && (
-                        <div className="bg-[hsl(var(--error))]/10 border border-[hsl(var(--error))]/30 rounded-xl p-4 mb-6">
+                        <div className="bg-[hsl(var(--error))]/10 border border-[hsl(var(--error))]/30 rounded-md p-4 mb-6">
                             <p className="text-[hsl(var(--error))] text-sm">{error}</p>
                         </div>
                     )}

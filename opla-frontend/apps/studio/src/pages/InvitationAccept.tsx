@@ -133,7 +133,7 @@ const InvitationAccept: React.FC = () => {
                                         }
                                     }}
                                     placeholder="Paste the generated or short-link token"
-                                    className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm"
                                 />
                             </label>
 
@@ -152,18 +152,18 @@ const InvitationAccept: React.FC = () => {
                                         }
                                     }}
                                     placeholder="Enter the 6-digit team PIN"
-                                    className="w-full rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm tracking-[0.2em]"
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm tracking-[0.2em]"
                                 />
                             </label>
                         </div>
 
                         {error ? (
-                            <div className="rounded-2xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-3 text-sm text-[hsl(var(--error))]">
+                            <div className="rounded-md border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 px-4 py-3 text-sm text-[hsl(var(--error))]">
                                 {error}
                             </div>
                         ) : null}
 
-                        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm text-[hsl(var(--text-secondary))]">
+                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm text-[hsl(var(--text-secondary))]">
                             Internal invitations accept email or short-link tokens. Contractor invitations accept generated-link tokens or team PINs.
                         </div>
 
@@ -174,7 +174,7 @@ const InvitationAccept: React.FC = () => {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="rounded-2xl bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50"
+                                className="rounded-md bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 disabled:opacity-50"
                             >
                                 {isSubmitting ? 'Accepting...' : 'Accept Invitation'}
                             </button>
@@ -208,7 +208,7 @@ const InvitationAccept: React.FC = () => {
                                 </p>
 
                                 <div className="mt-6 grid gap-4 md:grid-cols-2">
-                                    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-sm">
+                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-sm">
                                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Invitation</p>
                                         <p className="mt-2">Organization: {result.invitation.org_name || result.invitation.org_id}</p>
                                         {result.invitation.team_name ? <p className="mt-1">Team: {result.invitation.team_name}</p> : null}
@@ -218,7 +218,7 @@ const InvitationAccept: React.FC = () => {
                                         <p className="mt-1">Approval: {result.invitation.approval_mode}</p>
                                         <p className="mt-1">Status: {result.invitation.status}</p>
                                     </div>
-                                    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-sm">
+                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-sm">
                                         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Membership</p>
                                         {result.membership ? (
                                             <>
@@ -236,7 +236,7 @@ const InvitationAccept: React.FC = () => {
                                     {result.invitation.token ? (
                                         <button
                                             onClick={() => handleCopy(result.invitation.token)}
-                                            className="inline-flex items-center gap-2 rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                         >
                                             <Copy className="h-4 w-4" />
                                             Copy Token
@@ -245,7 +245,7 @@ const InvitationAccept: React.FC = () => {
                                     {result.status === 'accepted' ? (
                                         <button
                                             onClick={() => navigate('/dashboard?tab=projects')}
-                                            className="rounded-2xl border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                                            className="rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                                         >
                                             Go to Dashboard
                                         </button>

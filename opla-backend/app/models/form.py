@@ -45,3 +45,13 @@ class Form(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     project = relationship("Project", back_populates="forms")
+
+    @property
+    def dataset_id(self):
+        dataset = getattr(self, "dataset", None)
+        return dataset.id if dataset else None
+
+    @property
+    def current_dataset_schema_version_number(self):
+        dataset = getattr(self, "dataset", None)
+        return dataset.current_schema_version_number if dataset else None

@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { FormField } from '@opla/types';
 
@@ -82,13 +82,13 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
                                                 height: 24,
                                                 borderRadius: isRadio ? 12 : 6,
                                                 borderWidth: 2,
-                                                borderColor: isSelected ? '#6366f1' : '#475569',
-                                                backgroundColor: isSelected ? '#6366f1' : 'transparent',
+                                                borderColor: isSelected ? '#158754' : '#475569',
+                                                backgroundColor: isSelected ? '#158754' : 'transparent',
                                                 alignItems: 'center',
                                                 justifyContent: 'center'
                                             }}
                                         >
-                                            {isSelected && !isRadio && <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>✓</Text>}
+                                            {isSelected && !isRadio && <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>?</Text>}
                                             {isSelected && isRadio && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' }} />}
                                         </TouchableOpacity>
                                     );

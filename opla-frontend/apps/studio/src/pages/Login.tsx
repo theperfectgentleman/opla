@@ -139,7 +139,7 @@ const Login: React.FC = () => {
                     </div>
 
                     {/* Tab Switcher */}
-                    <div className="flex gap-2 mb-6 p-1 bg-[hsl(var(--surface-elevated))] rounded-xl">
+                    <div className="flex gap-2 mb-6 p-1 bg-[hsl(var(--surface-elevated))] rounded-md">
                         <button
                             type="button"
                             onClick={() => {
@@ -170,7 +170,7 @@ const Login: React.FC = () => {
 
                     {/* Error Display */}
                     {error && (
-                        <div className="bg-[hsl(var(--error))]/10 border border-[hsl(var(--error))]/30 rounded-xl p-4 mb-6">
+                        <div className="bg-[hsl(var(--error))]/10 border border-[hsl(var(--error))]/30 rounded-md p-4 mb-6">
                             <p className="text-[hsl(var(--error))] text-sm">{error}</p>
                         </div>
                     )}
@@ -280,7 +280,7 @@ const Login: React.FC = () => {
                                     <span className="font-medium text-[hsl(var(--text-primary))]">{formData.phone}</span>
                                 </p>
                                 {devOtp && (
-                                    <div className="bg-[hsl(var(--warning))]/10 border border-[hsl(var(--warning))]/30 rounded-xl p-3 mb-4">
+                                    <div className="bg-[hsl(var(--warning))]/10 border border-[hsl(var(--warning))]/30 rounded-md p-3 mb-4">
                                         <p className="text-sm text-[hsl(var(--warning))]">
                                             Dev Mode: Your OTP is <strong>{devOtp}</strong>
                                         </p>

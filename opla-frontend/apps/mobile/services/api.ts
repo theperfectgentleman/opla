@@ -28,6 +28,50 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
+// ─── 401 → auto-refresh interceptor ─────────────────────────────────────────
+let _refreshPromise: Promise<string | null> | null = null;
+
+apiClient.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const original = error.config;
+    if (error.response?.status !== 401 || original._retry) {
+      return Promise.reject(error);
+    }
+    original._retry = true;
+
+    try {
+      // Deduplicate concurrent refresh calls
+      if (!_refreshPromise) {
+        _refreshPromise = (async () => {
+          const raw = await SecureStore.getItemAsync('opla_auth_session');
+          if (!raw) return null;
+          const session = JSON.parse(raw);
+          if (!session?.refreshToken) return null;
+
+          const refreshApi = axios.create({ baseURL: API_URL, timeout: 10000 });
+          const res = await refreshApi.post('/auth/refresh', { refresh_token: session.refreshToken });
+          const { access_token, refresh_token } = res.data;
+
+          // Persist updated tokens back to session
+          const updated = { ...session, accessToken: access_token, refreshToken: refresh_token };
+          await SecureStore.setItemAsync('opla_auth_session', JSON.stringify(updated));
+          return access_token;
+        })().finally(() => { _refreshPromise = null; });
+      }
+
+      const newToken = await _refreshPromise;
+      if (!newToken) return Promise.reject(error);
+
+      original.headers.Authorization = `Bearer ${newToken}`;
+      return apiClient(original);
+    } catch {
+      // Refresh failed — let the original 401 propagate
+      return Promise.reject(error);
+    }
+  },
+);
+
 // ─── Auth endpoints ──────────────────────────────────────────────────────────
 export const authAPI = {
   loginEmail: async (email: string, password: string) => {
@@ -66,6 +110,14 @@ export const publicFormAPI = {
     const res = await apiClient.post(`/public/submissions/${slug}`, { data, metadata });
     return res.data;
   },
+  lookupOptions: async (
+    slug: string,
+    datasetId: string,
+    params: { label_field: string; value_field: string; search?: string; limit?: number },
+  ) => {
+    const res = await apiClient.get(`/public/forms/${slug}/lookup-sources/${datasetId}/options`, { params });
+    return res.data;
+  },
 };
 
 // ─── Desk form endpoints (authenticated) ────────────────────────────────────
@@ -76,6 +128,14 @@ export const deskFormAPI = {
   },
   submit: async (formId: string, data: Record<string, any>, metadata: Record<string, any>) => {
     const res = await apiClient.post('/submissions', { form_id: formId, data, metadata });
+    return res.data;
+  },
+  lookupOptions: async (
+    formId: string,
+    datasetId: string,
+    params: { label_field: string; value_field: string; search?: string; limit?: number },
+  ) => {
+    const res = await apiClient.get(`/forms/${formId}/lookup-sources/${datasetId}/options`, { params });
     return res.data;
   },
 };
@@ -120,8 +180,49 @@ export const projectAPI = {
     );
     return res.data;
   },
-  listForms: async (projectId: string) => {
-    const res = await apiClient.get(`/projects/${projectId}/forms`);
+  /** Pass liveOnly=true on mobile to show only published (live) forms. */
+  listForms: async (projectId: string, liveOnly = false) => {
+    const res = await apiClient.get(`/projects/${projectId}/forms`, {
+      params: liveOnly ? { live_only: true } : undefined,
+    });
+    return res.data;
+  },
+};
+
+// ─── Form metadata + stats endpoints (authenticated) ────────────────────────
+export const formAPI = {
+  /** Get full form metadata (title, status, version, blueprint_live, etc.). */
+  getMeta: async (formId: string) => {
+    const res = await apiClient.get(`/forms/${formId}`);
+    return res.data;
+  },
+  /** Get submission stats for a form: total, mine, last submitted. */
+  getStats: async (formId: string) => {
+    const res = await apiClient.get(`/forms/${formId}/stats`);
+    return res.data as {
+      form_id: string;
+      title: string;
+      status: string;
+      version: number;
+      submission_count: number;
+      my_submission_count: number;
+      last_submitted_at: string | null;
+    };
+  },
+};
+
+// ─── Asset endpoints ─────────────────────────────────────────────────────────
+export const assetsAPI = {
+  list: async (orgId: string, projectId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/assets`);
+    return res.data;
+  },
+};
+
+// ─── Report endpoints ─────────────────────────────────────────────────────────
+export const reportsAPI = {
+  list: async (orgId: string, projectId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/reports`);
     return res.data;
   },
 };

@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
+from app.api.schemas.automation import FormAutomationRuleCreate, FormAutomationRuleOut, FormAutomationRuleUpdate
 from app.api.dependencies import get_current_user, get_db
 from app.api.schemas.dataset import FormDatasetOut, FormDatasetUpdateIn, LookupDatasetSourceOut, LookupOptionsOut
 from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, FormStatsOut, PublishFormIn, FormResponsibilityUpdateIn
 from app.services.dataset_service import DatasetService
+from app.services.form_automation_service import FormAutomationService
 from app.services.form_service import FormService
 from app.services.project_access_service import ProjectAccessService
 from app.models.project import ProjectStatus
@@ -271,3 +273,87 @@ def update_form_responsibility(
         guest_accessor_id=payload.guest_accessor_id,
         guest_accessor_type=payload.guest_accessor_type,
     )
+
+
+@router.get("/{form_id}/automation-rules", response_model=List[FormAutomationRuleOut])
+def list_form_automation_rules(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    return FormAutomationService.list_rules(db, form_id)
+
+
+@router.post("/{form_id}/automation-rules", response_model=FormAutomationRuleOut, status_code=status.HTTP_201_CREATED)
+def create_form_automation_rule(
+    form_id: uuid.UUID,
+    payload: FormAutomationRuleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    return FormAutomationService.create_rule(
+        db,
+        form,
+        name=payload.name,
+        description=payload.description,
+        event_type=payload.event_type,
+        action_type=payload.action_type,
+        is_active=payload.is_active,
+        conditions_json=payload.conditions_json,
+        action_config_json=payload.action_config_json,
+        created_by=current_user.id,
+    )
+
+
+@router.patch("/{form_id}/automation-rules/{rule_id}", response_model=FormAutomationRuleOut)
+def update_form_automation_rule(
+    form_id: uuid.UUID,
+    rule_id: uuid.UUID,
+    payload: FormAutomationRuleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    rule = FormAutomationService.get_rule(db, form_id, rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Automation rule not found")
+    return FormAutomationService.update_rule(
+        db,
+        rule,
+        name=payload.name,
+        description=payload.description,
+        event_type=payload.event_type,
+        action_type=payload.action_type,
+        is_active=payload.is_active,
+        conditions_json=payload.conditions_json,
+        action_config_json=payload.action_config_json,
+    )
+
+
+@router.delete("/{form_id}/automation-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_form_automation_rule(
+    form_id: uuid.UUID,
+    rule_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    rule = FormAutomationService.get_rule(db, form_id, rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Automation rule not found")
+    FormAutomationService.delete_rule(db, rule)
+    return None

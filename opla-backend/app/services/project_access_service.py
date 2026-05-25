@@ -232,6 +232,17 @@ class ProjectAccessService:
         )
 
     @staticmethod
+    def ensure_can_review_form(db: Session, user_id: uuid.UUID, form: Form) -> Project:
+        project = ProjectAccessService.get_project_or_404(db, form.project_id)
+        return ProjectAccessService._ensure_project_permission(
+            db,
+            user_id,
+            project,
+            "submission.review",
+            error_detail="Submission review permission is required for this project",
+        )
+
+    @staticmethod
     def list_access_rules(db: Session, project_id: uuid.UUID) -> list[ProjectAccess]:
         return (
             db.query(ProjectAccess)

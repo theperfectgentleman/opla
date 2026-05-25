@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, FileSpreadsheet, LayoutDashboard, Loader2, PanelsTopLeft, Plus, Table2 } from 'lucide-react';
+import { BarChart3, FileSpreadsheet, LayoutDashboard, Loader2, PanelsTopLeft, Plus, Table2, FlaskConical } from 'lucide-react';
 
 import { analyticsAPI } from '../../lib/api';
 import { defaultSource } from './queryUtils';
@@ -12,6 +12,7 @@ const vizMeta: Record<SavedQuestion['viz_type'], { label: string; icon: ReactNod
 	chart: { label: 'Chart', icon: <BarChart3 className="h-4 w-4" /> },
 	spreadsheet: { label: 'Spreadsheet', icon: <FileSpreadsheet className="h-4 w-4" /> },
 	pivot: { label: 'Pivot', icon: <LayoutDashboard className="h-4 w-4" /> },
+	walker: { label: 'Walker Analysis', icon: <FlaskConical className="h-4 w-4" /> },
 };
 
 function formatDate(dateString: string) {
@@ -37,6 +38,33 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 	const [dashboardDescription, setDashboardDescription] = useState('');
 	const [submitLoading, setSubmitLoading] = useState(false);
 	const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+
+	async function handleAttachQuestion(questionId: string, dashboardId: string) {
+		const dashboard = dashboards.find(d => d.id === dashboardId);
+		if (!dashboard) return;
+
+		setSubmitLoading(true);
+		try {
+			await analyticsAPI.updateDashboard(orgId, dashboardId, {
+				cards: [
+					...dashboard.cards.map(c => ({
+						question_id: c.question_id,
+						position: c.position,
+						viz_override: c.viz_override
+					})),
+					{
+						question_id: questionId,
+						position: { x: 0, y: 0, w: 12, h: 8 }
+					}
+				] // preserves existing cards while appending the new one
+			});
+			setReloadToken(current => current + 1);
+		} catch (attachError: any) {
+			setError(attachError?.response?.data?.detail || attachError?.message || 'Could not attach question to dashboard.');
+		} finally {
+			setSubmitLoading(false);
+		}
+	}
 
 	const defaultAnalyticsSource = useMemo(() => defaultSource(sources, undefined), [sources]);
 
@@ -430,6 +458,24 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 									<h4 className="mt-2 text-sm font-semibold text-slate-800">{question.title}</h4>
 									<p className="mt-1 text-sm text-slate-500">{question.description || 'No description provided.'}</p>
 									<p className="mt-3 text-xs text-slate-500">Updated {formatDate(question.updated_at)}</p>
+									{dashboards.length > 0 && (
+										<div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+											<span className="text-xs font-medium text-slate-500 uppercase tracking-widest">Dashboards</span>
+											<select
+												className="ml-auto block w-56 rounded-md border-0 py-1.5 pl-3 pr-10 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-emerald-600 sm:leading-6"
+												onChange={(e) => {
+													if (e.target.value) void handleAttachQuestion(question.id, e.target.value);
+													e.target.value = '';
+												}}
+												defaultValue=""
+											>
+												<option value="" disabled>Add to dashboard...</option>
+												{dashboards.map(d => (
+													<option key={d.id} value={d.id}>{d.title}</option>
+												))}
+											</select>
+										</div>
+									)}
 								</article>
 							);
 						})

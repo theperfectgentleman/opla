@@ -1,5 +1,6 @@
 import unittest
 import uuid
+from datetime import date
 
 from fastapi.testclient import TestClient
 
@@ -16,9 +17,9 @@ from app.models.project_asset import ProjectAsset, ProjectAssetKind
 from app.models.project_report import ProjectReport
 from app.models.project_role_template import ProjectRoleTemplate
 from app.models.project_thread import ProjectThread
-from app.models.project_task import ProjectTask, ProjectTaskStatus
+from app.models.project_task import ProjectTask, ProjectTaskKind, ProjectTaskStatus
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType as RoleAccessorType
-from app.models.submission import Submission
+from app.models.submission import Submission, SubmissionReviewStatus
 from app.models.user import User
 from app.services.auth_service import auth_service
 from app.services.form_service import FormService, ProjectService
@@ -162,6 +163,7 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         form_ids = self.db.query(Form.id).filter(Form.project_id.in_(project_ids))
         dataset_ids = self.db.query(FormDataset.id).filter(FormDataset.form_id.in_(form_ids))
 
+        self.db.query(ProjectTask).filter(ProjectTask.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(Submission).filter(Submission.form_id.in_(
             form_ids
         )).delete(synchronize_session=False)
@@ -175,7 +177,6 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.db.query(ProjectAsset).filter(ProjectAsset.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectReport).filter(ProjectReport.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectThread).filter(ProjectThread.project_id.in_(project_ids)).delete(synchronize_session=False)
-        self.db.query(ProjectTask).filter(ProjectTask.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectAccess).filter(ProjectAccess.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectRoleTemplate).filter(ProjectRoleTemplate.org_id == org_id).delete(synchronize_session=False)
         self.db.query(OrgRoleAssignment).filter(OrgRoleAssignment.org_id == org_id).delete(synchronize_session=False)
@@ -252,6 +253,7 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["review_status"], SubmissionReviewStatus.SUBMITTED.value)
 
     def test_member_without_form_create_permission_cannot_create_form(self):
         response = self.client.post(
@@ -320,6 +322,243 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
 
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(len(list_response.json()), 1)
+
+    def test_admin_can_create_journey_visit_task_linked_to_submission(self):
+        form = Form(
+            project_id=self.open_project.id,
+            title=f"Recruitment Form {self.suffix}",
+            slug=f"recruitment-form-{self.suffix}",
+            blueprint_draft={"meta": {"title": "Recruitment Form"}},
+            blueprint_live={"meta": {"title": "Recruitment Form"}, "ui": []},
+            version=1,
+            published_version=1,
+            status=FormStatus.LIVE,
+            is_public=False,
+        )
+        self.db.add(form)
+        self.db.flush()
+
+        submission = Submission(
+            form_id=form.id,
+            user_id=self.admin_user.id,
+            data={"store_name": "Makola Central"},
+            metadata_json={"source": "test"},
+            form_version_number=1,
+        )
+        self.db.add(submission)
+        self.db.commit()
+
+        response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/tasks",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "title": "Visit Makola Central",
+                "kind": "journey_visit",
+                "visit_date": "2026-05-23",
+                "source_submission_id": str(submission.id),
+                "assigned_accessor_id": str(self.member_user.id),
+                "assigned_accessor_type": "user",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["kind"], "journey_visit")
+        self.assertEqual(payload["visit_date"], "2026-05-23")
+        self.assertEqual(payload["source_submission_id"], str(submission.id))
+
+    def test_member_can_list_only_their_tasks_for_a_day(self):
+        today_task = ProjectTask(
+            project_id=self.open_project.id,
+            title=f"Visit Kaneshie {self.suffix}",
+            kind=ProjectTaskKind.JOURNEY_VISIT,
+            visit_date=date(2026, 5, 23),
+            assigned_accessor_id=self.member_user.id,
+            assigned_accessor_type=AccessorType.USER,
+            created_by=self.admin_user.id,
+        )
+        other_day_task = ProjectTask(
+            project_id=self.open_project.id,
+            title=f"Visit Makola {self.suffix}",
+            kind=ProjectTaskKind.JOURNEY_VISIT,
+            visit_date=date(2026, 5, 24),
+            assigned_accessor_id=self.member_user.id,
+            assigned_accessor_type=AccessorType.USER,
+            created_by=self.admin_user.id,
+        )
+        other_user_task = ProjectTask(
+            project_id=self.open_project.id,
+            title=f"Visit Kejetia {self.suffix}",
+            kind=ProjectTaskKind.JOURNEY_VISIT,
+            visit_date=date(2026, 5, 23),
+            assigned_accessor_id=self.admin_user.id,
+            assigned_accessor_type=AccessorType.USER,
+            created_by=self.admin_user.id,
+        )
+        self.db.add_all([today_task, other_day_task, other_user_task])
+        self.db.commit()
+
+        response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/tasks/my-day?date=2026-05-23",
+            headers=self.auth_headers(self.member_user),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["id"], str(today_task.id))
+        self.assertEqual(payload[0]["kind"], "journey_visit")
+
+    def test_admin_can_list_and_review_form_submissions(self):
+        form = Form(
+            project_id=self.open_project.id,
+            title=f"Review Form {self.suffix}",
+            slug=f"review-form-{self.suffix}",
+            blueprint_draft={"meta": {"title": "Review Form"}},
+            blueprint_live={"meta": {"title": "Review Form"}, "ui": []},
+            version=1,
+            published_version=1,
+            status=FormStatus.LIVE,
+            is_public=False,
+        )
+        self.db.add(form)
+        self.db.commit()
+
+        create_response = self.client.post(
+            "/api/v1/submissions",
+            headers=self.auth_headers(self.admin_user),
+            json={"form_id": str(form.id), "data": {"amount": 120}, "metadata": {"source": "test"}},
+        )
+
+        self.assertEqual(create_response.status_code, 201)
+        submission_id = create_response.json()["id"]
+
+        list_response = self.client.get(
+            f"/api/v1/forms/{form.id}/submissions?review_status=submitted",
+            headers=self.auth_headers(self.admin_user),
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()), 1)
+        self.assertEqual(list_response.json()[0]["review_status"], SubmissionReviewStatus.SUBMITTED.value)
+
+        review_response = self.client.patch(
+            f"/api/v1/submissions/{submission_id}/review",
+            headers=self.auth_headers(self.admin_user),
+            json={"review_status": "approved", "review_comment": "Validated for workflow routing."},
+        )
+
+        self.assertEqual(review_response.status_code, 200)
+        reviewed = review_response.json()
+        self.assertEqual(reviewed["review_status"], SubmissionReviewStatus.APPROVED.value)
+        self.assertEqual(reviewed["review_comment"], "Validated for workflow routing.")
+        self.assertEqual(reviewed["reviewed_by"], str(self.admin_user.id))
+        self.assertIsNotNone(reviewed["reviewed_at"])
+
+    def test_member_without_review_permission_cannot_review_submission(self):
+        form = Form(
+            project_id=self.open_project.id,
+            title=f"Restricted Review Form {self.suffix}",
+            slug=f"restricted-review-form-{self.suffix}",
+            blueprint_draft={"meta": {"title": "Restricted Review Form"}},
+            blueprint_live={"meta": {"title": "Restricted Review Form"}, "ui": []},
+            version=1,
+            published_version=1,
+            status=FormStatus.LIVE,
+            is_public=False,
+        )
+        self.db.add(form)
+        self.db.flush()
+
+        submission = Submission(
+            form_id=form.id,
+            user_id=self.admin_user.id,
+            data={"expense_type": "transport", "amount": 32},
+            metadata_json={"source": "seed"},
+            form_version_number=1,
+            review_status=SubmissionReviewStatus.SUBMITTED,
+        )
+        self.db.add(submission)
+        self.db.commit()
+
+        response = self.client.patch(
+            f"/api/v1/submissions/{submission.id}/review",
+            headers=self.auth_headers(self.member_user),
+            json={"review_status": "rejected", "review_comment": "Not authorized."},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "Submission review permission is required for this project")
+
+    def test_approved_submission_can_trigger_generic_task_automation(self):
+        form = Form(
+            project_id=self.open_project.id,
+            title=f"Shared Expense Intake {self.suffix}",
+            slug=f"shared-expense-intake-{self.suffix}",
+            blueprint_draft={"meta": {"title": "Shared Expense Intake"}},
+            blueprint_live={"meta": {"title": "Shared Expense Intake"}, "ui": []},
+            version=1,
+            published_version=1,
+            status=FormStatus.LIVE,
+            is_public=False,
+        )
+        self.db.add(form)
+        self.db.commit()
+
+        create_rule = self.client.post(
+            f"/api/v1/forms/{form.id}/automation-rules",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "name": "Create settlement task",
+                "description": "Create a follow-up task for approved transport charges.",
+                "event_type": "submission_approved",
+                "action_type": "create_task",
+                "conditions_json": {
+                    "combinator": "and",
+                    "rules": [
+                        {"field": "charge_type", "operator": "equal", "value": "transport"},
+                        {"field": "amount", "operator": ">", "value": 30}
+                    ]
+                },
+                "action_config_json": {
+                    "title_template": "Settle {{ data.charge_type }} for {{ data.roommate_name }}",
+                    "description_template": "Approved amount: {{ data.amount }}",
+                    "kind": "general"
+                }
+            },
+        )
+
+        self.assertEqual(create_rule.status_code, 201)
+
+        submission_response = self.client.post(
+            "/api/v1/submissions",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "form_id": str(form.id),
+                "data": {"roommate_name": "Kojo", "charge_type": "transport", "amount": 45},
+                "metadata": {"source": "test"},
+            },
+        )
+        self.assertEqual(submission_response.status_code, 201)
+
+        submission_id = submission_response.json()["id"]
+        review_response = self.client.patch(
+            f"/api/v1/submissions/{submission_id}/review",
+            headers=self.auth_headers(self.admin_user),
+            json={"review_status": "approved", "review_comment": "Approved for settlement."},
+        )
+        self.assertEqual(review_response.status_code, 200)
+
+        task_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/tasks",
+            headers=self.auth_headers(self.admin_user),
+        )
+        self.assertEqual(task_response.status_code, 200)
+
+        matching_tasks = [task for task in task_response.json() if task["title"] == "Settle transport for Kojo"]
+        self.assertEqual(len(matching_tasks), 1)
+        self.assertEqual(matching_tasks[0]["description"], "Approved amount: 45")
+        self.assertEqual(matching_tasks[0]["source_submission_id"], submission_id)
 
     def test_admin_can_view_form_dataset_details(self):
         form = FormService.create_form(

@@ -1,13 +1,16 @@
-from datetime import datetime
+from datetime import date, datetime
 import uuid
 
 from fastapi import HTTPException
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
+from app.models.form import Form
 from app.models.org_member import OrgMember
 from app.models.project import Project
 from app.models.project_access import AccessorType
-from app.models.project_task import ProjectTask, ProjectTaskStatus
+from app.models.project_task import ProjectTask, ProjectTaskKind, ProjectTaskStatus
+from app.models.submission import Submission
 from app.models.team import Team
 from app.models.team_member import TeamMember
 from app.services.project_access_service import ProjectAccessService
@@ -51,6 +54,29 @@ class ProjectTaskService:
             raise HTTPException(status_code=400, detail="Assigned team was not found in this organization")
 
     @staticmethod
+    def _validate_source_submission(
+        db: Session,
+        project: Project,
+        source_submission_id: uuid.UUID | None,
+    ) -> None:
+        if source_submission_id is None:
+            return
+
+        submission = (
+            db.query(Submission)
+            .join(Form, Form.id == Submission.form_id)
+            .filter(Submission.id == source_submission_id, Form.project_id == project.id)
+            .first()
+        )
+        if not submission:
+            raise HTTPException(status_code=400, detail="Source submission was not found in this project")
+
+    @staticmethod
+    def _validate_kind(kind: ProjectTaskKind, visit_date: date | None) -> None:
+        if kind == ProjectTaskKind.JOURNEY_VISIT and visit_date is None:
+            raise HTTPException(status_code=400, detail="Journey visit tasks must include a visit date")
+
+    @staticmethod
     def list_tasks(db: Session, project_id: uuid.UUID) -> list[ProjectTask]:
         return (
             db.query(ProjectTask)
@@ -77,22 +103,30 @@ class ProjectTaskService:
         *,
         title: str,
         description: str | None,
+        kind: ProjectTaskKind,
         starts_at: datetime | None,
         due_at: datetime | None,
+        visit_date: date | None,
+        source_submission_id: uuid.UUID | None,
         assigned_accessor_id: uuid.UUID | None,
         assigned_accessor_type: AccessorType | None,
         created_by: uuid.UUID,
     ) -> ProjectTask:
         ProjectAccessService.ensure_project_is_mutable(project)
         ProjectTaskService._validate_timeline(starts_at, due_at)
+        ProjectTaskService._validate_kind(kind, visit_date)
         ProjectTaskService._validate_assignment(db, project, assigned_accessor_id, assigned_accessor_type)
+        ProjectTaskService._validate_source_submission(db, project, source_submission_id)
 
         task = ProjectTask(
             project_id=project.id,
             title=title.strip(),
             description=description.strip() if description else None,
+            kind=kind,
             starts_at=starts_at,
             due_at=due_at,
+            visit_date=visit_date,
+            source_submission_id=source_submission_id,
             assigned_accessor_id=assigned_accessor_id,
             assigned_accessor_type=assigned_accessor_type,
             created_by=created_by,
@@ -143,9 +177,12 @@ class ProjectTaskService:
         *,
         title: str | None = None,
         description: str | None = None,
+        kind: ProjectTaskKind | None = None,
         status: ProjectTaskStatus | None = None,
         starts_at: datetime | None = None,
         due_at: datetime | None = None,
+        visit_date: date | None = None,
+        source_submission_id: uuid.UUID | None = None,
         assigned_accessor_id: uuid.UUID | None = None,
         assigned_accessor_type: AccessorType | None = None,
         replace_assignment: bool = False,
@@ -154,19 +191,29 @@ class ProjectTaskService:
 
         next_starts_at = starts_at if starts_at is not None else task.starts_at
         next_due_at = due_at if due_at is not None else task.due_at
+        next_kind = kind if kind is not None else task.kind
+        next_visit_date = visit_date if visit_date is not None else task.visit_date
         ProjectTaskService._validate_timeline(next_starts_at, next_due_at)
+        ProjectTaskService._validate_kind(next_kind, next_visit_date)
 
         if title is not None:
             task.title = title.strip()
         if description is not None:
             task.description = description.strip() or None
+        if kind is not None:
+            task.kind = kind
         if starts_at is not None:
             task.starts_at = starts_at
         if due_at is not None:
             task.due_at = due_at
+        if visit_date is not None:
+            task.visit_date = visit_date
         if status is not None:
             task.status = status
             task.completed_at = datetime.utcnow() if status == ProjectTaskStatus.DONE else None
+        if source_submission_id is not None:
+            ProjectTaskService._validate_source_submission(db, project, source_submission_id)
+            task.source_submission_id = source_submission_id
 
         if replace_assignment:
             ProjectTaskService._validate_assignment(db, project, assigned_accessor_id, assigned_accessor_type)
@@ -182,3 +229,44 @@ class ProjectTaskService:
         ProjectAccessService.ensure_project_is_mutable(project)
         db.delete(task)
         db.commit()
+
+    @staticmethod
+    def list_tasks_for_user_day(
+        db: Session,
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+        target_date: date,
+    ) -> list[ProjectTask]:
+        team_ids = [
+            team_id
+            for (team_id,) in db.query(TeamMember.team_id).filter(TeamMember.user_id == user_id).all()
+        ]
+
+        assignment_filters = [
+            and_(
+                ProjectTask.assigned_accessor_type == AccessorType.USER,
+                ProjectTask.assigned_accessor_id == user_id,
+            )
+        ]
+        if team_ids:
+            assignment_filters.append(
+                and_(
+                    ProjectTask.assigned_accessor_type == AccessorType.TEAM,
+                    ProjectTask.assigned_accessor_id.in_(team_ids),
+                )
+            )
+
+        return (
+            db.query(ProjectTask)
+            .filter(
+                ProjectTask.project_id == project_id,
+                or_(*assignment_filters),
+                or_(
+                    ProjectTask.visit_date == target_date,
+                    func.date(ProjectTask.starts_at) == target_date,
+                    func.date(ProjectTask.due_at) == target_date,
+                ),
+            )
+            .order_by(ProjectTask.visit_date.asc(), ProjectTask.due_at.asc(), ProjectTask.created_at.desc())
+            .all()
+        )

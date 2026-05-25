@@ -115,6 +115,35 @@ class FormService:
         return f"field_{uuid.uuid4().hex[:12]}"
 
     @staticmethod
+    def _normalize_object_properties(properties: Optional[List[Dict]]) -> List[Dict]:
+        normalized_properties: List[Dict] = []
+        if not isinstance(properties, list):
+            return normalized_properties
+
+        for index, raw_property in enumerate(properties):
+            entry = dict(raw_property) if isinstance(raw_property, dict) else {"type": "string"}
+            raw_key = entry.get("key") or entry.get("name")
+            normalized_key = FormService._normalize_identifier(raw_key) or f"property_{index + 1}"
+
+            entry["key"] = normalized_key
+            entry["id"] = FormService._normalize_identifier(entry.get("id") or entry.get("field_id") or normalized_key) or normalized_key
+            entry["field_id"] = entry["id"]
+            entry["dataset_field_id"] = FormService._normalize_identifier(entry.get("dataset_field_id") or entry["id"]) or entry["id"]
+
+            if isinstance(entry.get("properties"), list):
+                entry["properties"] = FormService._normalize_object_properties(entry.get("properties"))
+
+            item_definition = entry.get("item_definition")
+            if isinstance(item_definition, dict):
+                normalized_item_definition = dict(item_definition)
+                normalized_item_definition["properties"] = FormService._normalize_object_properties(item_definition.get("properties"))
+                entry["item_definition"] = normalized_item_definition
+
+            normalized_properties.append(entry)
+
+        return normalized_properties
+
+    @staticmethod
     def _normalize_blueprint(blueprint: Optional[Dict]) -> Dict:
         payload = dict(blueprint or {})
         schema = payload.get("schema")
@@ -141,6 +170,13 @@ class FormService:
                 entry["id"] = identifier
                 entry["field_id"] = identifier
                 entry["dataset_field_id"] = identifier
+                if isinstance(entry.get("properties"), list):
+                    entry["properties"] = FormService._normalize_object_properties(entry.get("properties"))
+                item_definition = entry.get("item_definition")
+                if isinstance(item_definition, dict):
+                    normalized_item_definition = dict(item_definition)
+                    normalized_item_definition["properties"] = FormService._normalize_object_properties(item_definition.get("properties"))
+                    entry["item_definition"] = normalized_item_definition
                 normalized_schema.append(entry)
                 field_identifiers_by_key[normalized_key] = identifier
                 used_identifiers.add(identifier)
@@ -201,28 +237,68 @@ class FormService:
         if not isinstance(schema, list):
             return extracted
 
-        for index, field in enumerate(schema):
-            if not isinstance(field, dict):
-                continue
-
+        def append_definition_fields(field: Dict, *, parent_identifier: Optional[str] = None, parent_key: Optional[str] = None, parent_type: Optional[str] = None) -> None:
             identifier = (
                 field.get("id")
                 or field.get("field_id")
                 or field.get("dataset_field_id")
                 or field.get("key")
             )
-            if not identifier:
-                identifier = f"field_{index + 1}"
+            key = field.get("key") or str(identifier)
+
+            if parent_identifier and identifier:
+                identifier = f"{parent_identifier}.{identifier}"
+            elif not identifier:
+                identifier = f"field_{len(extracted) + 1}"
+
+            if parent_key:
+                key = f"{parent_key}.{key}"
+
+            definition = dict(field)
+            if parent_identifier:
+                definition["parent_identifier"] = parent_identifier
+            if parent_key:
+                definition["parent_key"] = parent_key
+            if parent_type:
+                definition["parent_type"] = parent_type
 
             extracted.append(
                 {
                     "identifier": str(identifier),
-                    "key": field.get("key") or str(identifier),
+                    "key": key,
                     "label": field.get("label") or field.get("title") or field.get("key") or str(identifier),
                     "field_type": field.get("type"),
-                    "definition": field,
+                    "definition": definition,
                 }
             )
+
+            nested_properties = []
+            if isinstance(field.get("properties"), list):
+                nested_properties = field.get("properties") or []
+            elif isinstance(field.get("item_definition"), dict):
+                nested_properties = field.get("item_definition", {}).get("properties") or []
+
+            for nested_field in nested_properties:
+                if isinstance(nested_field, dict):
+                    append_definition_fields(
+                        nested_field,
+                        parent_identifier=str(identifier),
+                        parent_key=key,
+                        parent_type=str(field.get("type") or parent_type or "object"),
+                    )
+
+        for index, field in enumerate(schema):
+            if not isinstance(field, dict):
+                continue
+            if not (
+                field.get("id")
+                or field.get("field_id")
+                or field.get("dataset_field_id")
+                or field.get("key")
+            ):
+                field = dict(field)
+                field["id"] = f"field_{index + 1}"
+            append_definition_fields(field)
 
         return extracted
 

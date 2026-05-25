@@ -49,7 +49,81 @@ export type FieldType =
   | 'audio_recorder'
   | 'matrix_table'
   | 'lookup_list'
-  | 'rating_scale';
+  | 'rating_scale'
+  | 'object_instance'
+  | 'object_collection';
+
+export type SchemaFieldType =
+  | 'string'
+  | 'number'
+  | 'integer'
+  | 'decimal'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'time'
+  | 'select'
+  | 'reference'
+  | 'computed'
+  | 'object'
+  | 'object_collection';
+
+export type ObjectPropertyEditMode = 'fixed' | 'defaulted' | 'editable' | 'hidden';
+
+export interface CatalogSourceItem {
+  id: string;
+  sku_code: string;
+  label: string;
+  default_price?: number | null;
+  unit?: string | null;
+  brand?: string | null;
+  price_editable?: boolean;
+  is_active?: boolean;
+}
+
+export interface ObjectReferenceDefinition {
+  source_type: 'dataset' | 'catalog' | 'user' | 'team' | 'submission' | 'custom';
+  source_id?: string;
+  label_field?: string;
+  value_field?: string;
+  filters?: Record<string, any>;
+  source_items?: CatalogSourceItem[];
+  field_mappings?: Record<string, string>;
+}
+
+export interface FormObjectDefinition {
+  id?: string;
+  name?: string;
+  label?: string;
+  description?: string;
+  properties: ObjectPropertyDefinition[];
+  allow_manual_add?: boolean;
+  allow_manual_remove?: boolean;
+  min_items?: number;
+  max_items?: number;
+}
+
+export interface ObjectPropertyDefinition {
+  key: string;
+  type: SchemaFieldType;
+  label?: string;
+  description?: string;
+  required?: boolean;
+  placeholder?: string;
+  options?: FieldOption[];
+  default_value?: any;
+  edit_mode?: ObjectPropertyEditMode;
+  formula?: string;
+  reference?: ObjectReferenceDefinition;
+  properties?: ObjectPropertyDefinition[];
+  item_definition?: FormObjectDefinition;
+}
+
+export interface FormSchemaField extends ObjectPropertyDefinition {
+  id?: string;
+  field_id?: string;
+  dataset_field_id?: string;
+}
 
 export type Platform = 'mobile' | 'web' | 'ussd';
 export type FormArea = 'yard' | 'desk'; // which app area can use this form
@@ -69,6 +143,8 @@ export interface FormField {
   type: FieldType;
   label: string;
   required: boolean;
+  formula?: string;
+  bind?: string;
   placeholder?: string;
   options?: FieldOption[];
   platforms?: Platform[];
@@ -101,6 +177,13 @@ export interface FormField {
   // rating scale
   min_label?: string;
   max_label?: string;
+  // object instance / collection
+  object_schema_key?: string;
+  object_definition?: FormObjectDefinition;
+  collection_layout?: 'cards' | 'table';
+  allow_add_items?: boolean;
+  allow_remove_items?: boolean;
+  catalog_source_type?: 'project_catalog';
 }
 
 export type RenderMode = 'single' | 'list';
@@ -166,7 +249,7 @@ export interface FormBlueprintMeta {
 
 export interface FormBlueprint {
   meta: FormBlueprintMeta;
-  schema: Array<Record<string, any>>;
+  schema: FormSchemaField[];
   ui: FormSection[];
   logic: LogicRule[];
 }

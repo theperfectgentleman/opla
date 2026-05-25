@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { formAPI, sectionTemplateAPI } from '../lib/api';
+import { formAPI, projectAPI, sectionTemplateAPI } from '../lib/api';
 import { useOrg } from '../contexts/OrgContext';
 import StudioLayout from '../components/StudioLayout';
 import {
@@ -36,7 +36,9 @@ type FieldType =
     | 'audio_recorder'
     | 'matrix_table'
     | 'lookup_list'
-    | 'rating_scale';
+    | 'rating_scale'
+    | 'object_collection'
+    | 'object_instance';
 
 interface FieldOption {
     label: string;        // Display text shown to respondent
@@ -56,11 +58,73 @@ interface TableRow {
 
 type TableCellType = 'checkbox' | 'radio' | 'text' | 'number' | 'dropdown';
 
+type ObjectPropertyType = 'string' | 'number' | 'integer' | 'decimal' | 'boolean' | 'select' | 'computed';
+type ObjectPropertyEditMode = 'fixed' | 'defaulted' | 'editable' | 'hidden';
+
+interface CatalogSourceItem {
+    id: string;
+    sku_code: string;
+    label: string;
+    default_price?: number | null;
+    unit?: string | null;
+    brand?: string | null;
+    price_editable?: boolean;
+    is_active?: boolean;
+}
+
+interface ObjectReferenceDefinition {
+    source_type: 'dataset' | 'catalog' | 'user' | 'team' | 'submission' | 'custom';
+    source_id?: string;
+    label_field?: string;
+    value_field?: string;
+    filters?: Record<string, any>;
+    source_items?: CatalogSourceItem[];
+    field_mappings?: Record<string, string>;
+}
+
+interface ObjectPropertyDefinition {
+    key: string;
+    type: ObjectPropertyType;
+    label?: string;
+    description?: string;
+    required?: boolean;
+    placeholder?: string;
+    options?: FieldOption[];
+    default_value?: any;
+    edit_mode?: ObjectPropertyEditMode;
+    formula?: string;
+    reference?: ObjectReferenceDefinition;
+}
+
+interface FormObjectDefinition {
+    id?: string;
+    name?: string;
+    label?: string;
+    description?: string;
+    properties: ObjectPropertyDefinition[];
+    allow_manual_add?: boolean;
+    allow_manual_remove?: boolean;
+    min_items?: number;
+    max_items?: number;
+}
+
+interface ProjectCatalogItem {
+    id: string;
+    sku_code: string;
+    label: string;
+    default_price?: number | null;
+    unit?: string | null;
+    brand?: string | null;
+    price_editable: boolean;
+    is_active: boolean;
+}
+
 interface FormField {
     id: string;
     type: FieldType;
     label: string;
     required: boolean;
+    formula?: string;
     placeholder?: string;
     options?: FieldOption[];         // Replaces old string[]
     platforms?: Platform[];
@@ -86,6 +150,14 @@ interface FormField {
     lookup_value_column?: number;
     min_label?: string;
     max_label?: string;
+
+    // Object types
+    object_schema_key?: string;
+    object_definition?: FormObjectDefinition;
+    collection_layout?: 'cards' | 'table';
+    allow_add_items?: boolean;
+    allow_remove_items?: boolean;
+    catalog_source_type?: 'project_catalog';
 }
 
 interface SectionProperties {
@@ -174,6 +246,8 @@ const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNo
     { type: 'matrix_table', label: 'Table / Matrix', icon: <Table2 className="w-4 h-4" /> },
     { type: 'lookup_list', label: 'Lookup List', icon: <Database className="w-4 h-4" />, defaults: { lookup_source_type: 'preset' } },
     { type: 'rating_scale', label: 'Rating Scale', icon: <Star className="w-4 h-4" />, defaults: { min: 1, max: 5, min_label: 'Very Difficult', max_label: 'Very Easy' } },
+    { type: 'object_collection', label: 'Object Collection', icon: <Layers className="w-4 h-4" />, defaults: { allow_add_items: true, allow_remove_items: true, collection_layout: 'cards' } },
+    { type: 'object_instance', label: 'Object Reference', icon: <FileText className="w-4 h-4" /> },
 ];
 
 const FormBuilder: React.FC = () => {
@@ -220,6 +294,7 @@ const FormBuilder: React.FC = () => {
         created_at?: string;
         blueprint?: any;
     }>>([]);
+    const [catalogItems, setCatalogItems] = useState<ProjectCatalogItem[]>([]);
     const [previewSlot, setPreviewSlot] = useState<2 | 3 | null>(null);
     const multiActionMenuRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -259,6 +334,237 @@ const FormBuilder: React.FC = () => {
     const currentSectionIndex = sections.findIndex(p => p.id === currentSectionId) !== -1 ? sections.findIndex(p => p.id === currentSectionId) : 0;
     const fields = sections[currentSectionIndex]?.fields || [];
     const selectedField = sections.flatMap(p => p.fields).find(f => f.id === selectedFieldId) || null;
+    const selectedObjectProperties = selectedField?.object_definition?.properties || [];
+
+    const buildCatalogSourceItems = (items: ProjectCatalogItem[]): CatalogSourceItem[] => (
+        items
+            .filter((item) => item.is_active !== false)
+            .map((item) => ({
+                id: item.id,
+                sku_code: item.sku_code,
+                label: item.label,
+                default_price: item.default_price,
+                unit: item.unit,
+                brand: item.brand,
+                price_editable: item.price_editable,
+                is_active: item.is_active,
+            }))
+    );
+
+    const createObjectDefinition = (field: FormField, properties?: ObjectPropertyDefinition[]): FormObjectDefinition => ({
+        id: field.object_schema_key || field.id,
+        name: field.object_schema_key || field.id,
+        label: field.label,
+        properties: properties || field.object_definition?.properties || [],
+        allow_manual_add: field.allow_add_items ?? true,
+        allow_manual_remove: field.allow_remove_items ?? true,
+    });
+
+    const createCatalogPresetProperties = (items: ProjectCatalogItem[]): ObjectPropertyDefinition[] => [
+        {
+            key: 'item_ref',
+            type: 'select',
+            label: 'Item',
+            required: true,
+            edit_mode: 'editable',
+            reference: {
+                source_type: 'catalog',
+                source_id: 'project_catalog',
+                label_field: 'label',
+                value_field: 'id',
+                source_items: buildCatalogSourceItems(items),
+                field_mappings: {
+                    sku_code: 'sku_code',
+                    item_label: 'label',
+                    unit: 'unit',
+                    brand: 'brand',
+                    unit_price: 'default_price',
+                },
+            },
+        },
+        {
+            key: 'sku_code',
+            type: 'string',
+            label: 'Item Code',
+            edit_mode: 'fixed',
+        },
+        {
+            key: 'item_label',
+            type: 'string',
+            label: 'Item Label',
+            edit_mode: 'fixed',
+        },
+        {
+            key: 'quantity',
+            type: 'integer',
+            label: 'Quantity',
+            required: true,
+            default_value: 1,
+            edit_mode: 'editable',
+        },
+        {
+            key: 'unit',
+            type: 'string',
+            label: 'Unit',
+            edit_mode: 'fixed',
+        },
+        {
+            key: 'brand',
+            type: 'string',
+            label: 'Brand',
+            edit_mode: 'hidden',
+        },
+        {
+            key: 'unit_price',
+            type: 'decimal',
+            label: 'Unit Price',
+            required: true,
+            edit_mode: 'defaulted',
+        },
+        {
+            key: 'line_total',
+            type: 'computed',
+            label: 'Line Total',
+            formula: 'quantity * unit_price',
+            edit_mode: 'fixed',
+        },
+        {
+            key: 'comment',
+            type: 'string',
+            label: 'Comment',
+            edit_mode: 'editable',
+        },
+    ];
+
+    const hydrateCatalogReferences = (definition: FormObjectDefinition | undefined, field: FormField): FormObjectDefinition | undefined => {
+        if (!definition) {
+            return undefined;
+        }
+
+        const catalogSourceItems = buildCatalogSourceItems(catalogItems);
+        const nextProperties = (definition.properties || []).map((property) => {
+            if (property.reference?.source_type !== 'catalog') {
+                return property;
+            }
+
+            return {
+                ...property,
+                reference: {
+                    ...property.reference,
+                    source_id: property.reference.source_id || 'project_catalog',
+                    label_field: property.reference.label_field || 'label',
+                    value_field: property.reference.value_field || 'id',
+                    source_items: catalogSourceItems,
+                },
+            };
+        });
+
+        return {
+            ...createObjectDefinition(field, nextProperties),
+            ...definition,
+            properties: nextProperties,
+            allow_manual_add: field.allow_add_items ?? definition.allow_manual_add,
+            allow_manual_remove: field.allow_remove_items ?? definition.allow_manual_remove,
+        };
+    };
+
+    const updateObjectDefinition = (fieldId: string, updater: (definition: FormObjectDefinition) => FormObjectDefinition) => {
+        const field = sections.flatMap((section) => section.fields).find((entry) => entry.id === fieldId);
+        if (!field) {
+            return;
+        }
+
+        const baseDefinition = createObjectDefinition(field);
+        updateField(fieldId, { object_definition: updater(baseDefinition) });
+    };
+
+    const updateSelectedObjectProperty = (index: number, patch: Partial<ObjectPropertyDefinition>) => {
+        if (!selectedField) {
+            return;
+        }
+
+        updateObjectDefinition(selectedField.id, (definition) => ({
+            ...definition,
+            properties: definition.properties.map((property, propertyIndex) => {
+                if (propertyIndex !== index) {
+                    return property;
+                }
+                const nextProperty = { ...property, ...patch };
+                if (nextProperty.type !== 'computed') {
+                    delete nextProperty.formula;
+                }
+                if (nextProperty.type !== 'select') {
+                    delete nextProperty.options;
+                }
+                return nextProperty;
+            }),
+        }));
+    };
+
+    const addSelectedObjectProperty = () => {
+        if (!selectedField) {
+            return;
+        }
+
+        updateObjectDefinition(selectedField.id, (definition) => ({
+            ...definition,
+            properties: [
+                ...definition.properties,
+                {
+                    key: `property_${definition.properties.length + 1}`,
+                    type: 'string',
+                    label: `Property ${definition.properties.length + 1}`,
+                    edit_mode: 'editable',
+                },
+            ],
+        }));
+    };
+
+    const removeSelectedObjectProperty = (index: number) => {
+        if (!selectedField) {
+            return;
+        }
+
+        updateObjectDefinition(selectedField.id, (definition) => ({
+            ...definition,
+            properties: definition.properties.filter((_, propertyIndex) => propertyIndex !== index),
+        }));
+    };
+
+    const applyCatalogRowTemplate = () => {
+        if (!selectedField) {
+            return;
+        }
+
+        const schemaKey = selectedField.object_schema_key || toSmartValue(selectedField.label || 'line_items');
+        updateField(selectedField.id, {
+            object_schema_key: schemaKey,
+            catalog_source_type: 'project_catalog',
+            object_definition: createObjectDefinition(
+                { ...selectedField, object_schema_key: schemaKey },
+                createCatalogPresetProperties(catalogItems),
+            ),
+        });
+    };
+
+    useEffect(() => {
+        const loadCatalogItems = async () => {
+            if (!currentOrg?.id || !formMeta?.project_id) {
+                setCatalogItems([]);
+                return;
+            }
+
+            try {
+                const items = await projectAPI.listCatalogItems(currentOrg.id, formMeta.project_id);
+                setCatalogItems(Array.isArray(items) ? items : []);
+            } catch (error) {
+                console.error('Failed to load project catalog items', error);
+                setCatalogItems([]);
+            }
+        };
+
+        loadCatalogItems();
+    }, [currentOrg?.id, formMeta?.project_id]);
 
     const getSlotVersion = (slot: 1 | 2 | 3) => activeVersions.find(v => v.kind === 'draft' && v.slot_index === slot);
 
@@ -287,6 +593,7 @@ const FormBuilder: React.FC = () => {
                 type: child.type as FieldType,
                 label: child.label || 'Untitled Field',
                 required: !!child.required,
+                formula: child.formula,
                 placeholder: child.placeholder,
                 options: Array.isArray(child.options) ? normaliseOptions(child.options) : undefined,
                 platforms: child.platforms,
@@ -297,6 +604,12 @@ const FormBuilder: React.FC = () => {
                 table_rows: child.table_rows,
                 table_cell_type: child.table_cell_type,
                 table_allow_multiple: !!child.table_allow_multiple,
+                object_schema_key: child.object_schema_key,
+                object_definition: child.object_definition,
+                collection_layout: child.collection_layout,
+                allow_add_items: child.allow_add_items,
+                allow_remove_items: child.allow_remove_items,
+                catalog_source_type: child.catalog_source_type,
             })) : []
         }));
 
@@ -380,6 +693,7 @@ const FormBuilder: React.FC = () => {
                             type: child.type as FieldType,
                             label: child.label || 'Untitled Field',
                             required: !!child.required,
+                            formula: child.formula,
                             placeholder: child.placeholder,
                             options: Array.isArray(child.options) ? normaliseOptions(child.options) : undefined,
                             platforms: child.platforms,
@@ -390,6 +704,12 @@ const FormBuilder: React.FC = () => {
                             table_rows: child.table_rows,
                             table_cell_type: child.table_cell_type,
                             table_allow_multiple: !!child.table_allow_multiple,
+                            object_schema_key: child.object_schema_key,
+                            object_definition: child.object_definition,
+                            collection_layout: child.collection_layout,
+                            allow_add_items: child.allow_add_items,
+                            allow_remove_items: child.allow_remove_items,
+                            catalog_source_type: child.catalog_source_type,
                         })) : []
                     }));
                     setSections(loadedSections);
@@ -615,8 +935,73 @@ const FormBuilder: React.FC = () => {
         if (type === 'gps_capture') return 'geojson';
         if (type === 'checkbox_group') return 'array';
         if (type === 'matrix_table') return 'object';
+        if (type === 'object_collection') return 'array';
+        if (type === 'object_instance') return 'object';
         return 'string';
     };
+
+    const buildSchemaEntry = (field: FormField) => {
+        const entry: Record<string, any> = {
+            key: field.id,
+            type: field.formula ? 'computed' : mapSchemaType(field.type),
+            required: field.required,
+        };
+
+        if (field.formula) {
+            entry.formula = field.formula;
+        }
+
+        if (field.type === 'checkbox_group') {
+            entry.items = { type: 'string' };
+        }
+        if (field.type === 'matrix_table') {
+            entry.columns = field.table_columns;
+            entry.rows = field.table_rows;
+            entry.cell_type = field.table_cell_type;
+        }
+        if (['object_collection', 'object_instance'].includes(field.type)) {
+            entry.object_schema_key = field.object_schema_key;
+            entry.item_definition = hydrateCatalogReferences(field.object_definition, field);
+            entry.catalog_source_type = field.catalog_source_type;
+        }
+
+        return entry;
+    };
+
+    const serializeUiField = (field: FormField) => ({
+        type: field.type,
+        bind: field.id,
+        label: field.label,
+        required: field.required,
+        formula: field.formula,
+        placeholder: field.placeholder,
+        options: field.options,
+        platforms: field.platforms,
+        min: field.min,
+        max: field.max,
+        minLength: field.minLength,
+        maxLength: field.maxLength,
+        default_value: field.default_value,
+        is_sensitive: field.is_sensitive,
+        exclude_from_export: field.exclude_from_export,
+        table_columns: field.table_columns,
+        table_rows: field.table_rows,
+        table_cell_type: field.table_cell_type,
+        table_allow_multiple: field.table_allow_multiple,
+        mask: field.mask,
+        lookup_source_type: field.lookup_source_type,
+        lookup_preset_id: field.lookup_preset_id,
+        lookup_custom_data: field.lookup_custom_data,
+        lookup_separator: field.lookup_separator,
+        lookup_label_column: field.lookup_label_column,
+        lookup_value_column: field.lookup_value_column,
+        object_schema_key: field.object_schema_key,
+        object_definition: hydrateCatalogReferences(field.object_definition, field),
+        collection_layout: field.collection_layout,
+        allow_add_items: field.allow_add_items,
+        allow_remove_items: field.allow_remove_items,
+        catalog_source_type: field.catalog_source_type,
+    });
 
     const handleSave = async () => {
         if (!formId) return;
@@ -639,22 +1024,7 @@ const FormBuilder: React.FC = () => {
                         mode: themeMode
                     }
                 },
-                schema: sections.flatMap(p => p.fields).map((f) => {
-                    const entry: Record<string, any> = {
-                        key: f.id,
-                        type: mapSchemaType(f.type),
-                        required: f.required
-                    };
-                    if (f.type === 'checkbox_group') {
-                        entry.items = { type: 'string' };
-                    }
-                    if (f.type === 'matrix_table') {
-                        entry.columns = f.table_columns;
-                        entry.rows = f.table_rows;
-                        entry.cell_type = f.table_cell_type;
-                    }
-                    return entry;
-                }),
+                schema: sections.flatMap(p => p.fields).map((f) => buildSchemaEntry(f)),
                 ui: sections.map((p) => ({
                     id: p.id,
                     type: 'screen',
@@ -666,33 +1036,7 @@ const FormBuilder: React.FC = () => {
                     is_repeatable: p.properties.is_repeatable,
                     max_repeats: p.properties.max_repeats,
                     shuffle_options: p.properties.shuffle_options,
-                    children: p.fields.map(f => ({
-                        type: f.type,
-                        bind: f.id,
-                        label: f.label,
-                        required: f.required,
-                        placeholder: f.placeholder,
-                        options: f.options,
-                        platforms: f.platforms,
-                        min: f.min,
-                        max: f.max,
-                        minLength: f.minLength,
-                        maxLength: f.maxLength,
-                        default_value: f.default_value,
-                        is_sensitive: f.is_sensitive,
-                        exclude_from_export: f.exclude_from_export,
-                        table_columns: f.table_columns,
-                        table_rows: f.table_rows,
-                        table_cell_type: f.table_cell_type,
-                        table_allow_multiple: f.table_allow_multiple,
-                        mask: f.mask,
-                        lookup_source_type: f.lookup_source_type,
-                        lookup_preset_id: f.lookup_preset_id,
-                        lookup_custom_data: f.lookup_custom_data,
-                        lookup_separator: f.lookup_separator,
-                        lookup_label_column: f.lookup_label_column,
-                        lookup_value_column: f.lookup_value_column,
-                    }))
+                    children: p.fields.map(f => serializeUiField(f))
                 })),
                 logic: logic
             };
@@ -770,22 +1114,7 @@ const FormBuilder: React.FC = () => {
                         mode: themeMode
                     }
                 },
-                schema: sections.flatMap(p => p.fields).map((f) => {
-                    const entry: Record<string, any> = {
-                        key: f.id,
-                        type: mapSchemaType(f.type),
-                        required: f.required
-                    };
-                    if (f.type === 'checkbox_group') {
-                        entry.items = { type: 'string' };
-                    }
-                    if (f.type === 'matrix_table') {
-                        entry.columns = f.table_columns;
-                        entry.rows = f.table_rows;
-                        entry.cell_type = f.table_cell_type;
-                    }
-                    return entry;
-                }),
+                schema: sections.flatMap(p => p.fields).map((f) => buildSchemaEntry(f)),
                 ui: sections.map((p) => ({
                     id: p.id,
                     type: 'screen',
@@ -797,33 +1126,7 @@ const FormBuilder: React.FC = () => {
                     is_repeatable: p.properties.is_repeatable,
                     max_repeats: p.properties.max_repeats,
                     shuffle_options: p.properties.shuffle_options,
-                    children: p.fields.map(f => ({
-                        type: f.type,
-                        bind: f.id,
-                        label: f.label,
-                        required: f.required,
-                        placeholder: f.placeholder,
-                        options: f.options,
-                        platforms: f.platforms,
-                        min: f.min,
-                        max: f.max,
-                        minLength: f.minLength,
-                        maxLength: f.maxLength,
-                        default_value: f.default_value,
-                        is_sensitive: f.is_sensitive,
-                        exclude_from_export: f.exclude_from_export,
-                        table_columns: f.table_columns,
-                        table_rows: f.table_rows,
-                        table_cell_type: f.table_cell_type,
-                        table_allow_multiple: f.table_allow_multiple,
-                        mask: f.mask,
-                        lookup_source_type: f.lookup_source_type,
-                        lookup_preset_id: f.lookup_preset_id,
-                        lookup_custom_data: f.lookup_custom_data,
-                        lookup_separator: f.lookup_separator,
-                        lookup_label_column: f.lookup_label_column,
-                        lookup_value_column: f.lookup_value_column,
-                    }))
+                    children: p.fields.map(f => serializeUiField(f))
                 })),
                 logic: logic
             };
@@ -1964,6 +2267,234 @@ const FormBuilder: React.FC = () => {
                                                         </div>
                                                     )}
 
+                                                    {['object_collection', 'object_instance'].includes(selectedField.type) && (
+                                                        <div className="space-y-4">
+                                                            <div>
+                                                                <label className="label">Object Schema ID</label>
+                                                                <input
+                                                                    value={selectedField.object_schema_key || ''}
+                                                                    onChange={(e) => updateField(selectedField.id, { object_schema_key: e.target.value })}
+                                                                    className="input"
+                                                                    placeholder="e.g. participant_profile"
+                                                                />
+                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">
+                                                                    The ID of the object schema to render here.
+                                                                </p>
+                                                            </div>
+
+                                                            <div>
+                                                                <label className="label">Catalog Source</label>
+                                                                <select
+                                                                    value={selectedField.catalog_source_type || ''}
+                                                                    onChange={(e) => {
+                                                                        const nextValue = e.target.value === 'project_catalog' ? 'project_catalog' : undefined;
+                                                                        updateField(selectedField.id, { catalog_source_type: nextValue });
+                                                                    }}
+                                                                    className="input py-2"
+                                                                >
+                                                                    <option value="">None</option>
+                                                                    <option value="project_catalog">Project Catalog</option>
+                                                                </select>
+                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">
+                                                                    Use the project catalog as a reusable reference source for row selection and default values.
+                                                                </p>
+                                                            </div>
+
+                                                            {selectedField.catalog_source_type === 'project_catalog' && (
+                                                                <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3 space-y-3">
+                                                                    <div className="flex items-start justify-between gap-3">
+                                                                        <div>
+                                                                            <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Catalog Snapshot</p>
+                                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
+                                                                                {catalogItems.length} active item{catalogItems.length === 1 ? '' : 's'} available for this form.
+                                                                            </p>
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={applyCatalogRowTemplate}
+                                                                            className="rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white"
+                                                                        >
+                                                                            Apply Catalog Row Template
+                                                                        </button>
+                                                                    </div>
+                                                                    <p className="text-[10px] leading-5 text-[hsl(var(--text-tertiary))]">
+                                                                        The template creates a reusable line-item row with item reference, quantity, unit price, and computed total fields backed by the current project catalog. You can then adapt the row properties below.
+                                                                    </p>
+                                                                </div>
+                                                            )}
+
+                                                            {selectedField.type === 'object_collection' && (
+                                                                <>
+                                                                    <div>
+                                                                        <label className="label">Layout Style</label>
+                                                                        <select
+                                                                            value={selectedField.collection_layout || 'cards'}
+                                                                            onChange={(e) => updateField(selectedField.id, { collection_layout: e.target.value as 'cards' | 'table' })}
+                                                                            className="input py-2"
+                                                                        >
+                                                                            <option value="cards">Cards</option>
+                                                                            <option value="table">Table</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                                            <div>
+                                                                                <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Allow Adding</p>
+                                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Users can add new items</p>
+                                                                            </div>
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={selectedField.allow_add_items ?? true}
+                                                                                onChange={(e) => updateField(selectedField.id, { allow_add_items: e.target.checked })}
+                                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                                            <div>
+                                                                                <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Allow Removing</p>
+                                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Users can remove items</p>
+                                                                            </div>
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={selectedField.allow_remove_items ?? true}
+                                                                                onChange={(e) => updateField(selectedField.id, { allow_remove_items: e.target.checked })}
+                                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </>
+                                                            )}
+
+                                                            <div className="space-y-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div>
+                                                                        <label className="label !mb-0">Row Properties</label>
+                                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">
+                                                                            Define the row fields, editability rules, and computed formulas for this object schema.
+                                                                        </p>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={addSelectedObjectProperty}
+                                                                        className="rounded-md border border-[hsl(var(--border))] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/40 hover:text-[hsl(var(--primary))]"
+                                                                    >
+                                                                        Add Property
+                                                                    </button>
+                                                                </div>
+
+                                                                {selectedObjectProperties.length === 0 ? (
+                                                                    <div className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-4 text-center text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                                        No row properties defined yet.
+                                                                    </div>
+                                                                ) : selectedObjectProperties.map((property, propertyIndex) => (
+                                                                    <div key={`${property.key}_${propertyIndex}`} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3 space-y-3">
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                                                Property {propertyIndex + 1}
+                                                                            </p>
+                                                                            <button
+                                                                                onClick={() => removeSelectedObjectProperty(propertyIndex)}
+                                                                                className="p-1.5 text-[hsl(var(--text-tertiary))] transition-all hover:text-[hsl(var(--error))] hover:bg-[hsl(var(--error))]/10 rounded-lg"
+                                                                            >
+                                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-2 gap-3">
+                                                                            <div>
+                                                                                <label className="label">Key</label>
+                                                                                <input
+                                                                                    value={property.key}
+                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { key: toSmartValue(e.target.value || `property_${propertyIndex + 1}`) })}
+                                                                                    className="input"
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="label">Label</label>
+                                                                                <input
+                                                                                    value={property.label || ''}
+                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { label: e.target.value })}
+                                                                                    className="input"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-2 gap-3">
+                                                                            <div>
+                                                                                <label className="label">Type</label>
+                                                                                <select
+                                                                                    value={property.type}
+                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { type: e.target.value as ObjectPropertyType })}
+                                                                                    className="input py-2"
+                                                                                >
+                                                                                    <option value="string">Text</option>
+                                                                                    <option value="integer">Integer</option>
+                                                                                    <option value="decimal">Decimal</option>
+                                                                                    <option value="number">Number</option>
+                                                                                    <option value="boolean">Boolean</option>
+                                                                                    <option value="select">Select</option>
+                                                                                    <option value="computed">Computed</option>
+                                                                                </select>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="label">Edit Mode</label>
+                                                                                <select
+                                                                                    value={property.edit_mode || 'editable'}
+                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { edit_mode: e.target.value as ObjectPropertyEditMode })}
+                                                                                    className="input py-2"
+                                                                                >
+                                                                                    <option value="editable">Editable</option>
+                                                                                    <option value="defaulted">Defaulted</option>
+                                                                                    <option value="fixed">Fixed</option>
+                                                                                    <option value="hidden">Hidden</option>
+                                                                                </select>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {property.type === 'computed' ? (
+                                                                            <div>
+                                                                                <label className="label">Formula</label>
+                                                                                <input
+                                                                                    value={property.formula || ''}
+                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { formula: e.target.value })}
+                                                                                    className="input font-mono text-xs"
+                                                                                    placeholder="e.g. quantity * unit_price"
+                                                                                />
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div>
+                                                                                <label className="label">Default Value</label>
+                                                                                <input
+                                                                                    value={property.default_value ?? ''}
+                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { default_value: e.target.value })}
+                                                                                    className="input"
+                                                                                    placeholder="Optional"
+                                                                                />
+                                                                            </div>
+                                                                        )}
+
+                                                                        <label className="flex items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 cursor-pointer">
+                                                                            <div>
+                                                                                <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Required</p>
+                                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">This row property must be present before submit.</p>
+                                                                            </div>
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={!!property.required}
+                                                                                onChange={(e) => updateSelectedObjectProperty(propertyIndex, { required: e.target.checked })}
+                                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                                                                            />
+                                                                        </label>
+
+                                                                        {property.reference?.source_type === 'catalog' && (
+                                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
+                                                                                This property uses the project item catalog and will map selected item values into sibling row fields when rendered on mobile.
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
                                                         <div>
                                                             <label className="label">Placeholder</label>
@@ -2351,6 +2882,21 @@ const FormBuilder: React.FC = () => {
                                                             ))}
                                                         </div>
                                                     </div>
+
+                                                    {selectedField.type === 'input_number' && (
+                                                        <div>
+                                                            <label className="label">Computed Formula</label>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-1.5">
+                                                                Optional. Example: <span className="font-mono">sum(line_items.line_total)</span>. When set, this field becomes read-only in the runtime.
+                                                            </p>
+                                                            <input
+                                                                value={selectedField.formula || ''}
+                                                                onChange={(e) => updateField(selectedField.id, { formula: e.target.value || undefined })}
+                                                                className="input font-mono text-xs"
+                                                                placeholder="e.g. sum(line_items.line_total)"
+                                                            />
+                                                        </div>
+                                                    )}
 
                                                     {/* Default Value — not applicable for matrix tables */}
                                                     {selectedField.type !== 'matrix_table' && (

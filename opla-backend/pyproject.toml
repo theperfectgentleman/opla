@@ -20,6 +20,9 @@ redis = "^5.0.0"
 python-multipart = "^0.0.9"
 python-dotenv = "^1.0.0"
 email-validator = "^2.3.0"
+pygwalker = "^0.4.9"
+duckdb = "^1.0.0"
+pandas = "^2.2.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Enum
+from sqlalchemy import Column, String, DateTime, Date, ForeignKey, Text, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -16,6 +16,11 @@ class ProjectTaskStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class ProjectTaskKind(str, enum.Enum):
+    GENERAL = "general"
+    JOURNEY_VISIT = "journey_visit"
+
+
 class ProjectTask(Base):
     __tablename__ = "project_tasks"
 
@@ -23,6 +28,11 @@ class ProjectTask(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    kind = Column(
+        Enum(ProjectTaskKind, name="project_task_kind", values_callable=lambda obj: [e.value for e in obj]),
+        default=ProjectTaskKind.GENERAL,
+        nullable=False,
+    )
     status = Column(
         Enum(ProjectTaskStatus, name="project_task_status", values_callable=lambda obj: [e.value for e in obj]),
         default=ProjectTaskStatus.TODO,
@@ -30,6 +40,8 @@ class ProjectTask(Base):
     )
     starts_at = Column(DateTime, nullable=True)
     due_at = Column(DateTime, nullable=True)
+    visit_date = Column(Date, nullable=True)
+    source_submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id"), nullable=True, index=True)
     assigned_accessor_id = Column(UUID(as_uuid=True), nullable=True)
     assigned_accessor_type = Column(
         Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]),
@@ -42,3 +54,4 @@ class ProjectTask(Base):
 
     project = relationship("Project", backref="project_tasks")
     creator = relationship("User")
+    source_submission = relationship("Submission")

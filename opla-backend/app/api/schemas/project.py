@@ -1,10 +1,10 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 from uuid import UUID
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 from app.models.project import ProjectStatus
 from app.models.project_access import AccessorType, ProjectRole
-from app.models.project_task import ProjectTaskStatus
+from app.models.project_task import ProjectTaskKind, ProjectTaskStatus
 
 class ProjectBase(BaseModel):
     name: str
@@ -85,8 +85,11 @@ class ProjectRoleTemplateOut(BaseModel):
 class ProjectTaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
+    kind: ProjectTaskKind = ProjectTaskKind.GENERAL
     starts_at: Optional[datetime] = None
     due_at: Optional[datetime] = None
+    visit_date: Optional[date] = None
+    source_submission_id: Optional[UUID] = None
     assigned_accessor_id: Optional[UUID] = None
     assigned_accessor_type: Optional[AccessorType] = None
 
@@ -94,6 +97,8 @@ class ProjectTaskCreate(BaseModel):
     def validate_task(self):
         if self.starts_at and self.due_at and self.due_at < self.starts_at:
             raise ValueError("Task due date must be after the start date")
+        if self.kind == ProjectTaskKind.JOURNEY_VISIT and self.visit_date is None:
+            raise ValueError("Journey visit tasks must include a visit date")
         if bool(self.assigned_accessor_id) != bool(self.assigned_accessor_type):
             raise ValueError("Assigned accessor id and type must be provided together")
         return self
@@ -102,9 +107,12 @@ class ProjectTaskCreate(BaseModel):
 class ProjectTaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    kind: Optional[ProjectTaskKind] = None
     status: Optional[ProjectTaskStatus] = None
     starts_at: Optional[datetime] = None
     due_at: Optional[datetime] = None
+    visit_date: Optional[date] = None
+    source_submission_id: Optional[UUID] = None
     assigned_accessor_id: Optional[UUID] = None
     assigned_accessor_type: Optional[AccessorType] = None
     clear_assignment: bool = False
@@ -113,6 +121,8 @@ class ProjectTaskUpdate(BaseModel):
     def validate_task(self):
         if self.starts_at and self.due_at and self.due_at < self.starts_at:
             raise ValueError("Task due date must be after the start date")
+        if self.kind == ProjectTaskKind.JOURNEY_VISIT and self.visit_date is None:
+            raise ValueError("Journey visit tasks must include a visit date")
         if not self.clear_assignment and (self.assigned_accessor_id is not None or self.assigned_accessor_type is not None):
             if bool(self.assigned_accessor_id) != bool(self.assigned_accessor_type):
                 raise ValueError("Assigned accessor id and type must be provided together")
@@ -126,12 +136,55 @@ class ProjectTaskOut(BaseModel):
     project_id: UUID
     title: str
     description: Optional[str] = None
+    kind: ProjectTaskKind
     status: ProjectTaskStatus
     starts_at: Optional[datetime] = None
     due_at: Optional[datetime] = None
+    visit_date: Optional[date] = None
+    source_submission_id: Optional[UUID] = None
     assigned_accessor_id: Optional[UUID] = None
     assigned_accessor_type: Optional[AccessorType] = None
     completed_at: Optional[datetime] = None
+    created_by: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectCatalogItemCreate(BaseModel):
+    sku_code: str
+    label: str
+    default_price: Optional[float] = None
+    unit: Optional[str] = None
+    brand: Optional[str] = None
+    is_active: bool = True
+    price_editable: bool = True
+    metadata_json: Optional[dict] = None
+
+
+class ProjectCatalogItemUpdate(BaseModel):
+    sku_code: Optional[str] = None
+    label: Optional[str] = None
+    default_price: Optional[float] = None
+    unit: Optional[str] = None
+    brand: Optional[str] = None
+    is_active: Optional[bool] = None
+    price_editable: Optional[bool] = None
+    metadata_json: Optional[dict] = None
+
+
+class ProjectCatalogItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    sku_code: str
+    label: str
+    default_price: Optional[float] = None
+    unit: Optional[str] = None
+    brand: Optional[str] = None
+    is_active: bool
+    price_editable: bool
+    metadata_json: Optional[dict] = None
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime

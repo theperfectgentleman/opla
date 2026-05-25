@@ -41,7 +41,7 @@ export interface SavedQuestion {
 	description?: string | null;
 	source_config: Record<string, unknown>;
 	query_config: Record<string, unknown>;
-	viz_type: 'table' | 'chart' | 'spreadsheet' | 'pivot';
+	viz_type: 'table' | 'chart' | 'spreadsheet' | 'pivot' | 'walker';
 	viz_config?: Record<string, unknown> | null;
 	cache_ttl_seconds?: number | null;
 	is_archived: boolean;
@@ -87,4 +87,5 @@ export interface AnalyticsToolProps {
 	projectId?: string;
 	sources: AnalyticsSource[];
 	initialSource?: AnalyticsSource | null;
+	initialAnalysis?: SavedQuestion | null;
 }

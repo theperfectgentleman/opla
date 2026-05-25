@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FormBlueprint } from '@opla/types';
+import { FormBlueprint, FormField, FormObjectDefinition, FormSchemaField, ObjectPropertyDefinition } from '@opla/types';
 import { isFieldVisible } from '../utils/logic';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TextInputField } from './fields/TextInputField';
@@ -13,10 +13,157 @@ import { MatrixTableField } from './fields/MatrixTableField';
 import { LookupListField } from './fields/LookupListField';
 import { RatingScaleField } from './fields/RatingScaleField';
 import { ToggleField } from './fields/ToggleField';
+import { ObjectCollectionField } from './fields/ObjectCollectionField';
 import { deskFormAPI, publicFormAPI } from '../../services/api';
 import { syncAllLookupDatasets } from '../utils/lookupCache';
 
-function FieldRenderer({ field, value, onChange, error, lookupContext }: any) {
+function getNestedValue(value: unknown, path: string[]): unknown {
+    return path.reduce<unknown>((current, segment) => {
+        if (!current || typeof current !== 'object') {
+            return undefined;
+        }
+        return (current as Record<string, unknown>)[segment];
+    }, value);
+}
+
+function evaluateFormFormula(formula: string, responses: Record<string, any>): number | undefined {
+    const withSums = formula.replace(/sum\(([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\)/g, (_, pathExpression: string) => {
+        const [collectionKey, ...rest] = pathExpression.split('.');
+        const collectionValue = responses[collectionKey];
+        if (!Array.isArray(collectionValue)) {
+            return '0';
+        }
+        const total = collectionValue.reduce((sum, item) => {
+            const rawValue = rest.length > 0 ? getNestedValue(item, rest) : item;
+            const numericValue = Number(rawValue ?? 0);
+            return sum + (Number.isFinite(numericValue) ? numericValue : 0);
+        }, 0);
+        return String(total);
+    });
+
+    const expression = withSums.replace(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g, (token) => {
+        const numericValue = Number(responses[token] ?? 0);
+        return Number.isFinite(numericValue) ? String(numericValue) : '0';
+    });
+
+    if (!/^[0-9+\-*/().\s]+$/.test(expression)) {
+        return undefined;
+    }
+
+    try {
+        const result = Function(`"use strict"; return (${expression});`)();
+        return typeof result === 'number' && Number.isFinite(result) ? result : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function resolveObjectDefinition(field: FormField, blueprint: FormBlueprint): FormObjectDefinition | undefined {
+    if (field.object_definition) {
+        return field.object_definition;
+    }
+
+    const schemaEntry = (blueprint.schema || []).find((entry: FormSchemaField) => {
+        const candidates = [entry.id, entry.field_id, entry.dataset_field_id, entry.key].filter(Boolean);
+        return candidates.includes(field.bind) || candidates.includes(field.id);
+    });
+    if (!schemaEntry) {
+        return undefined;
+    }
+
+    if (schemaEntry.item_definition) {
+        return schemaEntry.item_definition;
+    }
+    if (Array.isArray(schemaEntry.properties)) {
+        return {
+            label: schemaEntry.label,
+            properties: schemaEntry.properties,
+        };
+    }
+    return undefined;
+}
+
+function hasMeaningfulValue(value: unknown): boolean {
+    if (Array.isArray(value)) {
+        return value.length > 0;
+    }
+    if (value && typeof value === 'object') {
+        return Object.values(value as Record<string, unknown>).some((entry) => hasMeaningfulValue(entry));
+    }
+    return value !== undefined && value !== null && value !== '';
+}
+
+function validateObjectProperties(properties: ObjectPropertyDefinition[], value: unknown, path: string[] = []): string | undefined {
+    const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+
+    for (const property of properties) {
+        const currentPath = [...path, property.label || property.key];
+        const propertyValue = record[property.key];
+
+        if (property.required && !hasMeaningfulValue(propertyValue)) {
+            return `${currentPath.join(' > ')} is required`;
+        }
+
+        if (property.type === 'object' && Array.isArray(property.properties)) {
+            const nestedError = validateObjectProperties(property.properties, propertyValue, currentPath);
+            if (nestedError) {
+                return nestedError;
+            }
+        }
+    }
+
+    return undefined;
+}
+
+function validateField(field: FormField, value: unknown, blueprint: FormBlueprint): string | undefined {
+    if (field.formula) {
+        return undefined;
+    }
+
+    if (!field.required && (field.type !== 'object_collection' && field.type !== 'object_instance')) {
+        return undefined;
+    }
+
+    if (field.type === 'object_collection') {
+        if (!Array.isArray(value) || value.length === 0) {
+            return 'At least one item is required';
+        }
+        const objectDefinition = resolveObjectDefinition(field, blueprint);
+        if (!objectDefinition) {
+            return undefined;
+        }
+        for (let index = 0; index < value.length; index += 1) {
+            const rowError = validateObjectProperties(objectDefinition.properties || [], value[index], [`Item ${index + 1}`]);
+            if (rowError) {
+                return rowError;
+            }
+        }
+        return undefined;
+    }
+
+    if (field.type === 'object_instance') {
+        if (!hasMeaningfulValue(value)) {
+            return 'This section is required';
+        }
+        const objectDefinition = resolveObjectDefinition(field, blueprint);
+        return objectDefinition ? validateObjectProperties(objectDefinition.properties || [], value, [field.label]) : undefined;
+    }
+
+    if (field.required && !hasMeaningfulValue(value)) {
+        return 'This field is required';
+    }
+    return undefined;
+}
+
+function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint }: any) {
+    if (field.formula) {
+        return (
+            <View style={{ backgroundColor: '#1e293b', borderColor: error ? '#ef4444' : '#334155', borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12 }}>
+                <Text style={{ color: '#cbd5e1', fontSize: 14 }}>{value === undefined || value === null || value === '' ? 'Pending' : String(value)}</Text>
+            </View>
+        );
+    }
+
     switch (field.type) {
         case 'input_text':
         case 'email_input':
@@ -39,6 +186,10 @@ function FieldRenderer({ field, value, onChange, error, lookupContext }: any) {
             return <RatingScaleField field={field} value={value} onChange={onChange} error={error} />;
         case 'toggle':
             return <ToggleField field={field} value={value} onChange={onChange} error={error} />;
+        case 'object_collection':
+            return <ObjectCollectionField field={field} value={value} onChange={onChange} error={error} objectDefinition={resolveObjectDefinition(field, blueprint)} mode="collection" />;
+        case 'object_instance':
+            return <ObjectCollectionField field={field} value={value} onChange={onChange} error={error} objectDefinition={resolveObjectDefinition(field, blueprint)} mode="instance" />;
         default:
             // Fallback
             return (
@@ -119,6 +270,31 @@ export function FormRenderer({
         }
     }, [responses, loadingDraft, draftKey, onSaveDraft]);
 
+    useEffect(() => {
+        const computedFields = (blueprint.ui || []).flatMap((section) => section.children || []).filter((field) => field.formula);
+        if (computedFields.length === 0) {
+            return;
+        }
+
+        const updates: Record<string, any> = {};
+        computedFields.forEach((field) => {
+            if (!field.formula) {
+                return;
+            }
+            const computedValue = evaluateFormFormula(field.formula, responses);
+            if (computedValue === undefined) {
+                return;
+            }
+            if (responses[field.id] !== computedValue) {
+                updates[field.id] = computedValue;
+            }
+        });
+
+        if (Object.keys(updates).length > 0) {
+            setResponses((current) => ({ ...current, ...updates }));
+        }
+    }, [blueprint.ui, responses]);
+
 
     if (loadingDraft) {
         return <ActivityIndicator style={{ flex: 1 }} color="#158754" size="large" />;
@@ -139,8 +315,12 @@ export function FormRenderer({
         const newErrors: Record<string, string> = {};
         currentSection.children.forEach(field => {
             const visible = isFieldVisible(field.id, blueprint.logic || [], responses);
-            if (visible && field.required && !responses[field.id]) {
-                newErrors[field.id] = 'This field is required';
+            if (!visible) {
+                return;
+            }
+            const fieldError = validateField(field, responses[field.id], blueprint);
+            if (fieldError) {
+                newErrors[field.id] = fieldError;
             }
         });
 
@@ -243,6 +423,7 @@ export function FormRenderer({
                                 onChange={(val: any) => setResponses({ ...responses, [field.id]: val })}
                                 error={errors[field.id]}
                                 lookupContext={lookupContext}
+                                blueprint={blueprint}
                             />
                             {errors[field.id] && (
                                 <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{errors[field.id]}</Text>

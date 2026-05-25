@@ -241,6 +241,68 @@ class FormDatasetFlowTests(unittest.TestCase):
         self.assertEqual(ui_child["bind"], "customer_name")
         self.assertEqual(ui_child["id"], "customer_name")
 
+    def test_publish_object_collection_schema_tracks_nested_properties(self):
+        form = FormService.create_form(
+            self.db,
+            project_id=self.project.id,
+            title="Shared Expense Log",
+            blueprint={
+                "meta": {"title": "Shared Expense Log"},
+                "schema": [
+                    {
+                        "key": "expense_lines",
+                        "type": "object_collection",
+                        "label": "Expense Lines",
+                        "item_definition": {
+                            "name": "Expense Line",
+                            "properties": [
+                                {"key": "charge type", "type": "string", "label": "Charge Type", "required": True},
+                                {"key": "amount", "type": "number", "label": "Amount", "required": True},
+                                {
+                                    "key": "per person cost",
+                                    "type": "computed",
+                                    "label": "Per Person Cost",
+                                    "formula": "amount / roommate_count",
+                                },
+                            ],
+                        },
+                    }
+                ],
+                "ui": [],
+                "logic": [],
+            },
+        )
+
+        published_form = FormService.publish_form(self.db, form.id, published_by=self.user.id)
+        dataset = self.db.query(FormDataset).filter(FormDataset.form_id == form.id).one()
+        fields = {field.field_identifier: field for field in dataset.fields}
+
+        self.assertEqual(dataset.current_schema_version_number, published_form.published_version)
+        self.assertIn("expense_lines", fields)
+        self.assertIn("expense_lines.charge_type", fields)
+        self.assertIn("expense_lines.amount", fields)
+        self.assertIn("expense_lines.per_person_cost", fields)
+        self.assertEqual(fields["expense_lines"].field_type, "object_collection")
+        self.assertEqual(fields["expense_lines.amount"].field_key, "expense_lines.amount")
+        self.assertEqual(fields["expense_lines.amount"].metadata_json["parent_identifier"], "expense_lines")
+        self.assertEqual(fields["expense_lines.amount"].metadata_json["parent_type"], "object_collection")
+
+        submission = SubmissionService.create_submission(
+            self.db,
+            form_id=form.id,
+            data={
+                "expense_lines": [
+                    {"charge_type": "transport", "amount": 40, "per_person_cost": 20},
+                    {"charge_type": "research", "amount": 60, "per_person_cost": 30},
+                ]
+            },
+            user_id=self.user.id,
+            metadata={"source": "test"},
+        )
+
+        self.assertEqual(submission.dataset_id, dataset.id)
+        self.assertEqual(submission.data["expense_lines"][0]["charge_type"], "transport")
+
     def test_lookup_sources_and_options_are_available_for_same_project_forms(self):
         customer_form = FormService.create_form(
             self.db,

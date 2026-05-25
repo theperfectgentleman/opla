@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BarChart3, FileSpreadsheet, LayoutDashboard, Loader2, PanelsTopLeft, Table2 } from 'lucide-react';
+import { ArrowRight, BarChart3, FileSpreadsheet, FlaskConical, LayoutDashboard, Loader2, PanelsTopLeft, Table2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { analyticsAPI } from '../../lib/api';
@@ -12,6 +12,7 @@ const ChartBuilder = lazy(() => import('./ChartBuilder'));
 const AnalyticsSpreadsheet = lazy(() => import('./AnalyticsSpreadsheet'));
 const AnalyticsPivot = lazy(() => import('./AnalyticsPivot'));
 const DashboardCanvas = lazy(() => import('./DashboardCanvas'));
+const WalkerAnalysisLab = lazy(() => import('./WalkerAnalysisLab'));
 
 type AnalyticsHubForm = {
   id: string;
@@ -25,9 +26,10 @@ interface AnalyticsHubProps {
   orgId: string;
   projectId?: string;
   forms?: AnalyticsHubForm[];
+  activeTool?: AnalyticsToolKey;
 }
 
-type AnalyticsToolKey = 'explorer' | 'chart' | 'spreadsheet' | 'pivot' | 'dashboard';
+type AnalyticsToolKey = 'lab' | 'explorer' | 'chart' | 'spreadsheet' | 'pivot' | 'dashboard';
 
 type AnalyticsToolCard = {
   key: AnalyticsToolKey;
@@ -40,6 +42,15 @@ type AnalyticsToolCard = {
 };
 
 const toolCards: AnalyticsToolCard[] = [
+  {
+    key: 'lab',
+    label: 'Analysis Lab',
+    icon: <FlaskConical className="h-7 w-7" />,
+    color: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30',
+    accent: 'text-emerald-700 dark:text-emerald-300',
+    description: 'Analyze one published dataset in Graphic Walker through the first user-facing Opla analysis flow.',
+    bullets: ['Single-form analysis', 'Local capped row loading', 'Phase 1 analysis workflow'],
+  },
   {
     key: 'explorer',
     label: 'Data Explorer',
@@ -99,9 +110,8 @@ function ToolWorkspaceFallback({ label }: { label: string }) {
   );
 }
 
-export default function AnalyticsHub({ orgId, projectId, forms = [] }: AnalyticsHubProps) {
+export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool = 'lab' }: AnalyticsHubProps) {
   const navigate = useNavigate();
-  const [activeTool, setActiveTool] = useState<AnalyticsToolKey>('explorer');
   const [sources, setSources] = useState<AnalyticsSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,6 +218,12 @@ export default function AnalyticsHub({ orgId, projectId, forms = [] }: Analytics
 
     const toolProps = { orgId, projectId, sources };
     switch (activeTool) {
+    case 'lab':
+      return (
+        <Suspense fallback={<ToolWorkspaceFallback label="analysis lab" />}>
+          <WalkerAnalysisLab {...toolProps} />
+        </Suspense>
+      );
       case 'dashboard':
         return (
           <Suspense fallback={<ToolWorkspaceFallback label="dashboards" />}>
@@ -244,43 +260,19 @@ export default function AnalyticsHub({ orgId, projectId, forms = [] }: Analytics
 
   return (
     <div className="space-y-4" data-org={orgId} data-project={projectId}>
-      <div className="border-b border-slate-200 pb-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Insights Workspace</p>
-        <h2 className="mt-1 text-xl font-bold text-slate-800">Analytics Hub</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Run exploratory analytics across submissions, teams, and time windows before turning findings into reports.
-          (Module currently under construction as per Phase C of Analytics Module Dev Guide)
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {toolCards.map(tool => (
-          <button
-            key={tool.key}
-            type="button"
-            onClick={() => setActiveTool(tool.key)}
-            className={`flex min-h-[136px] flex-col items-start rounded-lg border p-4 text-left transition hover:bg-slate-50 ${tool.color} ${activeTool === tool.key ? 'border-l-2 border-l-emerald-700 bg-emerald-50 ring-1 ring-emerald-100' : 'bg-white'}`}
-            aria-pressed={activeTool === tool.key}
-          >
-            <div className={`mb-3 ${tool.accent}`}>{tool.icon}</div>
-            <h3 className="text-base font-bold text-slate-800">{tool.label}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">{tool.description}</p>
-            <span className="mt-auto inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-              Open
-              <ArrowRight className="h-4 w-4" />
-            </span>
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Active Workspace</p>
-          <h3 className="mt-1 text-xl font-bold text-slate-800">{selectedTool.label}</h3>
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Insights Workspace</p>
+          <h2 className="mt-1 text-xl font-bold text-slate-800">{selectedTool.label}</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">{selectedTool.description}</p>
         </div>
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-          Org {orgId.slice(0, 8)}{projectId ? ` • Project ${projectId.slice(0, 8)}` : ''}
+        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+          <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            Org {orgId.slice(0, 8)}{projectId ? ` • Project ${projectId.slice(0, 8)}` : ''}
+          </span>
+          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+            {selectedTool.label}
+          </span>
         </div>
       </div>
 

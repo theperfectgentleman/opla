@@ -187,6 +187,35 @@ export const projectAPI = {
     });
     return res.data;
   },
+  listTasks: async (orgId: string, projectId: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/tasks`);
+    return res.data;
+  },
+  listMyDayTasks: async (orgId: string, projectId: string, date: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/tasks/my-day`, {
+      params: { date },
+    });
+    return res.data;
+  },
+  updateTask: async (
+    orgId: string,
+    projectId: string,
+    taskId: string,
+    data: {
+      title?: string;
+      description?: string;
+      status?: 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
+      starts_at?: string;
+      due_at?: string;
+      visit_date?: string;
+      assigned_accessor_id?: string;
+      assigned_accessor_type?: 'user' | 'team';
+      clear_assignment?: boolean;
+    },
+  ) => {
+    const res = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`, data);
+    return res.data;
+  },
 };
 
 // ─── Form metadata + stats endpoints (authenticated) ────────────────────────

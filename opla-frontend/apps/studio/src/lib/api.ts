@@ -331,6 +331,47 @@ export const projectAPI = {
         const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/tasks`);
         return response.data;
     },
+    listCatalogItems: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/catalog-items`);
+        return response.data;
+    },
+    createCatalogItem: async (
+        orgId: string,
+        projectId: string,
+        data: {
+            sku_code: string;
+            label: string;
+            default_price?: number;
+            unit?: string;
+            brand?: string;
+            is_active?: boolean;
+            price_editable?: boolean;
+        },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/catalog-items`, data);
+        return response.data;
+    },
+    updateCatalogItem: async (
+        orgId: string,
+        projectId: string,
+        itemId: string,
+        data: {
+            sku_code?: string;
+            label?: string;
+            default_price?: number;
+            unit?: string;
+            brand?: string;
+            is_active?: boolean;
+            price_editable?: boolean;
+        },
+    ) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}/catalog-items/${itemId}`, data);
+        return response.data;
+    },
+    deleteCatalogItem: async (orgId: string, projectId: string, itemId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/projects/${projectId}/catalog-items/${itemId}`);
+        return response.data;
+    },
     createTask: async (
         orgId: string,
         projectId: string,
@@ -375,6 +416,45 @@ export const projectAPI = {
 export const formAPI = {
     create: async (projectId: string, data: { title: string; blueprint?: any; is_public?: boolean }) => {
         const response = await apiClient.post(`/projects/${projectId}/forms`, data);
+        return response.data;
+    },
+    listAutomationRules: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/automation-rules`);
+        return response.data;
+    },
+    createAutomationRule: async (
+        formId: string,
+        data: {
+            name: string;
+            description?: string;
+            event_type: 'submission_created' | 'submission_reviewed' | 'submission_approved';
+            action_type: 'create_task';
+            is_active?: boolean;
+            conditions_json?: Record<string, any> | null;
+            action_config_json: Record<string, any>;
+        },
+    ) => {
+        const response = await apiClient.post(`/forms/${formId}/automation-rules`, data);
+        return response.data;
+    },
+    updateAutomationRule: async (
+        formId: string,
+        ruleId: string,
+        data: {
+            name?: string;
+            description?: string;
+            event_type?: 'submission_created' | 'submission_reviewed' | 'submission_approved';
+            action_type?: 'create_task';
+            is_active?: boolean;
+            conditions_json?: Record<string, any> | null;
+            action_config_json?: Record<string, any>;
+        },
+    ) => {
+        const response = await apiClient.patch(`/forms/${formId}/automation-rules/${ruleId}`, data);
+        return response.data;
+    },
+    deleteAutomationRule: async (formId: string, ruleId: string) => {
+        const response = await apiClient.delete(`/forms/${formId}/automation-rules/${ruleId}`);
         return response.data;
     },
     updateResponsibility: async (
@@ -463,6 +543,16 @@ export const submissionAPI = {
         const response = await apiClient.post('/submissions', data);
         return response.data;
     },
+    listForForm: async (formId: string, reviewStatus?: 'submitted' | 'approved' | 'rejected') => {
+        const response = await apiClient.get(`/forms/${formId}/submissions`, {
+            params: reviewStatus ? { review_status: reviewStatus } : undefined,
+        });
+        return response.data;
+    },
+    review: async (submissionId: string, data: { review_status: 'submitted' | 'approved' | 'rejected'; review_comment?: string }) => {
+        const response = await apiClient.patch(`/submissions/${submissionId}/review`, data);
+        return response.data;
+    },
     getPublicForm: async (slug: string) => {
         const response = await apiClient.get(`/public/forms/${slug}`);
         return response.data;
@@ -513,6 +603,12 @@ export const analyticsAPI = {
         },
     ) => {
         const response = await apiClient.post(`/organizations/${orgId}/analytics/query`, data);
+        return response.data;
+    },
+    walkerCompute: async (orgId: string, datasetId: string, payload: any) => {
+        const response = await apiClient.post(`/analytics/walker/${datasetId}/compute`, payload, {
+            params: { org_id: orgId }
+        });
         return response.data;
     },
     listQuestions: async (orgId: string, projectId?: string) => {

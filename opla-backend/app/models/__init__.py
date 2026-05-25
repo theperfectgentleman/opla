@@ -8,11 +8,13 @@ from app.models.project_role_template import ProjectRoleTemplate
 from app.models.team import Team
 from app.models.team_member import TeamMember
 from app.models.form import Form
+from app.models.form_automation_rule import FormAutomationRule
 from app.models.form_version import FormVersion
 from app.models.form_dataset import FormDataset, FormDatasetSchemaVersion, FormDatasetField
 from app.models.submission import Submission
 from app.models.section_template import SectionTemplate
 from app.models.project_access import ProjectAccess
+from app.models.project_catalog_item import ProjectCatalogItem
 from app.models.project_task import ProjectTask
 from app.models.project_report import ProjectReport
 from app.models.project_asset import ProjectAsset

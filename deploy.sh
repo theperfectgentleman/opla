@@ -9,6 +9,8 @@ CYAN='\033[0;36m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+OPLA_PORTS=(8000 5173 4173 4174 4175 8081 19000 19001 19002)
+
 function show_menu() {
     clear
     echo -e "${CYAN}============================${NC}"
@@ -16,8 +18,8 @@ function show_menu() {
     echo -e "${CYAN}============================${NC}"
     echo -e "${GREEN}Development:${NC}"
     echo "1. Start All (Studio + Mobile + Backend)"
-    echo "2. Start Web Studio Only"
-    echo "3. Start Mobile App Only"
+    echo "2. Start Web Studio + Backend"
+    echo "3. Start Mobile App + Backend"
     echo "4. Start Backend API Only"
     echo ""
     echo -e "${GREEN}Database:${NC}"
@@ -27,6 +29,7 @@ function show_menu() {
     echo -e "${GREEN}Housekeeping:${NC}"
     echo "7. Install All Dependencies (Frontend + Backend)"
     echo "8. Clean Caches (Turbo, Node, PyCache)"
+    echo "9. Stop All Opla Services (Free Ports)"
     echo ""
     echo "Q. Quit"
     echo -e "${CYAN}============================${NC}"
@@ -105,19 +108,67 @@ function clean_cache() {
     echo -e "${GREEN}Cleaned!${NC}"
 }
 
+function stop_port_windows() {
+    local port="$1"
+    powershell.exe -NoProfile -Command "\
+        \$connections = Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue; \
+        if (-not \$connections) { exit 0 } \
+        \$pids = \$connections | Select-Object -ExpandProperty OwningProcess -Unique; \
+        foreach (\$pidValue in \$pids) { \
+            try { Stop-Process -Id \$pidValue -Force -ErrorAction Stop; Write-Output \"Stopped PID \$pidValue on port ${port}\" } \
+            catch { Write-Output \"Failed to stop PID \$pidValue on port ${port}: \$((\$_.Exception).Message)\" } \
+        }" 2>/dev/null
+}
+
+function stop_port_unix() {
+    local port="$1"
+
+    if command -v lsof >/dev/null 2>&1; then
+        local pids
+        pids=$(lsof -ti tcp:"$port" 2>/dev/null)
+        if [[ -n "$pids" ]]; then
+            echo "$pids" | xargs kill -9 2>/dev/null
+            echo "Stopped process(es) on port $port"
+        fi
+    elif command -v fuser >/dev/null 2>&1; then
+        fuser -k "${port}/tcp" 2>/dev/null && echo "Stopped process(es) on port $port"
+    fi
+}
+
+function stop_all_services() {
+    echo -e "${GREEN}Stopping Opla services and freeing known ports...${NC}"
+
+    for port in "${OPLA_PORTS[@]}"; do
+        echo "Checking port $port..."
+        if [[ "$OSTYPE" == "msys" ]]; then
+            stop_port_windows "$port"
+        else
+            stop_port_unix "$port"
+        fi
+    done
+
+    echo -e "${GREEN}Done freeing Opla ports.${NC}"
+}
+
+if [[ "$1" == "stop" ]]; then
+    stop_all_services
+    exit 0
+fi
+
 # Main Loop
 while true; do
     show_menu
     read -p "Select an option: " choice
     case $choice in
         1) start_backend; start_studio; start_mobile ;;
-        2) start_studio ;;
-        3) start_mobile ;;
+        2) start_backend; start_studio ;;
+        3) start_backend; start_mobile ;;
         4) start_backend ;;
         5) db_migrate ;;
         6) db_upgrade ;;
         7) install_deps ;;
         8) clean_cache ;;
+        9) stop_all_services ;;
         [Qq]) exit ;;
         *) echo -e "${RED}Invalid option${NC}"; sleep 1 ;;
     esac

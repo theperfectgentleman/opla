@@ -36,6 +36,8 @@ type StudioNavKey =
     | 'reports'
     | 'settings';
 
+type AnalyticsNavTool = 'lab' | 'explorer' | 'chart' | 'spreadsheet' | 'dashboard' | 'pivot';
+
 type NavCounts = {
     projects?: number;
     tasks?: number;
@@ -47,6 +49,8 @@ type NavCounts = {
 type StudioLayoutProps = {
     activeNav: StudioNavKey;
     onSelectNav: (key: StudioNavKey) => void;
+    activeAnalyticsTool?: AnalyticsNavTool;
+    onSelectAnalyticsTool?: (key: AnalyticsNavTool) => void;
     children: React.ReactNode;
     counts?: NavCounts;
     contentClassName?: string;
@@ -67,9 +71,20 @@ const navItems: Array<{ key: StudioNavKey; label: string; icon: React.ReactNode;
     { key: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
+const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
+    { key: 'lab', label: 'Analysis Lab' },
+    { key: 'explorer', label: 'Data Explorer' },
+    { key: 'chart', label: 'Chart Builder' },
+    { key: 'spreadsheet', label: 'Spreadsheet' },
+    { key: 'dashboard', label: 'Dashboards' },
+    { key: 'pivot', label: 'Pivot Table' },
+];
+
 const StudioLayout: React.FC<StudioLayoutProps> = ({
     activeNav,
     onSelectNav,
+    activeAnalyticsTool,
+    onSelectAnalyticsTool,
     children,
     counts,
     contentClassName = 'flex-1 overflow-y-auto p-10',
@@ -155,24 +170,48 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                         {navItems.map(item => {
                             const isActive = activeNav === item.key;
                             const count = item.countKey ? (counts?.[item.countKey] ?? 0) : 0;
+                            const showAnalyticsSubmenu = !isSidebarCollapsed && item.key === 'analysis' && isActive && onSelectAnalyticsTool;
 
                             return (
-                                <button
-                                    key={item.key}
-                                    onClick={() => onSelectNav(item.key)}
-                                    title={item.label}
-                                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : item.countKey ? 'justify-between px-4' : 'space-x-3 px-4'} py-3 rounded-md transition-all ${isActive ? 'bg-emerald-700 text-white shadow-md' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
-                                >
-                                    <div className={`flex items-center ${isSidebarCollapsed ? '' : 'space-x-3'}`}>
-                                        {item.icon}
-                                        {!isSidebarCollapsed && <span className="font-medium">{item.label}</span>}
-                                    </div>
-                                    {!isSidebarCollapsed && item.countKey && count > 0 && (
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
-                                            {count}
-                                        </span>
-                                    )}
-                                </button>
+                                <div key={item.key} className="space-y-1">
+                                    <button
+                                        onClick={() => onSelectNav(item.key)}
+                                        title={item.label}
+                                        className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-2' : item.countKey ? 'justify-between px-4' : 'space-x-3 px-4'} py-3 rounded-md transition-all ${isActive ? 'bg-emerald-700 text-white shadow-md' : 'hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'}`}
+                                    >
+                                        <div className={`flex items-center ${isSidebarCollapsed ? '' : 'space-x-3'}`}>
+                                            {item.icon}
+                                            {!isSidebarCollapsed && <span className="font-medium">{item.label}</span>}
+                                        </div>
+                                        {!isSidebarCollapsed && item.key === 'analysis' && onSelectAnalyticsTool ? (
+                                            <ChevronDown className={`h-4 w-4 transition-transform ${isActive ? 'rotate-180 text-white' : 'text-[hsl(var(--text-tertiary))]'}`} />
+                                        ) : null}
+                                        {!isSidebarCollapsed && item.countKey && count > 0 && (
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]'}`}>
+                                                {count}
+                                            </span>
+                                        )}
+                                    </button>
+
+                                    {showAnalyticsSubmenu ? (
+                                        <div className="ml-4 border-l border-[hsl(var(--border))] pl-3">
+                                            {analyticsSubItems.map(subItem => {
+                                                const isSubItemActive = activeAnalyticsTool === subItem.key;
+
+                                                return (
+                                                    <button
+                                                        key={subItem.key}
+                                                        type="button"
+                                                        onClick={() => onSelectAnalyticsTool(subItem.key)}
+                                                        className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
+                                                    >
+                                                        <span className="truncate font-medium">{subItem.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : null}
+                                </div>
                             );
                         })}
                     </nav>

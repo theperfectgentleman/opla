@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.api.dependencies import get_current_user, get_db
 from app.api.schemas.project import (
     ProjectAccessCreate,
     ProjectAccessOut,
+    ProjectCatalogItemCreate,
+    ProjectCatalogItemOut,
+    ProjectCatalogItemUpdate,
     ProjectCreate,
     ProjectOut,
     ProjectTaskCreate,
@@ -18,6 +23,7 @@ from app.api.schemas.project import (
 from app.services.form_service import ProjectService
 from app.services.organization_service import OrganizationService
 from app.services.project_access_service import ProjectAccessService
+from app.services.project_catalog_service import ProjectCatalogService
 from app.services.project_role_service import ProjectRoleService
 from app.services.project_task_service import ProjectTaskService
 from app.models.project_access import AccessorType
@@ -281,6 +287,20 @@ def list_project_tasks(
     return ProjectTaskService.list_tasks(db, project_id)
 
 
+@router.get("/{project_id}/tasks/my-day", response_model=List[ProjectTaskOut])
+def list_my_project_tasks_for_day(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    target_date: date = Query(alias="date"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectTaskService.list_tasks_for_user_day(db, project_id, current_user.id, target_date)
+
+
 @router.post("/{project_id}/tasks", response_model=ProjectTaskOut, status_code=status.HTTP_201_CREATED)
 def create_project_task(
     org_id: uuid.UUID,
@@ -297,8 +317,11 @@ def create_project_task(
         project,
         title=payload.title,
         description=payload.description,
+        kind=payload.kind,
         starts_at=payload.starts_at,
         due_at=payload.due_at,
+        visit_date=payload.visit_date,
+        source_submission_id=payload.source_submission_id,
         assigned_accessor_id=payload.assigned_accessor_id,
         assigned_accessor_type=payload.assigned_accessor_type,
         created_by=current_user.id,
@@ -324,9 +347,12 @@ def update_project_task(
         task,
         title=payload.title,
         description=payload.description,
+        kind=payload.kind,
         status=payload.status,
         starts_at=payload.starts_at,
         due_at=payload.due_at,
+        visit_date=payload.visit_date,
+        source_submission_id=payload.source_submission_id,
         assigned_accessor_id=None if payload.clear_assignment else payload.assigned_accessor_id,
         assigned_accessor_type=None if payload.clear_assignment else payload.assigned_accessor_type,
         replace_assignment=payload.clear_assignment or payload.assigned_accessor_id is not None or payload.assigned_accessor_type is not None,
@@ -346,4 +372,87 @@ def delete_project_task(
     if project.org_id != org_id:
         raise HTTPException(status_code=404, detail="Project not found")
     ProjectTaskService.delete_task(db, project, task)
+    return None
+
+
+@router.get("/{project_id}/catalog-items", response_model=List[ProjectCatalogItemOut])
+def list_project_catalog_items(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectCatalogService.list_items(db, project_id)
+
+
+@router.post("/{project_id}/catalog-items", response_model=ProjectCatalogItemOut, status_code=status.HTTP_201_CREATED)
+def create_project_catalog_item(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    payload: ProjectCatalogItemCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectCatalogService.create_item(
+        db,
+        project,
+        sku_code=payload.sku_code,
+        label=payload.label,
+        default_price=payload.default_price,
+        unit=payload.unit,
+        brand=payload.brand,
+        is_active=payload.is_active,
+        price_editable=payload.price_editable,
+        metadata_json=payload.metadata_json,
+        created_by=current_user.id,
+    )
+
+
+@router.patch("/{project_id}/catalog-items/{item_id}", response_model=ProjectCatalogItemOut)
+def update_project_catalog_item(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    item_id: uuid.UUID,
+    payload: ProjectCatalogItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    item = ProjectCatalogService.get_item_or_404(db, project_id, item_id)
+    return ProjectCatalogService.update_item(
+        db,
+        project,
+        item,
+        sku_code=payload.sku_code,
+        label=payload.label,
+        default_price=payload.default_price,
+        unit=payload.unit,
+        brand=payload.brand,
+        is_active=payload.is_active,
+        price_editable=payload.price_editable,
+        metadata_json=payload.metadata_json,
+    )
+
+
+@router.delete("/{project_id}/catalog-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_catalog_item(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    item = ProjectCatalogService.get_item_or_404(db, project_id, item_id)
+    ProjectCatalogService.delete_item(db, project, item)
     return None

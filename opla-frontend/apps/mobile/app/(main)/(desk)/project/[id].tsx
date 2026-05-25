@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FileText, BarChart2, Paperclip, ChevronRight, ChevronDown } from 'lucide-react-native';
+import { FileText, BarChart2, Paperclip, ChevronRight, ChevronDown, CalendarDays } from 'lucide-react-native';
 
 import { orgAPI, projectAPI, assetsAPI, reportsAPI } from '../../../../services/api';
 import { fmtDate } from '../../../../src/utils/dateFormat';
@@ -218,6 +218,23 @@ export default function ProjectDetailScreen() {
         </Text>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          <ArtifactTile
+            icon={<CalendarDays size={20} color={accent} />}
+            label="Today's Visits"
+            count={null}
+            accent={accent}
+            onPress={() =>
+              router.push({
+                pathname: '/(main)/(desk)/journey/[projectId]' as any,
+                params: {
+                  projectId: project.id,
+                  orgId,
+                  projectName: project.name,
+                  orgColor: accent,
+                },
+              })
+            }
+          />
           <ArtifactTile
             icon={<FileText size={20} color="#4ade80" />}
             label="Forms"

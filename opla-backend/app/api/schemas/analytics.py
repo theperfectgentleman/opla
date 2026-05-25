@@ -61,7 +61,7 @@ class SavedQuestionCreate(BaseModel):
     project_id: UUID | None = None
     source_config: dict[str, Any]
     query_config: dict[str, Any]
-    viz_type: str = Field("table", pattern="^(table|chart|spreadsheet|pivot)$")
+    viz_type: str = Field("table", pattern="^(table|chart|spreadsheet|pivot|walker)$")
     viz_config: dict[str, Any] | None = None
     cache_ttl_seconds: int | None = None
 
@@ -71,7 +71,7 @@ class SavedQuestionUpdate(BaseModel):
     description: str | None = None
     source_config: dict[str, Any] | None = None
     query_config: dict[str, Any] | None = None
-    viz_type: str | None = Field(None, pattern="^(table|chart|spreadsheet|pivot)$")
+    viz_type: str | None = Field(None, pattern="^(table|chart|spreadsheet|pivot|walker)$")
     viz_config: dict[str, Any] | None = None
     cache_ttl_seconds: int | None = None
     is_archived: bool | None = None

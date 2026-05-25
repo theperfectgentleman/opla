@@ -58,6 +58,11 @@ type DashboardAsset = {
     updated_at: string;
 };
 
+type AnalyticsToolKey = 'lab' | 'explorer' | 'chart' | 'spreadsheet' | 'dashboard' | 'pivot';
+
+const validDashboardTabs = ['projects', 'tasks', 'forms', 'datasets', 'members', 'audience', 'analysis', 'threads', 'assets', 'reports', 'settings'] as const;
+const validAnalyticsTools: AnalyticsToolKey[] = ['lab', 'explorer', 'chart', 'spreadsheet', 'dashboard', 'pivot'];
+
 const taskTone: Record<DashboardTask['status'], string> = {
     todo: 'bg-slate-500/10 text-slate-300 border border-slate-500/20',
     in_progress: 'bg-sky-500/10 text-sky-300 border border-sky-500/20',
@@ -84,6 +89,7 @@ const Dashboard: React.FC = () => {
     const { showToast } = useToast();
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('forms');
+    const [activeAnalyticsTool, setActiveAnalyticsTool] = useState<AnalyticsToolKey>('lab');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
     const [forms, setForms] = useState<any[]>([]);
     const [tasks, setTasks] = useState<DashboardTask[]>([]);
@@ -288,7 +294,7 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         const tab = searchParams.get('tab');
-        if (tab && ['projects', 'tasks', 'forms', 'datasets', 'members', 'audience', 'analysis', 'threads', 'assets', 'reports', 'settings'].includes(tab)) {
+        if (tab && validDashboardTabs.includes(tab as typeof validDashboardTabs[number])) {
             setActiveTab(tab);
             if (tab === 'members') {
                 const section = searchParams.get('section');
@@ -296,6 +302,13 @@ const Dashboard: React.FC = () => {
                     setMembersSubTab(section);
                 } else {
                     setMembersSubTab('teams');
+                }
+            }
+
+            if (tab === 'analysis') {
+                const tool = searchParams.get('tool');
+                if (tool && validAnalyticsTools.includes(tool as AnalyticsToolKey)) {
+                    setActiveAnalyticsTool(tool as AnalyticsToolKey);
                 }
             }
         }
@@ -306,6 +319,11 @@ const Dashboard: React.FC = () => {
         if (key === 'members') {
             setMembersSubTab('teams');
         }
+    };
+
+    const handleAnalyticsToolSelect = (tool: AnalyticsToolKey) => {
+        setActiveTab('analysis');
+        setActiveAnalyticsTool(tool);
     };
 
     const handleCreateProject = async (event: React.FormEvent) => {
@@ -463,6 +481,8 @@ const Dashboard: React.FC = () => {
             <StudioLayout
                 activeNav={activeTab as 'projects' | 'tasks' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings'}
                 onSelectNav={handleShellNavSelect}
+                activeAnalyticsTool={activeAnalyticsTool}
+                onSelectAnalyticsTool={handleAnalyticsToolSelect}
                 counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, members: members?.length || 0 }}
                 contentClassName="flex-1 overflow-y-auto p-10"
             >
@@ -837,7 +857,7 @@ const Dashboard: React.FC = () => {
 
                 {activeTab === 'analysis' && currentOrg && (
                     <Suspense fallback={<AnalyticsTabFallback />}>
-                        <AnalyticsHub orgId={currentOrg.id} projectId={undefined} forms={forms} />
+                        <AnalyticsHub orgId={currentOrg.id} projectId={undefined} forms={forms} activeTool={activeAnalyticsTool} />
                     </Suspense>
                 )}
 

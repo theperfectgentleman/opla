@@ -4,6 +4,7 @@ from datetime import date, datetime
 from typing import List, Optional
 from app.models.project import ProjectStatus
 from app.models.project_access import AccessorType, ProjectRole
+from app.models.project_attendance import ProjectAttendanceStatus
 from app.models.project_task import ProjectTaskKind, ProjectTaskStatus
 
 class ProjectBase(BaseModel):
@@ -90,6 +91,7 @@ class ProjectTaskCreate(BaseModel):
     due_at: Optional[datetime] = None
     visit_date: Optional[date] = None
     source_submission_id: Optional[UUID] = None
+    context_json: Optional[dict] = None
     assigned_accessor_id: Optional[UUID] = None
     assigned_accessor_type: Optional[AccessorType] = None
 
@@ -113,6 +115,7 @@ class ProjectTaskUpdate(BaseModel):
     due_at: Optional[datetime] = None
     visit_date: Optional[date] = None
     source_submission_id: Optional[UUID] = None
+    context_json: Optional[dict] = None
     assigned_accessor_id: Optional[UUID] = None
     assigned_accessor_type: Optional[AccessorType] = None
     clear_assignment: bool = False
@@ -142,10 +145,57 @@ class ProjectTaskOut(BaseModel):
     due_at: Optional[datetime] = None
     visit_date: Optional[date] = None
     source_submission_id: Optional[UUID] = None
+    context_json: Optional[dict] = None
+    automation_rule_id: Optional[UUID] = None
     assigned_accessor_id: Optional[UUID] = None
     assigned_accessor_type: Optional[AccessorType] = None
     completed_at: Optional[datetime] = None
     created_by: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectAttendanceLocation(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy_meters: Optional[float] = None
+    label: Optional[str] = None
+
+
+class ProjectAttendanceCheckIn(BaseModel):
+    timestamp: Optional[datetime] = None
+    location: ProjectAttendanceLocation
+    note: Optional[str] = None
+    image_uri: Optional[str] = None
+    signature: Optional[str] = None
+
+
+class ProjectAttendanceCheckOut(BaseModel):
+    timestamp: Optional[datetime] = None
+    location: ProjectAttendanceLocation
+    note: Optional[str] = None
+    image_uri: Optional[str] = None
+    signature: Optional[str] = None
+
+
+class ProjectAttendanceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    user_id: UUID
+    attendance_date: date
+    status: ProjectAttendanceStatus
+    check_in_at: datetime
+    check_in_location_json: dict
+    check_in_note: Optional[str] = None
+    check_in_image_uri: Optional[str] = None
+    check_in_signature: Optional[str] = None
+    check_out_at: Optional[datetime] = None
+    check_out_location_json: Optional[dict] = None
+    check_out_note: Optional[str] = None
+    check_out_image_uri: Optional[str] = None
+    check_out_signature: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

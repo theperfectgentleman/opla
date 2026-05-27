@@ -15,6 +15,7 @@ from app.models.submission import Submission
 from app.models.section_template import SectionTemplate
 from app.models.project_access import ProjectAccess
 from app.models.project_catalog_item import ProjectCatalogItem
+from app.models.project_attendance import ProjectAttendanceRecord
 from app.models.project_task import ProjectTask
 from app.models.project_report import ProjectReport
 from app.models.project_asset import ProjectAsset

@@ -197,6 +197,46 @@ export const projectAPI = {
     });
     return res.data;
   },
+  listAttendance: async (orgId: string, projectId: string, date?: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/attendance`, {
+      params: date ? { date } : undefined,
+    });
+    return res.data;
+  },
+  getMyAttendanceStatus: async (orgId: string, projectId: string, date: string) => {
+    const res = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/attendance/my-status`, {
+      params: { date },
+    });
+    return res.data;
+  },
+  checkInAttendance: async (
+    orgId: string,
+    projectId: string,
+    data: {
+      timestamp?: string;
+      location: { latitude: number; longitude: number; accuracy_meters?: number; label?: string };
+      note?: string;
+      image_uri?: string;
+      signature?: string;
+    },
+  ) => {
+    const res = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/attendance/check-in`, data);
+    return res.data;
+  },
+  checkOutAttendance: async (
+    orgId: string,
+    projectId: string,
+    data: {
+      timestamp?: string;
+      location: { latitude: number; longitude: number; accuracy_meters?: number; label?: string };
+      note?: string;
+      image_uri?: string;
+      signature?: string;
+    },
+  ) => {
+    const res = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/attendance/check-out`, data);
+    return res.data;
+  },
   updateTask: async (
     orgId: string,
     projectId: string,

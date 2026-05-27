@@ -108,9 +108,11 @@ class ProjectTaskService:
         due_at: datetime | None,
         visit_date: date | None,
         source_submission_id: uuid.UUID | None,
+        context_json: dict | None,
         assigned_accessor_id: uuid.UUID | None,
         assigned_accessor_type: AccessorType | None,
         created_by: uuid.UUID,
+        automation_rule_id: uuid.UUID | None = None,
     ) -> ProjectTask:
         ProjectAccessService.ensure_project_is_mutable(project)
         ProjectTaskService._validate_timeline(starts_at, due_at)
@@ -127,6 +129,8 @@ class ProjectTaskService:
             due_at=due_at,
             visit_date=visit_date,
             source_submission_id=source_submission_id,
+            context_json=context_json,
+            automation_rule_id=automation_rule_id,
             assigned_accessor_id=assigned_accessor_id,
             assigned_accessor_type=assigned_accessor_type,
             created_by=created_by,
@@ -183,9 +187,11 @@ class ProjectTaskService:
         due_at: datetime | None = None,
         visit_date: date | None = None,
         source_submission_id: uuid.UUID | None = None,
+        context_json: dict | None = None,
         assigned_accessor_id: uuid.UUID | None = None,
         assigned_accessor_type: AccessorType | None = None,
         replace_assignment: bool = False,
+        replace_context: bool = False,
     ) -> ProjectTask:
         ProjectAccessService.ensure_project_is_mutable(project)
 
@@ -214,6 +220,8 @@ class ProjectTaskService:
         if source_submission_id is not None:
             ProjectTaskService._validate_source_submission(db, project, source_submission_id)
             task.source_submission_id = source_submission_id
+        if replace_context:
+            task.context_json = context_json
 
         if replace_assignment:
             ProjectTaskService._validate_assignment(db, project, assigned_accessor_id, assigned_accessor_type)

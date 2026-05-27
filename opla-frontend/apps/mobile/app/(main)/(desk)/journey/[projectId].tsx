@@ -29,6 +29,8 @@ type ProjectTask = {
   due_at?: string | null;
   visit_date?: string | null;
   source_submission_id?: string | null;
+  context_json?: Record<string, unknown> | null;
+  automation_rule_id?: string | null;
   assigned_accessor_id?: string | null;
   assigned_accessor_type?: 'user' | 'team' | null;
   completed_at?: string | null;
@@ -52,6 +54,20 @@ function formatTaskMoment(task: ProjectTask) {
   return task.visit_date || task.due_at || task.starts_at || task.created_at;
 }
 
+function readTaskContextText(task: ProjectTask, key: string) {
+  const value = task.context_json?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function readNestedTaskContextText(task: ProjectTask, parentKey: string, childKey: string) {
+  const parent = task.context_json?.[parentKey];
+  if (!parent || typeof parent !== 'object' || Array.isArray(parent)) {
+    return null;
+  }
+  const value = (parent as Record<string, unknown>)[childKey];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function TaskCard({
   task,
   accent,
@@ -67,6 +83,11 @@ function TaskCard({
   const dateLabel = formatTaskMoment(task);
   const shortDescription = task.description?.trim();
   const likelyLocation = shortDescription?.split(/[\n,|]/)[0]?.trim();
+  const sourceRecordLabel = readTaskContextText(task, 'source_record_label');
+  const contextLocation = readTaskContextText(task, 'location_label')
+    || readTaskContextText(task, 'region')
+    || readNestedTaskContextText(task, 'routing', 'cluster')
+    || readNestedTaskContextText(task, 'routing', 'zone');
 
   return (
     <View
@@ -81,6 +102,11 @@ function TaskCard({
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <View style={{ flex: 1 }}>
+          {sourceRecordLabel ? (
+            <Text style={{ color: '#7dd3fc', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 }}>
+              {sourceRecordLabel}
+            </Text>
+          ) : null}
           <Text style={{ color: '#f8fafc', fontSize: 16, fontWeight: '800' }}>{task.title}</Text>
           {shortDescription ? (
             <Text style={{ color: '#94a3b8', fontSize: 12, marginTop: 6, lineHeight: 18 }}>
@@ -88,7 +114,7 @@ function TaskCard({
             </Text>
           ) : (
             <Text style={{ color: '#64748b', fontSize: 12, marginTop: 6 }}>
-              Visit details will appear here when the task carries store context.
+              Assignment details will appear here when the task carries source-record context.
             </Text>
           )}
         </View>
@@ -103,19 +129,19 @@ function TaskCard({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}>
           <CalendarDays size={14} color={accent} />
           <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
-            {dateLabel ? fmtDate(dateLabel) : 'No visit date'}
+            {dateLabel ? fmtDate(dateLabel) : 'No scheduled date'}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}>
           <MapPin size={14} color="#38bdf8" />
           <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
-            {likelyLocation || 'Location context pending'}
+            {contextLocation || likelyLocation || 'Context pending'}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }}>
           <Clock3 size={14} color="#fbbf24" />
           <Text style={{ color: '#cbd5e1', fontSize: 11, fontWeight: '600' }}>
-            {task.kind === 'journey_visit' ? 'Journey visit' : 'Task'}
+            {task.kind === 'journey_visit' ? 'Scheduled visit' : 'Task'}
           </Text>
         </View>
       </View>
@@ -193,7 +219,7 @@ export default function JourneyDayScreen() {
 
   const loadTasks = useCallback(async () => {
     if (!projectId || !orgId) {
-      setError('This journey view needs both project and organisation context. Open it from the project workspace.');
+      setError('This assignment view needs both project and organisation context. Open it from the project workspace.');
       return;
     }
     try {
@@ -201,7 +227,7 @@ export default function JourneyDayScreen() {
       setTasks(Array.isArray(data) ? data : []);
       setError('');
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? 'Could not load today\'s visits.');
+      setError(err?.response?.data?.detail ?? 'Could not load today\'s assignments.');
     }
   }, [orgId, projectId, targetDate]);
 
@@ -221,7 +247,7 @@ export default function JourneyDayScreen() {
       const updated = await projectAPI.updateTask(orgId, projectId, taskId, { status });
       setTasks((prev) => prev.map((task) => (task.id === updated.id ? updated : task)));
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? 'Could not update visit status.');
+      setError(err?.response?.data?.detail ?? 'Could not update assignment status.');
     }
   };
 
@@ -259,7 +285,7 @@ export default function JourneyDayScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '600' }}>{projectName ?? 'Project'}</Text>
-          <Text style={{ fontSize: 19, fontWeight: '800', color: '#f1f5f9' }}>Today's Visits</Text>
+          <Text style={{ fontSize: 19, fontWeight: '800', color: '#f1f5f9' }}>Today's Assignments</Text>
         </View>
         {!loading ? (
           <View style={{ backgroundColor: '#1e293b', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
@@ -289,7 +315,7 @@ export default function JourneyDayScreen() {
           >
             <Text style={{ color: '#f8fafc', fontSize: 15, fontWeight: '800' }}>{fmtDate(targetDate)}</Text>
             <Text style={{ color: '#94a3b8', fontSize: 12, marginTop: 6, lineHeight: 18 }}>
-              Assigned journey visits for this project. Store identity and location context come from the task title and description until richer visit metadata is added.
+              Assigned follow-ups for this project. Source-record identity and context come from the task title and description until richer task metadata is added.
             </Text>
           </View>
 
@@ -303,7 +329,7 @@ export default function JourneyDayScreen() {
             <View style={{ alignItems: 'center', paddingVertical: 48 }}>
               <CalendarDays size={40} color="#334155" />
               <Text style={{ color: '#475569', marginTop: 14, fontSize: 15, fontWeight: '600' }}>
-                No visits assigned for today
+                No assignments scheduled for today
               </Text>
               <Text style={{ color: '#334155', marginTop: 6, textAlign: 'center', fontSize: 13 }}>
                 Tasks assigned to you or your teams for {fmtDate(targetDate)} will appear here.

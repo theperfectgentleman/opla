@@ -14,6 +14,7 @@ import {
     Users,
     Database,
     XCircle,
+    MapPin,
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
@@ -126,10 +127,32 @@ type ProjectTask = {
     due_at?: string;
     visit_date?: string;
     source_submission_id?: string;
+    context_json?: Record<string, unknown> | null;
+    automation_rule_id?: string | null;
     assigned_accessor_id?: string;
     assigned_accessor_type?: 'user' | 'team';
     created_by?: string;
     completed_at?: string;
+    created_at: string;
+    updated_at: string;
+};
+
+type ProjectAttendanceRecord = {
+    id: string;
+    project_id: string;
+    user_id: string;
+    attendance_date: string;
+    status: 'checked_in' | 'checked_out';
+    check_in_at: string;
+    check_in_location_json: { latitude: number; longitude: number; accuracy_meters?: number; label?: string };
+    check_in_note?: string | null;
+    check_in_image_uri?: string | null;
+    check_in_signature?: string | null;
+    check_out_at?: string | null;
+    check_out_location_json?: { latitude: number; longitude: number; accuracy_meters?: number; label?: string } | null;
+    check_out_note?: string | null;
+    check_out_image_uri?: string | null;
+    check_out_signature?: string | null;
     created_at: string;
     updated_at: string;
 };
@@ -260,6 +283,7 @@ const ProjectWorkspace: React.FC = () => {
     const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
     const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
     const [tasks, setTasks] = useState<ProjectTask[]>([]);
+    const [attendanceRecords, setAttendanceRecords] = useState<ProjectAttendanceRecord[]>([]);
     const [reports, setReports] = useState<ReportArtifact[]>([]);
     const [accessRules, setAccessRules] = useState<ProjectAccessRule[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
@@ -295,6 +319,7 @@ const ProjectWorkspace: React.FC = () => {
         unit: '',
         brand: '',
     });
+    const attendanceDay = useMemo(() => formatDateKey(new Date()), []);
 
     const [datasets] = useState<WorkspaceDataset[]>([
         { id: 'ds-1', name: 'Customer Feedback', records_count: 1240, updated_at: new Date().toISOString(), status: 'active' },
@@ -346,10 +371,11 @@ const ProjectWorkspace: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const [project, projectForms, projectTasks, projectReports, projectAccess, orgTeams, templates, projectCatalogItems] = await Promise.all([
+                const [project, projectForms, projectTasks, projectAttendance, projectReports, projectAccess, orgTeams, templates, projectCatalogItems] = await Promise.all([
                     refreshCurrentProject(currentOrg.id, projectId),
                     formAPI.list(projectId),
                     projectAPI.listTasks(currentOrg.id, projectId),
+                    projectAPI.listAttendance(currentOrg.id, projectId, attendanceDay),
                     reportAPI.list(currentOrg.id, projectId),
                     projectAPI.listAccess(currentOrg.id, projectId),
                     teamAPI.list(currentOrg.id),
@@ -376,6 +402,7 @@ const ProjectWorkspace: React.FC = () => {
                 setCatalogItems(projectCatalogItems);
                 setReviewQueue(pendingReviews);
                 setTasks(projectTasks);
+                setAttendanceRecords(projectAttendance);
                 setReports(projectReports);
                 setAccessRules(projectAccess);
                 setTeams(orgTeams);
@@ -388,7 +415,7 @@ const ProjectWorkspace: React.FC = () => {
         };
 
         loadWorkspace();
-    }, [currentOrg, projectId, refreshCurrentProject, setCurrentProject]);
+    }, [attendanceDay, currentOrg, projectId, refreshCurrentProject, setCurrentProject]);
 
     const selectableAccessors = useMemo(() => {
         return members.map(member => ({
@@ -482,6 +509,28 @@ const ProjectWorkspace: React.FC = () => {
     const resolveRuleLabel = (rule: ProjectAccessRule) => resolveAccessorLabel(rule.accessor_id, rule.accessor_type);
     const resolveTaskAssigneeLabel = (task: ProjectTask) => resolveAccessorLabel(task.assigned_accessor_id, task.assigned_accessor_type);
     const selectedAutomationForm = forms.find((form) => form.id === selectedAutomationFormId) || null;
+
+    const getTaskContextText = (task: ProjectTask, key: string) => {
+        const value = task.context_json?.[key];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+    };
+
+    const getNestedTaskContextText = (task: ProjectTask, parentKey: string, childKey: string) => {
+        const parent = task.context_json?.[parentKey];
+        if (!parent || typeof parent !== 'object' || Array.isArray(parent)) {
+            return null;
+        }
+        const value = (parent as Record<string, unknown>)[childKey];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+    };
+
+    const getTaskSourceRecordLabel = (task: ProjectTask) => getTaskContextText(task, 'source_record_label');
+    const getTaskContextSummary = (task: ProjectTask) => (
+        getTaskContextText(task, 'location_label')
+        || getTaskContextText(task, 'region')
+        || getNestedTaskContextText(task, 'routing', 'cluster')
+        || getNestedTaskContextText(task, 'routing', 'zone')
+    );
 
     const isAutomatedTask = (task: ProjectTask) => Boolean(task.source_submission_id);
 
@@ -585,6 +634,24 @@ const ProjectWorkspace: React.FC = () => {
     };
 
     const getTaskAssignmentValue = (task: ProjectTask) => getAccessorValue(task.assigned_accessor_id, task.assigned_accessor_type);
+
+    const resolveAttendanceMemberLabel = (record: ProjectAttendanceRecord) => {
+        const member = members.find(item => item.user_id === record.user_id);
+        return member?.user?.full_name || member?.user?.email || member?.user?.phone || record.user_id;
+    };
+
+    const formatAttendanceLocation = (location?: { latitude: number; longitude: number; accuracy_meters?: number; label?: string } | null) => {
+        if (!location) {
+            return 'Location pending';
+        }
+        return location.label || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
+    };
+
+    const attendanceSummary = useMemo(() => ({
+        total: attendanceRecords.length,
+        checkedIn: attendanceRecords.filter((record) => record.status === 'checked_in').length,
+        checkedOut: attendanceRecords.filter((record) => record.status === 'checked_out').length,
+    }), [attendanceRecords]);
 
     const handleTaskStatusChange = async (taskId: string, status: ProjectTask['status']) => {
         if (!currentOrg || !projectId) return;
@@ -1586,6 +1653,11 @@ const ProjectWorkspace: React.FC = () => {
                                                 />
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex flex-wrap items-center gap-2">
+                                                        {getTaskSourceRecordLabel(task) && (
+                                                            <span className="inline-flex rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                                                                {getTaskSourceRecordLabel(task)}
+                                                            </span>
+                                                        )}
                                                         <h3 className={`text-sm font-semibold leading-tight text-[hsl(var(--text-primary))] ${task.status === 'done' ? 'line-through text-[hsl(var(--text-tertiary))]' : ''}`}>
                                                             {task.title}
                                                         </h3>
@@ -1616,6 +1688,11 @@ const ProjectWorkspace: React.FC = () => {
                                                     {task.visit_date && (
                                                         <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
                                                             Scheduled {new Date(task.visit_date).toLocaleDateString()}
+                                                        </p>
+                                                    )}
+                                                    {getTaskContextSummary(task) && (
+                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                            Context {getTaskContextSummary(task)}
                                                         </p>
                                                     )}
                                                     {task.due_at && (
@@ -1679,6 +1756,58 @@ const ProjectWorkspace: React.FC = () => {
                                             <div className="mt-3 rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-[11px] text-[hsl(var(--text-secondary))]">
                                                 Placeholder: message feed, composer, mentions, and activity history will land here.
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                            <MapPin className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Attendance</h2>
+                                            <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Operational check-in and check-out for {attendanceDay}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 text-[11px] text-[hsl(var(--text-secondary))]">
+                                        <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.total} total</span>
+                                        <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedIn} active</span>
+                                        <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedOut} completed</span>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                    {attendanceRecords.length === 0 ? (
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No attendance activity recorded for this day.</p>
+                                    ) : attendanceRecords.map(record => (
+                                        <div key={record.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div>
+                                                    <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{resolveAttendanceMemberLabel(record)}</h3>
+                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                        Checked in {new Date(record.check_in_at).toLocaleTimeString()}
+                                                        {record.check_out_at ? ` • Checked out ${new Date(record.check_out_at).toLocaleTimeString()}` : ''}
+                                                    </p>
+                                                </div>
+                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${record.status === 'checked_out' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-sky-500/10 text-sky-300 border border-sky-500/20'}`}>
+                                                    {record.status === 'checked_out' ? 'Checked Out' : 'Checked In'}
+                                                </span>
+                                            </div>
+                                            <p className="mt-2 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                Check-in: {formatAttendanceLocation(record.check_in_location_json)}
+                                            </p>
+                                            {record.check_out_location_json && (
+                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                    Check-out: {formatAttendanceLocation(record.check_out_location_json)}
+                                                </p>
+                                            )}
+                                            {(record.check_in_note || record.check_out_note) && (
+                                                <p className="mt-2 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                    {record.check_out_note || record.check_in_note}
+                                                </p>
+                                            )}
                                         </div>
                                     ))}
                                 </div>

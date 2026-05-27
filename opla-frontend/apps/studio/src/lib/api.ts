@@ -331,6 +331,12 @@ export const projectAPI = {
         const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/tasks`);
         return response.data;
     },
+    listAttendance: async (orgId: string, projectId: string, date?: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/attendance`, {
+            params: date ? { date } : undefined,
+        });
+        return response.data;
+    },
     listCatalogItems: async (orgId: string, projectId: string) => {
         const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/catalog-items`);
         return response.data;

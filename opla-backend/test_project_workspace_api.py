@@ -356,6 +356,11 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
                 "kind": "journey_visit",
                 "visit_date": "2026-05-23",
                 "source_submission_id": str(submission.id),
+                "context_json": {
+                    "source_record_label": "Makola Central",
+                    "region": "Greater Accra",
+                    "routing": {"cluster": "A1"},
+                },
                 "assigned_accessor_id": str(self.member_user.id),
                 "assigned_accessor_type": "user",
             },
@@ -366,6 +371,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(payload["kind"], "journey_visit")
         self.assertEqual(payload["visit_date"], "2026-05-23")
         self.assertEqual(payload["source_submission_id"], str(submission.id))
+        self.assertEqual(payload["context_json"]["source_record_label"], "Makola Central")
+        self.assertEqual(payload["context_json"]["routing"]["cluster"], "A1")
 
     def test_member_can_list_only_their_tasks_for_a_day(self):
         today_task = ProjectTask(
@@ -408,6 +415,61 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(len(payload), 1)
         self.assertEqual(payload[0]["id"], str(today_task.id))
         self.assertEqual(payload[0]["kind"], "journey_visit")
+
+    def test_member_can_check_in_and_out_for_project_attendance(self):
+        check_in_response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/attendance/check-in",
+            headers=self.auth_headers(self.member_user),
+            json={
+                "timestamp": "2026-05-25T08:15:00",
+                "location": {"latitude": 5.6037, "longitude": -0.1870, "accuracy_meters": 12.5, "label": "Osu Base"},
+                "note": "Morning roll call",
+                "signature": "K. Mensah",
+            },
+        )
+
+        self.assertEqual(check_in_response.status_code, 201)
+        checked_in = check_in_response.json()
+        self.assertEqual(checked_in["status"], "checked_in")
+        self.assertEqual(checked_in["check_in_location_json"]["label"], "Osu Base")
+        self.assertEqual(checked_in["check_in_signature"], "K. Mensah")
+
+        check_out_response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/attendance/check-out",
+            headers=self.auth_headers(self.member_user),
+            json={
+                "timestamp": "2026-05-25T17:30:00",
+                "location": {"latitude": 5.6071, "longitude": -0.1901, "accuracy_meters": 8.0, "label": "Osu Debrief"},
+                "note": "Day complete",
+            },
+        )
+
+        self.assertEqual(check_out_response.status_code, 200)
+        checked_out = check_out_response.json()
+        self.assertEqual(checked_out["status"], "checked_out")
+        self.assertEqual(checked_out["check_out_location_json"]["label"], "Osu Debrief")
+        self.assertEqual(checked_out["check_out_note"], "Day complete")
+
+    def test_admin_can_list_project_attendance_for_day(self):
+        self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/attendance/check-in",
+            headers=self.auth_headers(self.member_user),
+            json={
+                "timestamp": "2026-05-25T08:00:00",
+                "location": {"latitude": 5.6037, "longitude": -0.1870, "label": "Field Hub"},
+            },
+        )
+
+        response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/attendance?date=2026-05-25",
+            headers=self.auth_headers(self.admin_user),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["user_id"], str(self.member_user.id))
+        self.assertEqual(payload[0]["status"], "checked_in")
 
     def test_admin_can_list_and_review_form_submissions(self):
         form = Form(
@@ -529,6 +591,7 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         )
 
         self.assertEqual(create_rule.status_code, 201)
+        rule_id = create_rule.json()["id"]
 
         submission_response = self.client.post(
             "/api/v1/submissions",
@@ -559,6 +622,7 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(len(matching_tasks), 1)
         self.assertEqual(matching_tasks[0]["description"], "Approved amount: 45")
         self.assertEqual(matching_tasks[0]["source_submission_id"], submission_id)
+        self.assertEqual(matching_tasks[0]["automation_rule_id"], rule_id)
 
     def test_admin_can_view_form_dataset_details(self):
         form = FormService.create_form(

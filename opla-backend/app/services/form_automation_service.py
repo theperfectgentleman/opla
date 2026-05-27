@@ -218,9 +218,11 @@ class FormAutomationService:
             due_at=FormAutomationService._resolve_datetime_value(config, event_context, field_key="due_at_field", value_key="due_at_value"),
             visit_date=FormAutomationService._resolve_date_value(config, event_context, field_key="visit_date_field", value_key="visit_date_value"),
             source_submission_id=submission.id,
+            context_json=None,
             assigned_accessor_id=FormAutomationService._coerce_uuid(config.get("assigned_accessor_id")),
             assigned_accessor_type=assigned_accessor_type,
             created_by=actor_id or submission.user_id or rule.created_by,
+            automation_rule_id=rule.id,
         )
 
     @staticmethod

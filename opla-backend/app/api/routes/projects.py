@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -7,6 +7,9 @@ from app.api.dependencies import get_current_user, get_db
 from app.api.schemas.project import (
     ProjectAccessCreate,
     ProjectAccessOut,
+    ProjectAttendanceCheckIn,
+    ProjectAttendanceCheckOut,
+    ProjectAttendanceOut,
     ProjectCatalogItemCreate,
     ProjectCatalogItemOut,
     ProjectCatalogItemUpdate,
@@ -24,6 +27,7 @@ from app.services.form_service import ProjectService
 from app.services.organization_service import OrganizationService
 from app.services.project_access_service import ProjectAccessService
 from app.services.project_catalog_service import ProjectCatalogService
+from app.services.project_attendance_service import ProjectAttendanceService
 from app.services.project_role_service import ProjectRoleService
 from app.services.project_task_service import ProjectTaskService
 from app.models.project_access import AccessorType
@@ -301,6 +305,80 @@ def list_my_project_tasks_for_day(
     return ProjectTaskService.list_tasks_for_user_day(db, project_id, current_user.id, target_date)
 
 
+@router.get("/{project_id}/attendance", response_model=List[ProjectAttendanceOut])
+def list_project_attendance(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    target_date: date | None = Query(default=None, alias="date"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectAttendanceService.list_records(db, project_id, target_date)
+
+
+@router.get("/{project_id}/attendance/my-status", response_model=ProjectAttendanceOut | None)
+def get_my_project_attendance_status(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    target_date: date = Query(alias="date"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectAttendanceService.get_record_for_user_day(db, project_id, current_user.id, target_date)
+
+
+@router.post("/{project_id}/attendance/check-in", response_model=ProjectAttendanceOut, status_code=status.HTTP_201_CREATED)
+def check_in_project_attendance(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    payload: ProjectAttendanceCheckIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectAttendanceService.check_in(
+        db,
+        project,
+        user_id=current_user.id,
+        timestamp=payload.timestamp or datetime.utcnow(),
+        location=payload.location.model_dump(),
+        note=payload.note,
+        image_uri=payload.image_uri,
+        signature=payload.signature,
+    )
+
+
+@router.post("/{project_id}/attendance/check-out", response_model=ProjectAttendanceOut)
+def check_out_project_attendance(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    payload: ProjectAttendanceCheckOut,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return ProjectAttendanceService.check_out(
+        db,
+        project,
+        user_id=current_user.id,
+        timestamp=payload.timestamp or datetime.utcnow(),
+        location=payload.location.model_dump(),
+        note=payload.note,
+        image_uri=payload.image_uri,
+        signature=payload.signature,
+    )
+
+
 @router.post("/{project_id}/tasks", response_model=ProjectTaskOut, status_code=status.HTTP_201_CREATED)
 def create_project_task(
     org_id: uuid.UUID,
@@ -322,6 +400,7 @@ def create_project_task(
         due_at=payload.due_at,
         visit_date=payload.visit_date,
         source_submission_id=payload.source_submission_id,
+        context_json=payload.context_json,
         assigned_accessor_id=payload.assigned_accessor_id,
         assigned_accessor_type=payload.assigned_accessor_type,
         created_by=current_user.id,
@@ -353,9 +432,11 @@ def update_project_task(
         due_at=payload.due_at,
         visit_date=payload.visit_date,
         source_submission_id=payload.source_submission_id,
+        context_json=payload.context_json,
         assigned_accessor_id=None if payload.clear_assignment else payload.assigned_accessor_id,
         assigned_accessor_type=None if payload.clear_assignment else payload.assigned_accessor_type,
         replace_assignment=payload.clear_assignment or payload.assigned_accessor_id is not None or payload.assigned_accessor_type is not None,
+        replace_context="context_json" in payload.model_fields_set,
     )
 
 

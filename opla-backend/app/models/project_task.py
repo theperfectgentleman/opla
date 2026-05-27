@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, DateTime, Date, ForeignKey, Text, Enum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
@@ -42,6 +42,13 @@ class ProjectTask(Base):
     due_at = Column(DateTime, nullable=True)
     visit_date = Column(Date, nullable=True)
     source_submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id"), nullable=True, index=True)
+    context_json = Column(JSONB, nullable=True)
+    automation_rule_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("form_automation_rules.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     assigned_accessor_id = Column(UUID(as_uuid=True), nullable=True)
     assigned_accessor_type = Column(
         Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]),
@@ -55,3 +62,4 @@ class ProjectTask(Base):
     project = relationship("Project", backref="project_tasks")
     creator = relationship("User")
     source_submission = relationship("Submission")
+    automation_rule = relationship("FormAutomationRule")

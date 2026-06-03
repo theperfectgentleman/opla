@@ -386,6 +386,7 @@ export const projectAPI = {
             description?: string;
             starts_at?: string;
             due_at?: string;
+            context_json?: Record<string, unknown>;
             assigned_accessor_id?: string;
             assigned_accessor_type?: 'user' | 'team';
         },

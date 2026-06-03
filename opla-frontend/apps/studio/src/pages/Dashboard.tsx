@@ -104,6 +104,7 @@ const Dashboard: React.FC = () => {
     const [taskProjectId, setTaskProjectId] = useState('');
     const [taskTitle, setTaskTitle] = useState('');
     const [taskDescription, setTaskDescription] = useState('');
+    const [taskContextJson, setTaskContextJson] = useState('');
     const [taskStartsAt, setTaskStartsAt] = useState('');
     const [taskDueAt, setTaskDueAt] = useState('');
     const [taskAssigneeType, setTaskAssigneeType] = useState<'user' | 'team'>('user');
@@ -432,6 +433,21 @@ const Dashboard: React.FC = () => {
         event.preventDefault();
         if (!currentOrg || !taskProjectId || !taskTitle.trim()) return;
 
+        let contextJson: Record<string, unknown> | undefined;
+        if (taskContextJson.trim()) {
+            try {
+                const parsed = JSON.parse(taskContextJson);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    alert('Task context must be a JSON object.');
+                    return;
+                }
+                contextJson = parsed as Record<string, unknown>;
+            } catch {
+                alert('Task context must be valid JSON.');
+                return;
+            }
+        }
+
         try {
             setSavingTask(true);
             await projectAPI.createTask(currentOrg.id, taskProjectId, {
@@ -439,11 +455,13 @@ const Dashboard: React.FC = () => {
                 description: taskDescription.trim() || undefined,
                 starts_at: taskStartsAt ? new Date(taskStartsAt).toISOString() : undefined,
                 due_at: taskDueAt ? new Date(taskDueAt).toISOString() : undefined,
+                context_json: contextJson,
                 assigned_accessor_id: taskAssigneeId || undefined,
                 assigned_accessor_type: taskAssigneeId ? taskAssigneeType : undefined,
             });
             setTaskTitle('');
             setTaskDescription('');
+            setTaskContextJson('');
             setTaskStartsAt('');
             setTaskDueAt('');
             await refreshTasks();
@@ -705,6 +723,16 @@ const Dashboard: React.FC = () => {
                                         onChange={(event) => setTaskDescription(event.target.value)}
                                         className="min-h-[96px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
                                         placeholder="Capture the deliverable, owner notes, or dependency"
+                                    />
+                                </div>
+
+                                <div className="md:col-span-2">
+                                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Task Context (JSON)</label>
+                                    <textarea
+                                        value={taskContextJson}
+                                        onChange={(event) => setTaskContextJson(event.target.value)}
+                                        className="min-h-[96px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 font-mono text-sm"
+                                        placeholder={"{\n  \"source_record_label\": \"Outlet 14\",\n  \"location_label\": \"Tema cluster\"\n}"}
                                     />
                                 </div>
 

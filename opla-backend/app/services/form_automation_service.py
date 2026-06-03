@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import json
 import re
 import uuid
 from typing import Any, Optional
@@ -218,12 +219,105 @@ class FormAutomationService:
             due_at=FormAutomationService._resolve_datetime_value(config, event_context, field_key="due_at_field", value_key="due_at_value"),
             visit_date=FormAutomationService._resolve_date_value(config, event_context, field_key="visit_date_field", value_key="visit_date_value"),
             source_submission_id=submission.id,
-            context_json=None,
+            context_json=FormAutomationService._resolve_context_json(config, event_context),
             assigned_accessor_id=FormAutomationService._coerce_uuid(config.get("assigned_accessor_id")),
             assigned_accessor_type=assigned_accessor_type,
             created_by=actor_id or submission.user_id or rule.created_by,
             automation_rule_id=rule.id,
         )
+
+    @staticmethod
+    def _resolve_context_json(config: dict[str, Any], event_context: dict[str, Any]) -> Optional[dict[str, Any]]:
+        raw_mapping = config.get("context_mapping_json")
+        if raw_mapping in (None, "", {}):
+            return None
+
+        if isinstance(raw_mapping, str):
+            try:
+                raw_mapping = json.loads(raw_mapping)
+            except json.JSONDecodeError:
+                return None
+
+        if not isinstance(raw_mapping, dict):
+            return None
+
+        resolved: dict[str, Any] = {}
+        for target_key, source in raw_mapping.items():
+            if not isinstance(target_key, str) or not target_key.strip():
+                continue
+
+            resolved_value = FormAutomationService._resolve_context_value(source, event_context)
+            if resolved_value is None:
+                continue
+
+            FormAutomationService._set_context_value(resolved, target_key.strip(), resolved_value)
+
+        return resolved or None
+
+    @staticmethod
+    def _resolve_context_value(source: Any, event_context: dict[str, Any]) -> Any:
+        if isinstance(source, str):
+            trimmed = source.strip()
+            if not trimmed:
+                return None
+            if "{{" in trimmed and "}}" in trimmed:
+                rendered = FormAutomationService._render_template(trimmed, event_context)
+                return rendered or None
+
+            resolved = FormAutomationService._resolve_path(event_context, trimmed)
+            if resolved is not None:
+                return FormAutomationService._normalize_json_value(resolved)
+            return trimmed
+
+        if isinstance(source, dict):
+            nested = {
+                key: value
+                for key, value in (
+                    (key, FormAutomationService._resolve_context_value(value, event_context))
+                    for key, value in source.items()
+                )
+                if value is not None
+            }
+            return nested or None
+
+        if isinstance(source, list):
+            nested = [
+                value
+                for value in (FormAutomationService._resolve_context_value(value, event_context) for value in source)
+                if value is not None
+            ]
+            return nested or None
+
+        return FormAutomationService._normalize_json_value(source)
+
+    @staticmethod
+    def _set_context_value(target: dict[str, Any], path: str, value: Any) -> None:
+        parts = [part for part in path.split(".") if part]
+        if not parts:
+            return
+
+        cursor = target
+        for part in parts[:-1]:
+            existing = cursor.get(part)
+            if not isinstance(existing, dict):
+                existing = {}
+                cursor[part] = existing
+            cursor = existing
+        cursor[parts[-1]] = value
+
+    @staticmethod
+    def _normalize_json_value(value: Any) -> Any:
+        if isinstance(value, uuid.UUID):
+            return str(value)
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, dict):
+            return {key: FormAutomationService._normalize_json_value(entry) for key, entry in value.items()}
+        if isinstance(value, list):
+            return [FormAutomationService._normalize_json_value(entry) for entry in value]
+        return value
 
     @staticmethod
     def _resolve_date_value(config: dict[str, Any], event_context: dict[str, Any], *, field_key: str, value_key: str) -> Optional[date]:

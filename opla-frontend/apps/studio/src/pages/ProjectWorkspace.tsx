@@ -300,6 +300,7 @@ const ProjectWorkspace: React.FC = () => {
         title_template: 'Follow up {{ submission.id }}',
         description_template: '',
         assigned_accessor: '',
+        context_mapping_json: '',
         starts_at_value: '',
         due_at_value: '',
         visit_date_value: '',
@@ -653,6 +654,29 @@ const ProjectWorkspace: React.FC = () => {
         checkedOut: attendanceRecords.filter((record) => record.status === 'checked_out').length,
     }), [attendanceRecords]);
 
+    const workflowMetrics = useMemo(() => {
+        const sourceLinkedTasks = tasks.filter((task) => Boolean(task.source_submission_id)).length;
+        const automatedTasks = tasks.filter((task) => isAutomatedTask(task)).length;
+        const completedTasks = tasks.filter((task) => task.status === 'done').length;
+        const publishedReports = reports.filter((report) => report.status === 'published').length;
+
+        return {
+            pendingReview: reviewQueue.length,
+            sourceLinkedTasks,
+            automatedTasks,
+            completedTasks,
+            completionRate: tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0,
+            attendanceCompletionRate: attendanceRecords.length > 0 ? Math.round((attendanceSummary.checkedOut / attendanceRecords.length) * 100) : 0,
+            publishedReports,
+        };
+    }, [attendanceRecords.length, attendanceSummary.checkedOut, reports, reviewQueue.length, tasks]);
+
+    const workflowJoinNotes = useMemo(() => ([
+        'Source records join to assignments through source_submission_id on project tasks.',
+        'Automation provenance stays on automation_rule_id, while task context_json carries copied routing or source labels for reporting.',
+        'Attendance joins back to field execution through project_id, user_id, and attendance_date for the same operating day.',
+    ]), []);
+
     const handleTaskStatusChange = async (taskId: string, status: ProjectTask['status']) => {
         if (!currentOrg || !projectId) return;
 
@@ -860,6 +884,7 @@ const ProjectWorkspace: React.FC = () => {
             title_template: 'Follow up {{ submission.id }}',
             description_template: '',
             assigned_accessor: '',
+            context_mapping_json: '',
             starts_at_value: '',
             due_at_value: '',
             visit_date_value: '',
@@ -886,6 +911,9 @@ const ProjectWorkspace: React.FC = () => {
         return [
             `Task: ${config.title_template || 'Follow up {{ submission.id }}'}`,
             `Assignee: ${assigneeLabel}`,
+            config.context_mapping_json && Object.keys(config.context_mapping_json).length > 0
+                ? `Context: ${Object.keys(config.context_mapping_json).length} mapped field${Object.keys(config.context_mapping_json).length === 1 ? '' : 's'}`
+                : null,
             config.due_at_value ? `Due: ${config.due_at_value}` : null,
             config.visit_date_value ? `Scheduled: ${config.visit_date_value}` : null,
         ].filter(Boolean).join(' • ');
@@ -898,6 +926,22 @@ const ProjectWorkspace: React.FC = () => {
         }
 
         const nextAccessor = parseAccessorValue(newAutomationRule.assigned_accessor);
+        let contextMapping: Record<string, unknown> | undefined;
+        const rawContextMapping = newAutomationRule.context_mapping_json.trim();
+        if (rawContextMapping) {
+            try {
+                const parsed = JSON.parse(rawContextMapping);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    setError('Task context mapping must be a JSON object.');
+                    return;
+                }
+                contextMapping = parsed as Record<string, unknown>;
+            } catch {
+                setError('Task context mapping must be valid JSON.');
+                return;
+            }
+        }
+
         const cleanConditions = automationConditions
             .map((condition) => ({
                 field: condition.field.trim(),
@@ -925,6 +969,7 @@ const ProjectWorkspace: React.FC = () => {
                 description_template: newAutomationRule.description_template.trim() || undefined,
                 assigned_accessor_id: nextAccessor.accessor_id || undefined,
                 assigned_accessor_type: nextAccessor.accessor_type || undefined,
+                context_mapping_json: contextMapping,
                 starts_at_value: newAutomationRule.starts_at_value || undefined,
                 due_at_value: newAutomationRule.due_at_value || undefined,
                 visit_date_value: newAutomationRule.visit_date_value || undefined,
@@ -1231,6 +1276,19 @@ const ProjectWorkspace: React.FC = () => {
                                                     className="input"
                                                     placeholder="Triggered from {{ submission.id }} for {{ data.region }}"
                                                 />
+                                            </div>
+
+                                            <div>
+                                                <label className="label">Task Context Mapping (JSON)</label>
+                                                <textarea
+                                                    value={newAutomationRule.context_mapping_json}
+                                                    onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, context_mapping_json: event.target.value }))}
+                                                    className="input min-h-[120px] font-mono text-[11px]"
+                                                    placeholder={"{\n  \"source_record_label\": \"data.roommate_name\",\n  \"location_label\": \"{{ data.region }} cluster\",\n  \"routing.cluster\": \"data.cluster\"\n}"}
+                                                />
+                                                <p className="mt-1 text-[10px] text-[hsl(var(--text-tertiary))]">
+                                                    Optional. Values can be event paths such as <span className="font-mono">data.region</span> or templates such as <span className="font-mono">{'{{ data.roommate_name }}'}</span>. Dot keys create nested task context.
+                                                </p>
                                             </div>
 
                                             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1832,6 +1890,51 @@ const ProjectWorkspace: React.FC = () => {
                                     </button>
                                 </div>
                                 <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
+                                        <div className="flex flex-col gap-3">
+                                            <div>
+                                                <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">Workflow Coverage</h3>
+                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                    Operational metrics that reporting can now consume from source review, tasks, automation, and attendance.
+                                                </p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Pending review</p>
+                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.pendingReview}</p>
+                                                </div>
+                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Source-linked tasks</p>
+                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.sourceLinkedTasks}</p>
+                                                </div>
+                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Automation-created</p>
+                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.automatedTasks}</p>
+                                                </div>
+                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Task completion</p>
+                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.completionRate}%</p>
+                                                </div>
+                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Attendance complete</p>
+                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.attendanceCompletionRate}%</p>
+                                                </div>
+                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Published reports</p>
+                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.publishedReports}</p>
+                                                </div>
+                                            </div>
+                                            <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Reporting joins</p>
+                                                <div className="mt-2 space-y-1.5 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                    {workflowJoinNotes.map((note) => (
+                                                        <p key={note}>{note}</p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {reports.length === 0 ? (
                                         <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No reports yet.</p>
                                     ) : reports.map(report => (

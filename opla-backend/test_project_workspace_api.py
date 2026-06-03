@@ -624,6 +624,84 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(matching_tasks[0]["source_submission_id"], submission_id)
         self.assertEqual(matching_tasks[0]["automation_rule_id"], rule_id)
 
+    def test_approved_submission_automation_can_map_task_context(self):
+        form = Form(
+            project_id=self.open_project.id,
+            title=f"Assignment Intake {self.suffix}",
+            slug=f"assignment-intake-{self.suffix}",
+            blueprint_draft={"meta": {"title": "Assignment Intake"}},
+            blueprint_live={"meta": {"title": "Assignment Intake"}, "ui": []},
+            version=1,
+            published_version=1,
+            status=FormStatus.LIVE,
+            is_public=False,
+        )
+        self.db.add(form)
+        self.db.commit()
+
+        create_rule = self.client.post(
+            f"/api/v1/forms/{form.id}/automation-rules",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "name": "Create routed task",
+                "description": "Capture source context on automated tasks.",
+                "event_type": "submission_approved",
+                "action_type": "create_task",
+                "conditions_json": None,
+                "action_config_json": {
+                    "title_template": "Visit {{ data.outlet_name }}",
+                    "description_template": "Review {{ data.outlet_name }} in {{ data.region }}",
+                    "kind": "journey_visit",
+                    "visit_date_value": "2026-06-03",
+                    "context_mapping_json": {
+                        "source_record_label": "data.outlet_name",
+                        "location_label": "{{ data.region }} cluster",
+                        "routing.cluster": "data.cluster",
+                        "review.review_status": "submission.review_status"
+                    }
+                }
+            },
+        )
+
+        self.assertEqual(create_rule.status_code, 201)
+
+        submission_response = self.client.post(
+            "/api/v1/submissions",
+            headers=self.auth_headers(self.admin_user),
+            json={
+                "form_id": str(form.id),
+                "data": {
+                    "outlet_name": "Osu Shop 4",
+                    "region": "Accra",
+                    "cluster": "South Coast",
+                },
+                "metadata": {"source": "test"},
+            },
+        )
+        self.assertEqual(submission_response.status_code, 201)
+
+        submission_id = submission_response.json()["id"]
+        review_response = self.client.patch(
+            f"/api/v1/submissions/{submission_id}/review",
+            headers=self.auth_headers(self.admin_user),
+            json={"review_status": "approved", "review_comment": "Ready for fieldwork."},
+        )
+        self.assertEqual(review_response.status_code, 200)
+
+        task_response = self.client.get(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/tasks",
+            headers=self.auth_headers(self.admin_user),
+        )
+        self.assertEqual(task_response.status_code, 200)
+
+        matching_tasks = [task for task in task_response.json() if task["title"] == "Visit Osu Shop 4"]
+        self.assertEqual(len(matching_tasks), 1)
+        self.assertEqual(matching_tasks[0]["source_submission_id"], submission_id)
+        self.assertEqual(matching_tasks[0]["context_json"]["source_record_label"], "Osu Shop 4")
+        self.assertEqual(matching_tasks[0]["context_json"]["location_label"], "Accra cluster")
+        self.assertEqual(matching_tasks[0]["context_json"]["routing"]["cluster"], "South Coast")
+        self.assertEqual(matching_tasks[0]["context_json"]["review"]["review_status"], "approved")
+
     def test_admin_can_view_form_dataset_details(self):
         form = FormService.create_form(
             self.db,

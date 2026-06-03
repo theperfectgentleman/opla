@@ -7,15 +7,14 @@ import {
     Save, Play, Trash2, Settings, Smartphone, Layout,
     MapPin, Camera, Type, Hash, CheckSquare, List, Mail,
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
-    ChevronDown, ChevronRight, ArrowLeft, Zap, GitBranch, Terminal,
-    Layers, ChevronRight as Crumb, Copy, MoveRight, Table2, Database,
+    ChevronDown, ArrowLeft, Zap, GitBranch, Terminal,
+    Layers, Copy, MoveRight, Table2, Database,
     Eye, RotateCcw, Star
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
 type Platform = 'mobile' | 'web' | 'ussd';
 type RenderMode = 'single' | 'list';
-
 type FieldType =
     | 'input_text'
     | 'input_number'
@@ -175,6 +174,17 @@ interface FormSection {
     fields: FormField[];
     properties: SectionProperties;
     template_id?: string;
+    layout?: SectionCanvasLayout;
+}
+
+type SectionCollapseMode = 'full' | 'summary' | 'title';
+
+interface SectionCanvasLayout {
+    x: number;
+    y: number;
+    width?: number;
+    collapsed?: boolean;
+    collapse_mode?: SectionCollapseMode;
 }
 
 /** Strips stop words and builds a ≤5-word snake_case key from a label. */
@@ -250,6 +260,45 @@ const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNo
     { type: 'object_instance', label: 'Object Reference', icon: <FileText className="w-4 h-4" /> },
 ];
 
+const FLOW_NODE_WIDTH = 320;
+const FLOW_NODE_GAP_X = 380;
+const FLOW_NODE_GAP_Y = 220;
+const VARIABLE_DELETE_REVEAL_WIDTH = 88;
+
+const getNextCollapseMode = (mode: SectionCollapseMode): SectionCollapseMode => {
+    if (mode === 'full') return 'summary';
+    if (mode === 'summary') return 'title';
+    return 'full';
+};
+
+const getDefaultSectionLayout = (index: number): SectionCanvasLayout => ({
+    x: 80 + (index % 3) * FLOW_NODE_GAP_X,
+    y: 80 + Math.floor(index / 3) * FLOW_NODE_GAP_Y,
+    width: FLOW_NODE_WIDTH,
+    collapsed: false,
+    collapse_mode: 'full',
+});
+
+const ensureSectionLayout = (layout: Partial<SectionCanvasLayout> | undefined, index: number): SectionCanvasLayout => {
+    const fallback = getDefaultSectionLayout(index);
+    const rawCollapseMode = (layout as (Partial<SectionCanvasLayout> & { collapseMode?: SectionCollapseMode }) | undefined)?.collapseMode;
+    const collapseMode = rawCollapseMode === 'full' || rawCollapseMode === 'summary' || rawCollapseMode === 'title'
+        ? rawCollapseMode
+        : layout?.collapse_mode === 'full' || layout?.collapse_mode === 'summary' || layout?.collapse_mode === 'title'
+            ? layout.collapse_mode
+            : layout?.collapsed
+                ? 'summary'
+                : fallback.collapse_mode || 'full';
+
+    return {
+        x: typeof layout?.x === 'number' ? layout.x : fallback.x,
+        y: typeof layout?.y === 'number' ? layout.y : fallback.y,
+        width: typeof layout?.width === 'number' ? layout.width : fallback.width,
+        collapsed: collapseMode !== 'full',
+        collapse_mode: collapseMode,
+    };
+};
+
 const FormBuilder: React.FC = () => {
     const { formId } = useParams<{ formId: string }>();
     const navigate = useNavigate();
@@ -265,27 +314,40 @@ const FormBuilder: React.FC = () => {
         published_version?: number | null;
     } | null>(null);
     const [title, setTitle] = useState('Untitled Form');
-    const [templates, setTemplates] = useState<any[]>([]);
+    const [, setTemplates] = useState<any[]>([]);
     const defaultSectionProperties = (): SectionProperties => ({ render_mode: 'list', platforms: ['mobile', 'web'] });
-    const [sections, setSections] = useState<FormSection[]>([{ id: 'screen_1', title: 'Section 1', fields: [], properties: defaultSectionProperties() }]);
+    const [sections, setSections] = useState<FormSection[]>([{ id: 'screen_1', title: 'Section 1', fields: [], properties: defaultSectionProperties(), layout: ensureSectionLayout(undefined, 0) }]);
     const [currentSectionId, setCurrentSectionId] = useState<string>('screen_1');
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [logic, setLogic] = useState<LogicRule[]>([]);
     const [isSaving, setIsSaving] = useState(false);
-    const [openSection, setOpenSection] = useState<'basic' | 'advanced' | 'templates' | null>('basic');
     const [propertyTab, setPropertyTab] = useState<'content' | 'logic'>('content');
-    const [view, setView] = useState<'form' | 'section'>('form');
+    const [view, setView] = useState<'flow' | 'section'>('flow');
     const [slideDir, setSlideDir] = useState<'forward' | 'back'>('forward');
     const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
     const [dragEnabledFieldId, setDragEnabledFieldId] = useState<string | null>(null);
     const dragFieldIdRef = React.useRef<string | null>(null);
+    const swipeStateRef = React.useRef<{ fieldId: string | null; startX: number; startY: number; offset: number; swiping: boolean }>({
+        fieldId: null,
+        startX: 0,
+        startY: 0,
+        offset: 0,
+        swiping: false,
+    });
+    const flowCanvasRef = React.useRef<HTMLDivElement | null>(null);
     const [moveMenuFieldId, setMoveMenuFieldId] = useState<string | null>(null);
+    const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
+    const [sectionDragOffset, setSectionDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
     const [showSimulatorMenu, setShowSimulatorMenu] = useState(false);
     const [showMultiActionMenu, setShowMultiActionMenu] = useState(false);
     const [showBackupTools, setShowBackupTools] = useState(false);
+    const [isBuilderConsoleOpen, setIsBuilderConsoleOpen] = useState(false);
+    const [inspectorWidgetType, setInspectorWidgetType] = useState<FieldType>('input_text');
     const [initialHash, setInitialHash] = useState<string>('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
     const [isPublishing, setIsPublishing] = useState(false);
+    const [swipedFieldId, setSwipedFieldId] = useState<string | null>(null);
+    const [swipeOffset, setSwipeOffset] = useState(0);
     const [activeVersions, setActiveVersions] = useState<Array<{
         id: string;
         kind: 'draft' | 'live';
@@ -328,13 +390,248 @@ const FormBuilder: React.FC = () => {
     const exitSection = () => {
         setSlideDir('back');
         setSelectedFieldId(null);
-        setView('form');
+        setView('flow');
     };
 
     const currentSectionIndex = sections.findIndex(p => p.id === currentSectionId) !== -1 ? sections.findIndex(p => p.id === currentSectionId) : 0;
     const fields = sections[currentSectionIndex]?.fields || [];
     const selectedField = sections.flatMap(p => p.fields).find(f => f.id === selectedFieldId) || null;
+    const selectedSection = sections[currentSectionIndex] || sections[0] || null;
     const selectedObjectProperties = selectedField?.object_definition?.properties || [];
+
+    useEffect(() => {
+        if (!draggingSectionId) {
+            return;
+        }
+
+        const handlePointerMove = (event: PointerEvent) => {
+            const canvasRect = flowCanvasRef.current?.getBoundingClientRect();
+            if (!canvasRect) {
+                return;
+            }
+            const nextX = Math.max(24, event.clientX - canvasRect.left - sectionDragOffset.x + flowCanvasRef.current!.scrollLeft);
+            const nextY = Math.max(24, event.clientY - canvasRect.top - sectionDragOffset.y + flowCanvasRef.current!.scrollTop);
+            setSections((prev) => prev.map((section, index) => (
+                section.id === draggingSectionId
+                    ? { ...section, layout: { ...ensureSectionLayout(section.layout, index), x: nextX, y: nextY } }
+                    : section
+            )));
+        };
+
+        const handlePointerUp = () => {
+            setDraggingSectionId(null);
+        };
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [draggingSectionId, sectionDragOffset]);
+
+    const updateSectionLayout = (sectionId: string, patch: Partial<SectionCanvasLayout>) => {
+        setSections((prev) => prev.map((section, index) => (
+            section.id === sectionId
+                ? {
+                    ...section,
+                    layout: {
+                        ...ensureSectionLayout(section.layout, index),
+                        ...patch,
+                        collapsed: (patch.collapse_mode ?? ensureSectionLayout(section.layout, index).collapse_mode) !== 'full',
+                    }
+                }
+                : section
+        )));
+    };
+
+    const buildFieldTypeDefaults = (type: FieldType, defaults?: Partial<FormField>): Partial<FormField> => {
+        const isChoice = ['dropdown', 'radio_group', 'checkbox_group'].includes(type);
+        const defaultOpts: FieldOption[] = isChoice
+            ? [{ label: 'Option A', value: 'option_a' }, { label: 'Option B', value: 'option_b' }]
+            : [];
+        const isMatrix = type === 'matrix_table';
+        const defaultColumns: TableColumn[] = isMatrix ? [
+            { id: 'col_1', label: 'Strongly Agree' },
+            { id: 'col_2', label: 'Agree' },
+            { id: 'col_3', label: 'Neutral' },
+            { id: 'col_4', label: 'Disagree' },
+            { id: 'col_5', label: 'Strongly Disagree' },
+        ] : [];
+        const defaultRows: TableRow[] = isMatrix ? [
+            { id: 'row_1', label: 'Statement 1' },
+            { id: 'row_2', label: 'Statement 2' },
+            { id: 'row_3', label: 'Statement 3' },
+        ] : [];
+
+        return {
+            placeholder: ['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(type) ? 'Enter value...' : undefined,
+            platforms: ['mobile', 'web'],
+            options: isChoice ? defaultOpts : type === 'toggle'
+                ? [{ label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }]
+                : undefined,
+            table_columns: isMatrix ? defaultColumns : undefined,
+            table_rows: isMatrix ? defaultRows : undefined,
+            table_cell_type: isMatrix ? 'radio' : undefined,
+            min_label: type === 'rating_scale' ? 'Very Difficult' : undefined,
+            max_label: type === 'rating_scale' ? 'Very Easy' : undefined,
+            min: type === 'rating_scale' ? 1 : undefined,
+            max: type === 'rating_scale' ? 5 : undefined,
+            lookup_source_type: type === 'lookup_list' ? 'preset' : undefined,
+            allow_add_items: type === 'object_collection' ? true : undefined,
+            allow_remove_items: type === 'object_collection' ? true : undefined,
+            collection_layout: type === 'object_collection' ? 'cards' : undefined,
+            ...defaults,
+        };
+    };
+
+    const addFieldToSection = (sectionId: string, type: FieldType, defaults?: Partial<FormField>) => {
+        const newField: FormField = {
+            id: `field_${Date.now()}`,
+            type,
+            label: type === 'matrix_table' ? 'New Table / Matrix' : `New ${type.replace(/_/g, ' ')}`,
+            required: false,
+            ...buildFieldTypeDefaults(type, defaults),
+        };
+        setSections(prev => prev.map(p => p.id === sectionId ? { ...p, fields: [...p.fields, newField] } : p));
+        setCurrentSectionId(sectionId);
+        setSelectedFieldId(newField.id);
+        return newField;
+    };
+
+    const reorderFieldsInSection = (sectionId: string, fromFieldId: string, toFieldId: string) => {
+        setSections((prev) => prev.map((section) => {
+            if (section.id !== sectionId) return section;
+            const nextFields = [...section.fields];
+            const fromIndex = nextFields.findIndex((field) => field.id === fromFieldId);
+            const toIndex = nextFields.findIndex((field) => field.id === toFieldId);
+            if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+                return section;
+            }
+            const [moved] = nextFields.splice(fromIndex, 1);
+            nextFields.splice(toIndex, 0, moved);
+            return { ...section, fields: nextFields };
+        }));
+    };
+
+    const getVisibleFieldsForCard = (section: FormSection, layout: SectionCanvasLayout) => {
+        const collapseMode = layout.collapse_mode || 'full';
+        if (collapseMode === 'title') {
+            return [];
+        }
+        if (collapseMode === 'summary') {
+            return section.fields.slice(0, Math.max(1, Math.ceil(section.fields.length / 2)));
+        }
+        return section.fields;
+    };
+
+    const handleVariableSwipeStart = (event: React.PointerEvent<HTMLDivElement>, fieldId: string) => {
+        if ((event.target as HTMLElement).closest('button') || (event.target as HTMLElement).closest('[data-drag-handle="true"]')) {
+            return;
+        }
+        swipeStateRef.current = {
+            fieldId,
+            startX: event.clientX,
+            startY: event.clientY,
+            offset: swipedFieldId === fieldId ? -VARIABLE_DELETE_REVEAL_WIDTH : 0,
+            swiping: false,
+        };
+        (event.currentTarget as HTMLDivElement).setPointerCapture(event.pointerId);
+    };
+
+    const handleVariableSwipeMove = (event: React.PointerEvent<HTMLDivElement>, fieldId: string) => {
+        const swipe = swipeStateRef.current;
+        if (swipe.fieldId !== fieldId) {
+            return;
+        }
+
+        const deltaX = event.clientX - swipe.startX;
+        const deltaY = event.clientY - swipe.startY;
+
+        if (!swipe.swiping) {
+            if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                return;
+            }
+            if (Math.abs(deltaX) < 10) {
+                return;
+            }
+            swipe.swiping = true;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        const nextOffset = Math.max(-VARIABLE_DELETE_REVEAL_WIDTH, Math.min(0, swipe.offset + deltaX));
+        setSwipedFieldId(fieldId);
+        setSwipeOffset(nextOffset);
+    };
+
+    const handleVariableSwipeEnd = (event: React.PointerEvent<HTMLDivElement>, fieldId: string) => {
+        const swipe = swipeStateRef.current;
+        if (swipe.fieldId !== fieldId) {
+            return;
+        }
+
+        if ((event.currentTarget as HTMLDivElement).hasPointerCapture(event.pointerId)) {
+            (event.currentTarget as HTMLDivElement).releasePointerCapture(event.pointerId);
+        }
+
+        const shouldReveal = swipe.swiping && swipeOffset <= -(VARIABLE_DELETE_REVEAL_WIDTH / 2);
+        setSwipedFieldId(shouldReveal ? fieldId : null);
+        setSwipeOffset(shouldReveal ? -VARIABLE_DELETE_REVEAL_WIDTH : 0);
+        swipeStateRef.current = { fieldId: null, startX: 0, startY: 0, offset: 0, swiping: false };
+    };
+
+    const closeVariableSwipe = () => {
+        setSwipedFieldId(null);
+        setSwipeOffset(0);
+        swipeStateRef.current = { fieldId: null, startX: 0, startY: 0, offset: 0, swiping: false };
+    };
+
+    const getFlowConnections = () => {
+        const sectionById = new Map(sections.map((section, index) => [section.id, { ...section, layout: ensureSectionLayout(section.layout, index) }]));
+        const links: Array<{ id: string; sourceId: string; targetId: string; label: string; tone: 'option' | 'logic' }> = [];
+
+        sections.forEach((section) => {
+            section.fields.forEach((field) => {
+                (field.options || []).forEach((option) => {
+                    if (!option.skip_to || !sectionById.has(option.skip_to)) {
+                        return;
+                    }
+                    links.push({
+                        id: `option-${field.id}-${option.value}-${option.skip_to}`,
+                        sourceId: section.id,
+                        targetId: option.skip_to,
+                        label: `${field.label}: ${option.label}`,
+                        tone: 'option',
+                    });
+                });
+            });
+        });
+
+        logic.forEach((rule) => {
+            if (!rule.target_id || !sectionById.has(rule.target_id)) {
+                return;
+            }
+            if (!['section_jump', 'section_skip'].includes(rule.type)) {
+                return;
+            }
+            const sourceId = rule.source_id && sectionById.has(rule.source_id)
+                ? rule.source_id
+                : sections.find((section) => section.fields.some((field) => field.id === rule.source_id))?.id;
+            if (!sourceId || !sectionById.has(sourceId)) {
+                return;
+            }
+            links.push({
+                id: `logic-${rule.id}`,
+                sourceId,
+                targetId: rule.target_id,
+                label: rule.action === 'skip' ? 'Skip' : 'Jump',
+                tone: 'logic',
+            });
+        });
+
+        return links;
+    };
 
     const buildCatalogSourceItems = (items: ProjectCatalogItem[]): CatalogSourceItem[] => (
         items
@@ -580,6 +877,7 @@ const FormBuilder: React.FC = () => {
         const loadedSections: FormSection[] = blueprint.ui.map((screen: any, idx: number) => ({
             id: screen.id || `screen_${idx + 1}`,
             title: screen.title || `Section ${idx + 1}`,
+            layout: ensureSectionLayout(screen.layout, idx),
             properties: {
                 render_mode: screen.render_mode || 'list',
                 description: screen.description,
@@ -636,17 +934,6 @@ const FormBuilder: React.FC = () => {
         'rating_scale'
     ];
 
-    const advancedTypes: FieldType[] = [
-        'gps_capture',
-        'photo_capture',
-        'file_upload',
-        'signature_pad',
-        'barcode_scanner',
-        'audio_recorder',
-        'matrix_table',
-        'lookup_list'
-    ];
-
     const getWidget = (type: FieldType) => widgetLibrary.find((w) => w.type === type);
 
     useEffect(() => {
@@ -680,6 +967,7 @@ const FormBuilder: React.FC = () => {
                     const loadedSections: FormSection[] = blueprint.ui.map((screen: any, idx: number) => ({
                         id: screen.id || `screen_${idx + 1}`,
                         title: screen.title || `Section ${idx + 1}`,
+                        layout: ensureSectionLayout(screen.layout, idx),
                         properties: {
                             render_mode: screen.render_mode || 'list',
                             description: screen.description,
@@ -717,7 +1005,7 @@ const FormBuilder: React.FC = () => {
                     setLogic(blueprint.logic || []);
                     setInitialHash(computeHash(data.title || 'Untitled Form', loadedSections, blueprint.logic || []));
                 } else {
-                    const defaultSecs: FormSection[] = [{ id: 'screen_1', title: 'Section 1', fields: [], properties: { render_mode: 'list', platforms: ['mobile', 'web'] } }];
+                    const defaultSecs: FormSection[] = [{ id: 'screen_1', title: 'Section 1', fields: [], properties: { render_mode: 'list', platforms: ['mobile', 'web'] }, layout: ensureSectionLayout(undefined, 0) }];
                     setSections(defaultSecs);
                     setCurrentSectionId('screen_1');
                     setLogic([]);
@@ -745,42 +1033,7 @@ const FormBuilder: React.FC = () => {
     }, [currentOrg?.id]);
 
     const addField = (type: FieldType, defaults?: Partial<FormField>) => {
-        const isChoice = ['dropdown', 'radio_group', 'checkbox_group'].includes(type);
-        const defaultOpts: FieldOption[] = isChoice
-            ? [{ label: 'Option A', value: 'option_a' }, { label: 'Option B', value: 'option_b' }]
-            : [];
-        const isMatrix = type === 'matrix_table';
-        const defaultColumns: TableColumn[] = isMatrix ? [
-            { id: 'col_1', label: 'Strongly Agree' },
-            { id: 'col_2', label: 'Agree' },
-            { id: 'col_3', label: 'Neutral' },
-            { id: 'col_4', label: 'Disagree' },
-            { id: 'col_5', label: 'Strongly Disagree' },
-        ] : [];
-        const defaultRows: TableRow[] = isMatrix ? [
-            { id: 'row_1', label: 'Statement 1' },
-            { id: 'row_2', label: 'Statement 2' },
-            { id: 'row_3', label: 'Statement 3' },
-        ] : [];
-        const newField: FormField = {
-            id: `field_${Date.now()}`,
-            type,
-            label: isMatrix ? 'New Table / Matrix' : `New ${type.replace(/_/g, ' ')}`,
-            required: false,
-            placeholder: 'Enter value...',
-            platforms: ['mobile', 'web'],
-            options: isChoice ? defaultOpts : undefined,
-            table_columns: isMatrix ? defaultColumns : undefined,
-            table_rows: isMatrix ? defaultRows : undefined,
-            table_cell_type: isMatrix ? 'radio' : undefined,
-            min_label: type === 'rating_scale' ? 'Very Difficult' : undefined,
-            max_label: type === 'rating_scale' ? 'Very Easy' : undefined,
-            min: type === 'rating_scale' ? 1 : undefined,
-            max: type === 'rating_scale' ? 5 : undefined,
-            ...defaults
-        };
-        setSections(prev => prev.map(p => p.id === currentSectionId ? { ...p, fields: [...p.fields, newField] } : p));
-        setSelectedFieldId(newField.id);
+        addFieldToSection(currentSectionId, type, defaults);
     };
 
     const copyField = (fieldId: string) => {
@@ -829,6 +1082,28 @@ const FormBuilder: React.FC = () => {
         setSections(prev => prev.map(p => ({ ...p, fields: p.fields.map(f => f.id === id ? { ...f, ...patch } : f) })));
     };
 
+    const changeFieldType = (fieldId: string, nextType: FieldType) => {
+        const widgetDefaults = getWidget(nextType)?.defaults;
+        setSections((prev) => prev.map((section) => ({
+            ...section,
+            fields: section.fields.map((field) => {
+                if (field.id !== fieldId) {
+                    return field;
+                }
+                const typeDefaults = buildFieldTypeDefaults(nextType, widgetDefaults);
+                return {
+                    ...field,
+                    ...typeDefaults,
+                    type: nextType,
+                    id: field.id,
+                    label: field.label,
+                    required: field.required,
+                    platforms: field.platforms?.length ? field.platforms : typeDefaults.platforms,
+                };
+            }),
+        })));
+    };
+
     const updateFieldId = (oldId: string, newId: string) => {
         setSections(prev => prev.map(p => ({ ...p, fields: p.fields.map(f => f.id === oldId ? { ...f, id: newId } : f) })));
         setSelectedFieldId(newId);
@@ -836,7 +1111,7 @@ const FormBuilder: React.FC = () => {
 
     const addSection = () => {
         const newId = `screen_${Date.now()}`;
-        setSections(prev => [...prev, { id: newId, title: `Section ${prev.length + 1}`, fields: [], properties: defaultSectionProperties() }]);
+        setSections(prev => [...prev, { id: newId, title: `Section ${prev.length + 1}`, fields: [], properties: defaultSectionProperties(), layout: ensureSectionLayout(undefined, prev.length) }]);
         setCurrentSectionId(newId);
     };
 
@@ -870,6 +1145,508 @@ const FormBuilder: React.FC = () => {
 
     const updateLogicRule = (id: string, patch: Partial<LogicRule>) => {
         setLogic(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+    };
+
+    const renderFlowVariableEditor = () => {
+        const section = sections.find((candidate) => candidate.id === currentSectionId) || selectedSection;
+
+        if (!section || !selectedField) {
+            return (
+                <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section Quick Settings</p>
+                        <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">{section?.title || 'No section selected'}</h4>
+                        <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Select a variable from any section card to edit its widget properties here without leaving Flow Overview.</p>
+                    </div>
+                    <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))]/80 px-6 text-center">
+                        <div>
+                            <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">No variable selected</p>
+                            <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Click a variable row inside any section card to populate the docked editor.</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const currentWidget = getWidget(selectedField.type);
+        const renderDefaultValueControl = () => {
+            if (selectedField.type === 'matrix_table') {
+                return null;
+            }
+
+            if (['dropdown', 'radio_group'].includes(selectedField.type)) {
+                return (
+                    <select
+                        value={selectedField.default_value || ''}
+                        onChange={(event) => updateField(selectedField.id, { default_value: event.target.value || undefined })}
+                        className="input py-2"
+                    >
+                        <option value="">No Default</option>
+                        {(selectedField.options || []).map((option, index) => (
+                            <option key={`${option.value}_${index}`} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                );
+            }
+
+            if (selectedField.type === 'toggle') {
+                return (
+                    <div className="grid grid-cols-3 gap-2">
+                        {[
+                            { label: selectedField.options?.find((option) => option.value === 'true')?.label ?? 'Yes', value: 'true' },
+                            { label: selectedField.options?.find((option) => option.value === 'false')?.label ?? 'No', value: 'false' },
+                            { label: 'None', value: '' },
+                        ].map(({ label, value }) => {
+                            const active = (selectedField.default_value ?? '') === value;
+                            return (
+                                <button
+                                    key={value}
+                                    onClick={() => updateField(selectedField.id, { default_value: value || undefined })}
+                                    className={`rounded-md border px-3 py-2 text-xs font-semibold transition-all ${active
+                                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                        : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                );
+            }
+
+            return (
+                <input
+                    type={selectedField.type === 'input_number' ? 'number' : selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'text'}
+                    value={selectedField.default_value || ''}
+                    onChange={(event) => updateField(selectedField.id, { default_value: event.target.value || undefined })}
+                    className="input"
+                    placeholder="Optional default value"
+                />
+            );
+        };
+
+        return (
+            <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+                <div className="space-y-4">
+                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section Quick Settings</p>
+                        <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title}</h4>
+                        <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">These section-level settings stay available while you edit a variable from the flow canvas.</p>
+                        <div className="mt-4 space-y-3">
+                            <div>
+                                <label className="label mb-2">Render Mode</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(['list', 'single'] as RenderMode[]).map((mode) => {
+                                        const active = section.properties.render_mode === mode;
+                                        return (
+                                            <button
+                                                key={mode}
+                                                onClick={() => updateCurrentSectionProperties({ render_mode: mode })}
+                                                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${active
+                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                    : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                                    }`}
+                                            >
+                                                {mode === 'list' ? 'List' : 'Single'}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <label className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                <div>
+                                    <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Shuffle Options</p>
+                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Randomize choice order in this section.</p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={!!section.properties.shuffle_options}
+                                    onChange={(event) => updateCurrentSectionProperties({ shuffle_options: event.target.checked })}
+                                    className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
+                                />
+                            </label>
+
+                            <button
+                                onClick={() => enterSection(section.id)}
+                                className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                            >
+                                Open Full Section Editor
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Basic Widgets</p>
+                                <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">Swap widget type</h4>
+                            </div>
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                {currentWidget?.label || selectedField.type}
+                            </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                            {basicTypes.map((type) => {
+                                const widget = getWidget(type);
+                                if (!widget) return null;
+                                const active = selectedField.type === type;
+                                return (
+                                    <button
+                                        key={type}
+                                        onClick={() => changeFieldType(selectedField.id, type)}
+                                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-all ${active
+                                            ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                            : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                            }`}
+                                    >
+                                        <span className="shrink-0 text-[hsl(var(--primary))]">{widget.icon}</span>
+                                        <span className="truncate">{widget.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Variable Editor</p>
+                                <h4 className="mt-2 text-base font-semibold text-[hsl(var(--text-primary))]">{selectedField.label}</h4>
+                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">Editing inside {section.title}. Changes save into the same draft blueprint as Section View.</p>
+                            </div>
+                            <button
+                                onClick={() => enterSection(section.id)}
+                                className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                            >
+                                Open Full Inspector
+                            </button>
+                        </div>
+
+                        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                            <div className="space-y-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 p-4">
+                                <div>
+                                    <label className="label">Label</label>
+                                    <input
+                                        value={selectedField.label}
+                                        onChange={(event) => updateField(selectedField.id, { label: event.target.value })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Bind Key</label>
+                                    <input
+                                        value={selectedField.id}
+                                        onChange={(event) => updateFieldId(selectedField.id, event.target.value)}
+                                        className="input font-mono text-xs"
+                                    />
+                                </div>
+                                <label className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
+                                    <div>
+                                        <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Required</p>
+                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Make this variable mandatory.</p>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedField.required}
+                                        onChange={(event) => updateField(selectedField.id, { required: event.target.checked })}
+                                        className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
+                                    />
+                                </label>
+                                {['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
+                                    <div>
+                                        <label className="label">Placeholder</label>
+                                        <input
+                                            value={selectedField.placeholder || ''}
+                                            onChange={(event) => updateField(selectedField.id, { placeholder: event.target.value })}
+                                            className="input"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 p-4">
+                                <div>
+                                    <label className="label">Platforms</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => (
+                                            <label key={platform} className="flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs font-medium capitalize text-[hsl(var(--text-secondary))]">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedField.platforms?.includes(platform) || false}
+                                                    onChange={(event) => {
+                                                        const next = new Set(selectedField.platforms || []);
+                                                        if (event.target.checked) next.add(platform);
+                                                        else next.delete(platform);
+                                                        updateField(selectedField.id, { platforms: Array.from(next) });
+                                                    }}
+                                                    className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
+                                                />
+                                                <span>{platform}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="label">Default Value</label>
+                                    {renderDefaultValueControl()}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                        { key: 'is_sensitive', label: 'Sensitive' },
+                                        { key: 'exclude_from_export', label: 'Exclude Export' },
+                                    ].map(({ key, label }) => (
+                                        <label key={key} className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
+                                            <span className="text-xs font-semibold text-[hsl(var(--text-secondary))]">{label}</span>
+                                            <input
+                                                type="checkbox"
+                                                checked={!!(selectedField as any)[key]}
+                                                onChange={(event) => updateField(selectedField.id, { [key]: event.target.checked } as any)}
+                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {['dropdown', 'radio_group', 'checkbox_group', 'toggle'].includes(selectedField.type) && (
+                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Choice Editor</p>
+                                    <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">Options and routing</h4>
+                                </div>
+                                {selectedField.type !== 'toggle' && (
+                                    <button
+                                        onClick={() => {
+                                            const nextIndex = (selectedField.options?.length || 0) + 1;
+                                            const label = `Option ${nextIndex}`;
+                                            updateField(selectedField.id, { options: [...(selectedField.options || []), { label, value: toSmartValue(label) }] });
+                                        }}
+                                        className="rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                                    >
+                                        Add Option
+                                    </button>
+                                )}
+                            </div>
+
+                            {selectedField.type === 'toggle' ? (
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                    {[
+                                        { yes: 'Yes', no: 'No' },
+                                        { yes: 'True', no: 'False' },
+                                        { yes: 'On', no: 'Off' },
+                                        { yes: 'Agree', no: 'Disagree' },
+                                        { yes: 'Enabled', no: 'Disabled' },
+                                        { yes: 'Allow', no: 'Deny' },
+                                    ].map(({ yes, no }) => {
+                                        const currentYes = selectedField.options?.find((option) => option.value === 'true')?.label;
+                                        const active = currentYes === yes;
+                                        return (
+                                            <button
+                                                key={yes}
+                                                onClick={() => updateField(selectedField.id, { options: [{ label: yes, value: 'true' }, { label: no, value: 'false' }] })}
+                                                className={`rounded-lg border px-3 py-3 text-left text-xs font-semibold transition-all ${active
+                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                    : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                                    }`}
+                                            >
+                                                {yes} / {no}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                                    {(selectedField.options || []).map((option, index) => (
+                                        <div key={`${option.value}_${index}`} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 p-3">
+                                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_auto]">
+                                                <input
+                                                    value={option.label}
+                                                    onChange={(event) => {
+                                                        const nextOptions = [...(selectedField.options || [])];
+                                                        nextOptions[index] = { ...nextOptions[index], label: event.target.value, value: nextOptions[index].value || toSmartValue(event.target.value) };
+                                                        updateField(selectedField.id, { options: nextOptions });
+                                                    }}
+                                                    className="input text-sm"
+                                                    placeholder="Label"
+                                                />
+                                                <input
+                                                    value={option.value}
+                                                    onChange={(event) => {
+                                                        const nextOptions = [...(selectedField.options || [])];
+                                                        nextOptions[index] = { ...nextOptions[index], value: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') };
+                                                        updateField(selectedField.id, { options: nextOptions });
+                                                    }}
+                                                    className="input font-mono text-xs"
+                                                    placeholder="value_key"
+                                                />
+                                                <button
+                                                    onClick={() => updateField(selectedField.id, { options: (selectedField.options || []).filter((_, optionIndex) => optionIndex !== index) })}
+                                                    className="rounded-md border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-tertiary))] transition-all hover:border-[hsl(var(--error))]/40 hover:text-[hsl(var(--error))]"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                            <select
+                                                value={option.skip_to || ''}
+                                                onChange={(event) => {
+                                                    const nextOptions = [...(selectedField.options || [])];
+                                                    nextOptions[index] = { ...nextOptions[index], skip_to: event.target.value || undefined };
+                                                    updateField(selectedField.id, { options: nextOptions });
+                                                }}
+                                                className="input mt-3 py-2 text-xs"
+                                            >
+                                                <option value="">No route change</option>
+                                                {sections.map((candidateSection) => (
+                                                    <option key={candidateSection.id} value={candidateSection.id}>{candidateSection.title}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {selectedField.type === 'input_number' && (
+                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Number Rules</p>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                                <div>
+                                    <label className="label">Min Value</label>
+                                    <input
+                                        type="number"
+                                        value={selectedField.min || ''}
+                                        onChange={(event) => updateField(selectedField.id, { min: parseInt(event.target.value, 10) || undefined })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Max Value</label>
+                                    <input
+                                        type="number"
+                                        value={selectedField.max || ''}
+                                        onChange={(event) => updateField(selectedField.id, { max: parseInt(event.target.value, 10) || undefined })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div className="lg:col-span-3">
+                                    <label className="label">Computed Formula</label>
+                                    <input
+                                        value={selectedField.formula || ''}
+                                        onChange={(event) => updateField(selectedField.id, { formula: event.target.value || undefined })}
+                                        className="input font-mono text-xs"
+                                        placeholder="e.g. sum(line_items.line_total)"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedField.type === 'rating_scale' && (
+                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Scale Configuration</p>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-4">
+                                <div>
+                                    <label className="label">Min Value</label>
+                                    <input
+                                        type="number"
+                                        value={selectedField.min || 1}
+                                        onChange={(event) => updateField(selectedField.id, { min: parseInt(event.target.value, 10) || 1 })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Max Value</label>
+                                    <input
+                                        type="number"
+                                        value={selectedField.max || 5}
+                                        onChange={(event) => updateField(selectedField.id, { max: parseInt(event.target.value, 10) || 5 })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Min Label</label>
+                                    <input
+                                        value={selectedField.min_label || ''}
+                                        onChange={(event) => updateField(selectedField.id, { min_label: event.target.value })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Max Label</label>
+                                    <input
+                                        value={selectedField.max_label || ''}
+                                        onChange={(event) => updateField(selectedField.id, { max_label: event.target.value })}
+                                        className="input"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {['date_picker', 'time_picker'].includes(selectedField.type) && (
+                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Range Limits</p>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                                <div>
+                                    <label className="label">Min {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
+                                    <input
+                                        type={selectedField.type === 'date_picker' ? 'date' : 'time'}
+                                        value={selectedField.min || ''}
+                                        onChange={(event) => updateField(selectedField.id, { min: event.target.value || undefined })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Max {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
+                                    <input
+                                        type={selectedField.type === 'date_picker' ? 'date' : 'time'}
+                                        value={selectedField.max || ''}
+                                        onChange={(event) => updateField(selectedField.id, { max: event.target.value || undefined })}
+                                        className="input"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
+                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Validation</p>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                                <div>
+                                    <label className="label">Min Length</label>
+                                    <input
+                                        type="number"
+                                        value={selectedField.minLength || ''}
+                                        onChange={(event) => updateField(selectedField.id, { minLength: parseInt(event.target.value, 10) || undefined })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Max Length</label>
+                                    <input
+                                        type="number"
+                                        value={selectedField.maxLength || ''}
+                                        onChange={(event) => updateField(selectedField.id, { maxLength: parseInt(event.target.value, 10) || undefined })}
+                                        className="input"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
     };
 
     const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
@@ -1029,6 +1806,7 @@ const FormBuilder: React.FC = () => {
                     id: p.id,
                     type: 'screen',
                     title: p.title,
+                    layout: p.layout,
                     template_id: p.template_id,
                     render_mode: p.properties.render_mode,
                     description: p.properties.description,
@@ -1176,31 +1954,43 @@ const FormBuilder: React.FC = () => {
             contentClassName="flex-1 overflow-hidden"
             alignRightRail
         >
-            <div className="flex flex-col h-full bg-[hsl(var(--background))] text-[hsl(var(--text-primary))]">
+            <div className={`flex h-full flex-col text-[hsl(var(--text-primary))] ${view === 'flow'
+                ? 'bg-[linear-gradient(180deg,rgba(236,253,245,0.7),rgba(248,250,252,0.95)_16%,hsl(var(--background))_42%)]'
+                : 'bg-[linear-gradient(180deg,rgba(248,250,252,0.98),rgba(241,245,249,0.92)_18%,hsl(var(--background))_40%)]'
+                }`}>
                 {/* Header */}
-                <header className="h-16 border-b border-[hsl(var(--border))] flex items-center justify-between px-6 bg-[hsl(var(--surface))]/70 backdrop-blur-md shrink-0">
+                <header className={`flex h-16 shrink-0 items-center justify-between border-b px-6 backdrop-blur-md ${view === 'flow'
+                    ? 'border-[hsl(var(--primary))]/18 bg-[linear-gradient(90deg,rgba(15,118,110,0.12),rgba(255,255,255,0.76)_28%,rgba(255,255,255,0.92))]'
+                    : 'border-[hsl(var(--border))] bg-[linear-gradient(90deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))]'
+                    }`}>
                     <div className="flex items-center space-x-3">
                         {view === 'section' ? (
-                            /* Section View: breadcrumb */
                             <>
                                 <button
                                     onClick={exitSection}
                                     className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-md transition-all text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
-                                    title="Back to Form"
+                                    title="Back to Flow"
                                 >
                                     <ArrowLeft className="w-5 h-5" />
                                 </button>
-                                <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={exitSection}
-                                        className="text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] font-semibold text-sm transition-colors"
-                                    >
-                                        {title}
-                                    </button>
-                                    <Crumb className="w-4 h-4 text-[hsl(var(--text-tertiary))]" />
-                                    <span className="text-[hsl(var(--text-primary))] font-bold text-sm">
+                                <div className="w-10 h-10 bg-[hsl(var(--primary))] rounded-md flex items-center justify-center shadow-lg shadow-black/10">
+                                    <Layout className="w-6 h-6 text-white" />
+                                </div>
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <input
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        className="min-w-0 bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
+                                    />
+                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
+                                        Studio Builder
+                                    </div>
+                                    <div className="rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-secondary))]">
+                                        Inspector Mode
+                                    </div>
+                                    <div className="max-w-[220px] truncate rounded-full border border-[hsl(var(--primary))]/18 bg-[hsl(var(--primary))]/8 px-3 py-1 text-[11px] font-semibold text-[hsl(var(--primary))]">
                                         {sections.find(s => s.id === currentSectionId)?.title || 'Section'}
-                                    </span>
+                                    </div>
                                 </div>
                             </>
                         ) : (
@@ -1221,10 +2011,21 @@ const FormBuilder: React.FC = () => {
                                     onChange={(e) => setTitle(e.target.value)}
                                     className="bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
                                 />
+                                <div className="ml-4 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
+                                    Studio Builder
+                                </div>
+                                <div className="rounded-full border border-[hsl(var(--primary))]/25 bg-[hsl(var(--primary))]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--primary))]">
+                                    Flow Mode
+                                </div>
                             </>
                         )}
                     </div>
                     <div className="flex items-center space-x-3">
+                        {view === 'section' && (
+                            <div className="rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-secondary))]">
+                                Inspector Mode
+                            </div>
+                        )}
                         <div className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg border ${formMeta?.status === 'live'
                             ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))] border-[hsl(var(--success))]/30'
                             : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border-[hsl(var(--border))]'
@@ -1241,210 +2042,495 @@ const FormBuilder: React.FC = () => {
                     </div>
                 </header>
 
-                <div className="flex flex-1 overflow-hidden">
-                    {/* Left Panel: Widget Library — only in Section View */}
+                <div className={`flex flex-1 overflow-hidden ${view === 'section' ? 'p-4 pt-3' : ''}`}>
+                    <div className={`flex flex-1 overflow-hidden ${view === 'section'
+                        ? 'flex-col rounded-[28px] border border-[hsl(var(--border))] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.92))] shadow-[0_24px_60px_rgba(15,23,42,0.08)]'
+                        : ''
+                        }`}>
                     {view === 'section' && (
-                        <aside className="w-72 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden animate-in slide-in-from-left-4 fade-in duration-300">
-                            <div className="flex-1 overflow-y-auto hide-scrollbar p-6 space-y-6">
-                                {/* Basic Widgets */}
-                                <div>
-                                    <button
-                                        onClick={() => setOpenSection(openSection === 'basic' ? null : 'basic')}
-                                        className="w-full flex items-center justify-between text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-2 hover:text-[hsl(var(--text-primary))] transition-colors"
-                                    >
-                                        <span>Basic Widgets</span>
-                                        {openSection === 'basic' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                    </button>
-                                    {openSection === 'basic' && (
-                                        <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200">
-                                            {basicTypes.map((type) => {
-                                                const widget = getWidget(type);
-                                                if (!widget) return null;
-                                                return (
-                                                    <button key={type} onClick={() => addField(widget.type, widget.defaults)} className="sidebar-btn group">
-                                                        <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">{widget.icon}</div>
-                                                        <span>{widget.label}</span>
-                                                    </button>
-                                                );
-                                            })}
+                        <div className="border-b border-[hsl(var(--border))] bg-[linear-gradient(90deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-5 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="relative inline-grid grid-cols-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))]/92 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+                                        <div
+                                            className="pointer-events-none absolute left-[calc(50%)] top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-full bg-[linear-gradient(135deg,rgba(134,239,172,0.95),rgba(167,243,208,0.92))] shadow-[0_8px_20px_rgba(74,222,128,0.28)] transition-all duration-300"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                setSelectedFieldId(null);
+                                                setView('flow');
+                                            }}
+                                            className="relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-[hsl(var(--text-tertiary))] transition-colors hover:text-[hsl(var(--text-primary))]"
+                                        >
+                                            <GitBranch className="h-4 w-4" />
+                                            <span>Flow Mode</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (!selectedSection) {
+                                                    return;
+                                                }
+                                                setSelectedFieldId(null);
+                                                setCurrentSectionId(selectedSection.id);
+                                                setView('section');
+                                            }}
+                                            disabled={!selectedSection}
+                                            className={`relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors ${!selectedSection ? 'cursor-not-allowed opacity-50' : ''}`}
+                                        >
+                                            <Layout className="h-4 w-4" />
+                                            <span>Inspector Mode</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Inspector Canvas</p>
+                                        <div className="mt-1 flex items-center gap-2 text-sm text-[hsl(var(--text-primary))]">
+                                            <Layout className="h-4 w-4 text-[hsl(var(--primary))]" />
+                                            <span className="truncate font-semibold">{selectedSection?.title || 'Section'}</span>
                                         </div>
-                                    )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex min-h-0 flex-1 overflow-hidden">
+                    {/* Left Panel: Section Navigator — only in Section View */}
+                    {view === 'section' && (
+                        <aside className="w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex h-full overflow-hidden animate-in slide-in-from-left-4 fade-in duration-300">
+                            <div className="flex w-14 flex-col items-center gap-2 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/80 px-2 py-3">
+                                <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))] shadow-[inset_2px_0_0_hsl(var(--primary))]">
+                                    <Layers className="w-4 h-4" />
+                                </span>
+                            </div>
+
+                            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section List</p>
+                                            <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Survey Sections</h3>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                addSection();
+                                                setSelectedFieldId(null);
+                                            }}
+                                            className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                        >
+                                            + Section
+                                        </button>
+                                    </div>
+                                    <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Select a section to edit its widgets in the center canvas.</p>
                                 </div>
 
-                                {/* Advanced Widgets */}
-                                <div>
-                                    <button
-                                        onClick={() => setOpenSection(openSection === 'advanced' ? null : 'advanced')}
-                                        className="w-full flex items-center justify-between text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-2 hover:text-[hsl(var(--text-primary))] transition-colors"
-                                    >
-                                        <span>Advanced Widgets</span>
-                                        {openSection === 'advanced' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                    </button>
-                                    {openSection === 'advanced' && (
-                                        <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200">
-                                            {advancedTypes.map((type) => {
-                                                const widget = getWidget(type);
-                                                if (!widget) return null;
-                                                return (
-                                                    <button key={type} onClick={() => addField(widget.type, widget.defaults)} className="sidebar-btn group">
-                                                        <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">{widget.icon}</div>
-                                                        <span>{widget.label}</span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Templates */}
-                                <div>
-                                    <button
-                                        onClick={() => setOpenSection(openSection === 'templates' ? null : 'templates')}
-                                        className="w-full flex items-center justify-between text-sm font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider mb-2 hover:text-[hsl(var(--text-primary))] transition-colors"
-                                    >
-                                        <span>Templates</span>
-                                        {openSection === 'templates' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                    </button>
-                                    {openSection === 'templates' && (
-                                        <div className="space-y-2 mt-4 animate-in slide-in-from-top-2 fade-in duration-200">
-                                            {templates.length === 0 ? (
-                                                <div className="text-center p-6 border-2 border-dashed border-[hsl(var(--border))] rounded-md">
-                                                    <List className="w-8 h-8 text-[hsl(var(--border-hover))] mx-auto mb-2" />
-                                                    <p className="text-xs text-[hsl(var(--text-tertiary))]">No templates found</p>
+                                <div className="flex-1 overflow-y-auto hide-scrollbar p-3 space-y-2">
+                                    {sections.map((section, index) => {
+                                        const isActive = section.id === currentSectionId;
+                                        return (
+                                            <button
+                                                key={section.id}
+                                                onClick={() => {
+                                                    setCurrentSectionId(section.id);
+                                                    setSelectedFieldId(null);
+                                                }}
+                                                className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
+                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/8 shadow-[0_0_0_1px_hsl(var(--primary))_inset]'
+                                                    : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] hover:border-[hsl(var(--border-hover))]'
+                                                    }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title || `Section ${index + 1}`}</p>
+                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{section.fields.length} widget{section.fields.length !== 1 ? 's' : ''}</p>
+                                                    </div>
+                                                    <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">S{index + 1}</span>
                                                 </div>
-                                            ) : (
-                                                templates.map((tpl) => (
-                                                    <button
-                                                        key={tpl.id}
-                                                        onClick={() => {
-                                                            const newId = `screen_${Date.now()}`;
-                                                            const clonedFields = (tpl.blueprint?.fields || []).map((f: any) => ({
-                                                                ...f,
-                                                                id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-                                                            }));
-                                                            setSections(prev => [...prev, {
-                                                                id: newId,
-                                                                title: tpl.blueprint?.title || tpl.name,
-                                                                fields: clonedFields,
-                                                                properties: tpl.blueprint?.properties || defaultSectionProperties(),
-                                                                template_id: tpl.id
-                                                            }]);
-                                                            setCurrentSectionId(newId);
-                                                            showToast('Template added', 'Section created from template', 'success');
-                                                        }}
-                                                        className="sidebar-btn group"
-                                                    >
-                                                        <div className="icon-wrapper text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/10">
-                                                            <Layers className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="text-left w-full overflow-hidden">
-                                                            <div className="text-sm font-medium text-[hsl(var(--text-primary))] truncate">{tpl.name}</div>
-                                                            {tpl.description && <div className="text-xs text-[hsl(var(--text-secondary))] truncate">{tpl.description}</div>}
-                                                        </div>
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
-                                    )}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </aside>
                     )}
 
-                    {/* Main Canvas — switches between Form View and Section View */}
-                    <main className="flex-1 bg-[hsl(var(--background))] overflow-y-auto hide-scrollbar">
-                        {view === 'form' ? (
+                    {/* Main Canvas — switches between Flow Mode and Inspector Mode */}
+                    <main className={`flex flex-1 flex-col overflow-hidden ${view === 'flow'
+                        ? 'bg-transparent'
+                        : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.66),rgba(248,250,252,0.9))]'
+                        }`}>
+                        {view === 'flow' && (
+                        <div className="border-b border-[hsl(var(--primary))]/15 bg-[linear-gradient(90deg,rgba(255,255,255,0.32),rgba(255,255,255,0.68))] px-5 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="relative inline-grid grid-cols-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))]/92 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+                                        <div
+                                            className={`pointer-events-none absolute top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-full bg-[linear-gradient(135deg,rgba(134,239,172,0.95),rgba(167,243,208,0.92))] shadow-[0_8px_20px_rgba(74,222,128,0.28)] transition-all duration-300 ${view === 'flow' ? 'left-1' : 'left-[calc(50%)]'
+                                                }`}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                setSelectedFieldId(null);
+                                                setView('flow');
+                                            }}
+                                            className={`relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${view === 'flow'
+                                                ? 'text-slate-950'
+                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
+                                                }`}
+                                        >
+                                            <GitBranch className="h-4 w-4" />
+                                            <span>Flow Mode</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (!selectedSection) {
+                                                    return;
+                                                }
+                                                setSelectedFieldId(null);
+                                                setCurrentSectionId(selectedSection.id);
+                                                setView('section');
+                                            }}
+                                            disabled={!selectedSection}
+                                            className={`relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-[hsl(var(--text-tertiary))] transition-colors hover:text-[hsl(var(--text-primary))] ${!selectedSection ? 'cursor-not-allowed opacity-50' : ''}`}
+                                        >
+                                            <Layout className="h-4 w-4" />
+                                            <span>Inspector Mode</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
+                                            {view === 'flow' ? 'Flow Overview' : 'Inspector Canvas'}
+                                        </p>
+                                        <div className="mt-1 flex items-center gap-2 text-sm text-[hsl(var(--text-primary))]">
+                                            {view === 'flow' ? (
+                                                <>
+                                                    <GitBranch className="h-4 w-4 text-[hsl(var(--primary))]" />
+                                                    <span className="font-semibold">Map sections, variables, and routing</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Layout className="h-4 w-4 text-[hsl(var(--primary))]" />
+                                                    <span className="truncate font-semibold">{selectedSection?.title || 'Section'}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        )}
+
+                        <div className="min-h-0 flex-1 overflow-y-auto hide-scrollbar">
+                        {view === 'flow' ? (
                             /* ═══════════════════════════════════════════════
-                               FORM VIEW  — manage & organise sections
+                               FLOW VIEW  — manage flow and section layout
                             ═══════════════════════════════════════════════ */
                             <div
-                                key="form-view"
+                                key="flow-view"
                                 className={`p-12 min-h-full animate-in fade-in ${slideDir === 'back' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
                                     } duration-300`}
                             >
-                                <div className="max-w-4xl mx-auto">
-                                    <div className="mb-8">
-                                        <h2 className="text-2xl font-bold text-[hsl(var(--text-primary))]">Form Sections</h2>
-                                        <p className="text-sm text-[hsl(var(--text-secondary))] mt-1">Click a section to edit its fields. Drag to reorder.</p>
+                                <div className="mx-auto max-w-7xl">
+                                    <div className="mb-8 flex items-end justify-between gap-6">
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-[hsl(var(--text-primary))]">Form Flow</h2>
+                                            <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Arrange section nodes, inspect routing, and jump into detail editing from the canvas.</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                            <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">{sections.length} sections</span>
+                                            <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
+                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {sections.map((section, idx) => (
-                                            <div
-                                                key={section.id}
-                                                onClick={() => enterSection(section.id)}
-                                                className="group relative bg-[hsl(var(--surface))] border-2 border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/60 rounded-md p-6 cursor-pointer transition-all hover:shadow-lg hover:shadow-[hsl(var(--primary))]/5 hover:-translate-y-0.5"
+                                    <div className="flex h-[calc(100vh-12rem)] min-h-[860px] flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Canvas</p>
+                                                <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Drag section headers to position them. Use field routes and logic to understand the full journey.</p>
+                                            </div>
+                                            <button
+                                                onClick={addSection}
+                                                className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm font-semibold text-[hsl(var(--text-primary))] transition-all hover:border-[hsl(var(--primary))]/40 hover:text-[hsl(var(--primary))]"
                                             >
-                                                {/* Section number badge */}
-                                                <div className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] text-xs font-bold flex items-center justify-center">
-                                                    {idx + 1}
+                                                Add Section
+                                            </button>
+                                        </div>
+
+                                        <div ref={flowCanvasRef} className="relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
+                                            <svg className="pointer-events-none absolute left-0 top-0 h-[1600px] w-[1600px]" viewBox="0 0 1600 1600" fill="none">
+                                                {getFlowConnections().map((link) => {
+                                                    const sourceIndex = sections.findIndex((section) => section.id === link.sourceId);
+                                                    const targetIndex = sections.findIndex((section) => section.id === link.targetId);
+                                                    if (sourceIndex === -1 || targetIndex === -1) {
+                                                        return null;
+                                                    }
+                                                    const sourceLayout = ensureSectionLayout(sections[sourceIndex].layout, sourceIndex);
+                                                    const targetLayout = ensureSectionLayout(sections[targetIndex].layout, targetIndex);
+                                                    const startX = sourceLayout.x + (sourceLayout.width || FLOW_NODE_WIDTH);
+                                                    const startY = sourceLayout.y + 96;
+                                                    const endX = targetLayout.x;
+                                                    const endY = targetLayout.y + 72;
+                                                    const controlOffset = Math.max(120, Math.abs(endX - startX) / 2);
+                                                    const stroke = link.tone === 'option' ? 'hsl(var(--primary))' : 'hsl(var(--warning))';
+                                                    const labelX = startX + (endX - startX) / 2;
+                                                    const labelY = startY + (endY - startY) / 2 - 12;
+
+                                                    return (
+                                                        <g key={link.id}>
+                                                            <path
+                                                                d={`M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`}
+                                                                fill="none"
+                                                                stroke={stroke}
+                                                                strokeWidth="2.5"
+                                                                strokeDasharray={link.tone === 'option' ? '0' : '8 6'}
+                                                                opacity="0.82"
+                                                            />
+                                                            <rect x={labelX - 60} y={labelY - 10} width="120" height="20" rx="10" fill="hsl(var(--surface))" stroke={stroke} strokeWidth="1" opacity="0.95" />
+                                                            <text x={labelX} y={labelY + 4} textAnchor="middle" fill={stroke} fontSize="10" fontWeight="700">
+                                                                {link.label.length > 18 ? `${link.label.slice(0, 18)}...` : link.label}
+                                                            </text>
+                                                        </g>
+                                                    );
+                                                })}
+                                            </svg>
+
+                                            <div className="relative h-[1600px] w-[1600px]">
+                                                {sections.map((section, idx) => {
+                                                    const layout = ensureSectionLayout(section.layout, idx);
+                                                    const collapseMode = layout.collapse_mode || 'full';
+                                                    const visibleFields = getVisibleFieldsForCard(section, layout);
+                                                    const hiddenFieldCount = Math.max(0, section.fields.length - visibleFields.length);
+                                                    const isActive = currentSectionId === section.id;
+                                                    return (
+                                                        <div
+                                                            key={section.id}
+                                                            className={`absolute rounded-2xl border shadow-lg transition-all ${isActive
+                                                                ? 'border-[hsl(var(--primary))] bg-[hsl(var(--surface))] shadow-[0_14px_40px_rgba(15,23,42,0.16)]'
+                                                                : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))]/95 shadow-[0_10px_30px_rgba(15,23,42,0.08)] hover:border-[hsl(var(--primary))]/40'
+                                                                }`}
+                                                            style={{ left: layout.x, top: layout.y, width: layout.width || FLOW_NODE_WIDTH }}
+                                                        >
+                                                            <div
+                                                                onPointerDown={(event) => {
+                                                                    if ((event.target as HTMLElement).closest('button')) {
+                                                                        return;
+                                                                    }
+                                                                    const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
+                                                                    setCurrentSectionId(section.id);
+                                                                    setSelectedFieldId(null);
+                                                                    setDraggingSectionId(section.id);
+                                                                    setSectionDragOffset({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+                                                                }}
+                                                                className="flex cursor-grab items-start justify-between rounded-t-2xl border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/80 px-4 py-3 active:cursor-grabbing"
+                                                            >
+                                                                <div className="min-w-0">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))]">
+                                                                            <Layers className="w-4 h-4" />
+                                                                        </span>
+                                                                        <div>
+                                                                            <p className="truncate text-sm font-bold text-[hsl(var(--text-primary))]">{section.title}</p>
+                                                                            <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Section {idx + 1}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => enterSection(section.id)}
+                                                                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            </div>
+
+                                                            <div
+                                                                role="button"
+                                                                tabIndex={0}
+                                                                onClick={() => {
+                                                                    setCurrentSectionId(section.id);
+                                                                    setSelectedFieldId(null);
+                                                                }}
+                                                                onKeyDown={(event) => {
+                                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                                        event.preventDefault();
+                                                                        setCurrentSectionId(section.id);
+                                                                        setSelectedFieldId(null);
+                                                                    }
+                                                                }}
+                                                                className="block w-full px-4 pb-4 pt-3 text-left"
+                                                            >
+                                                                {collapseMode !== 'title' && section.properties.description && (
+                                                                    <p className="mb-3 line-clamp-2 text-xs leading-5 text-[hsl(var(--text-secondary))]">{section.properties.description}</p>
+                                                                )}
+
+                                                                {collapseMode !== 'title' && (
+                                                                    <div className="mb-3 flex flex-wrap gap-2">
+                                                                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${section.properties.render_mode === 'single' ? 'bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
+                                                                            {section.properties.render_mode}
+                                                                        </span>
+                                                                        <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--text-tertiary))]">{section.fields.length} fields</span>
+                                                                        {(section.properties.platforms || []).slice(0, 3).map((platform) => (
+                                                                            <span key={platform} className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] capitalize text-[hsl(var(--text-tertiary))]">{platform}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {collapseMode !== 'title' && (
+                                                                    <div className="space-y-2">
+                                                                    {section.fields.length === 0 ? (
+                                                                        <div className="rounded-lg border border-dashed border-[hsl(var(--border))] px-3 py-4 text-center text-[11px] text-[hsl(var(--text-tertiary))]">No fields yet</div>
+                                                                    ) : visibleFields.map((field) => {
+                                                                        const isDeleteRevealed = swipedFieldId === field.id;
+                                                                        const currentSwipeOffset = isDeleteRevealed ? swipeOffset : 0;
+                                                                        const isSelectedField = currentSectionId === section.id && selectedFieldId === field.id;
+                                                                        return (
+                                                                            <div
+                                                                                key={field.id}
+                                                                                onDragOver={(event) => {
+                                                                                    event.preventDefault();
+                                                                                    event.stopPropagation();
+                                                                                    setDragOverFieldId(field.id);
+                                                                                }}
+                                                                                onDrop={(event) => {
+                                                                                    event.preventDefault();
+                                                                                    event.stopPropagation();
+                                                                                    const dragId = dragFieldIdRef.current;
+                                                                                    if (!dragId || dragId === field.id) {
+                                                                                        setDragOverFieldId(null);
+                                                                                        return;
+                                                                                    }
+                                                                                    reorderFieldsInSection(section.id, dragId, field.id);
+                                                                                    dragFieldIdRef.current = null;
+                                                                                    setDragEnabledFieldId(null);
+                                                                                    setDragOverFieldId(null);
+                                                                                }}
+                                                                                className={`relative overflow-hidden rounded-lg border transition-all hover:border-[hsl(var(--primary))]/30 ${isSelectedField
+                                                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/6 shadow-[0_0_0_1px_hsl(var(--primary))_inset]'
+                                                                                    : dragOverFieldId === field.id
+                                                                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/5'
+                                                                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))]'
+                                                                                    }`}
+                                                                            >
+                                                                                <button
+                                                                                    onClick={(event) => {
+                                                                                        event.stopPropagation();
+                                                                                        closeVariableSwipe();
+                                                                                        removeField(field.id);
+                                                                                    }}
+                                                                                    className="absolute inset-y-0 right-0 z-0 flex w-[88px] items-center justify-center bg-[hsl(var(--error))] px-2 text-[11px] font-semibold text-white"
+                                                                                    title="Delete variable"
+                                                                                >
+                                                                                    Delete
+                                                                                </button>
+
+                                                                                <div
+                                                                                    onPointerDown={(event) => handleVariableSwipeStart(event, field.id)}
+                                                                                    onPointerMove={(event) => handleVariableSwipeMove(event, field.id)}
+                                                                                    onPointerUp={(event) => handleVariableSwipeEnd(event, field.id)}
+                                                                                    onPointerCancel={closeVariableSwipe}
+                                                                                    onClick={(event) => {
+                                                                                        event.stopPropagation();
+                                                                                        if (swipeStateRef.current.swiping) {
+                                                                                            return;
+                                                                                        }
+                                                                                        closeVariableSwipe();
+                                                                                        setCurrentSectionId(section.id);
+                                                                                        setSelectedFieldId(field.id);
+                                                                                    }}
+                                                                                    className="relative z-10 flex items-center justify-between bg-[hsl(var(--surface))] px-3 py-2 transition-transform duration-200"
+                                                                                    style={{ transform: `translateX(${currentSwipeOffset}px)` }}
+                                                                                >
+                                                                                    <div className="flex min-w-0 items-center gap-2">
+                                                                                        <span
+                                                                                            data-drag-handle="true"
+                                                                                            draggable
+                                                                                            onDragStart={(event) => {
+                                                                                                event.stopPropagation();
+                                                                                                closeVariableSwipe();
+                                                                                                dragFieldIdRef.current = field.id;
+                                                                                                setDragEnabledFieldId(field.id);
+                                                                                                setDragOverFieldId(null);
+                                                                                            }}
+                                                                                            onDragEnd={() => {
+                                                                                                dragFieldIdRef.current = null;
+                                                                                                setDragEnabledFieldId(null);
+                                                                                                setDragOverFieldId(null);
+                                                                                            }}
+                                                                                            className="cursor-grab text-[hsl(var(--text-tertiary))] active:cursor-grabbing"
+                                                                                        >
+                                                                                            ⋮⋮
+                                                                                        </span>
+                                                                                        <div className="min-w-0">
+                                                                                            <p className="truncate text-xs font-semibold text-[hsl(var(--text-primary))]">{field.label}</p>
+                                                                                            <p className="truncate text-[10px] uppercase tracking-wider text-[hsl(var(--text-tertiary))]">{field.id}</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="ml-3 flex shrink-0 items-center gap-2">
+                                                                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">{field.type.replace(/_/g, ' ')}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                    {hiddenFieldCount > 0 && <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">+{hiddenFieldCount} more fields</div>}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-4 py-3">
+                                                                <button
+                                                                    onClick={() => addFieldToSection(section.id, 'input_text')}
+                                                                    className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:text-[hsl(var(--primary))]"
+                                                                >
+                                                                    Add Variable
+                                                                </button>
+                                                                <div className="flex items-center gap-2">
+                                                                    <button
+                                                                        onClick={() => updateSectionLayout(section.id, { collapse_mode: getNextCollapseMode(collapseMode) })}
+                                                                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))]"
+                                                                        title="Cycle card collapse mode"
+                                                                    >
+                                                                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapseMode === 'title' ? '-rotate-90' : collapseMode === 'summary' ? 'rotate-0' : 'rotate-180'}`} />
+                                                                        <span>{collapseMode === 'full' ? 'All' : collapseMode === 'summary' ? '50%' : 'Title'}</span>
+                                                                    </button>
+                                                                    {sections.length > 1 && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const next = sections.filter((candidate) => candidate.id !== section.id);
+                                                                                setSections(next);
+                                                                                if (currentSectionId === section.id && next.length) {
+                                                                                    setCurrentSectionId(next[0].id);
+                                                                                    setSelectedFieldId(null);
+                                                                                }
+                                                                            }}
+                                                                            className="rounded-md p-1.5 text-[hsl(var(--text-tertiary))] transition-all hover:bg-[hsl(var(--error))]/10 hover:text-[hsl(var(--error))]"
+                                                                            title="Delete section"
+                                                                        >
+                                                                            <Trash2 className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="shrink-0 border-t border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/60 px-5 py-4">
+                                            <div className="mb-3 flex items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Docked Editor</p>
+                                                    <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Flow Variable Editor</h3>
                                                 </div>
-
-                                                <div className="flex items-start space-x-4 mb-4">
-                                                    <div className="w-10 h-10 rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] flex items-center justify-center shrink-0 group-hover:bg-[hsl(var(--primary))]/20 transition-colors">
-                                                        <Layers className="w-5 h-5" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <h3 className="font-bold text-[hsl(var(--text-primary))] truncate">{section.title}</h3>
-                                                        {section.properties.description && (
-                                                            <p className="text-xs text-[hsl(var(--text-secondary))] mt-0.5 line-clamp-2">{section.properties.description}</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Meta row */}
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${section.properties.render_mode === 'single'
-                                                        ? 'bg-[hsl(var(--primary))]/15 text-[hsl(var(--primary))]'
-                                                        : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'
-                                                        }`}>
-                                                        {section.properties.render_mode === 'single' ? 'Single' : 'List'}
-                                                    </span>
-                                                    <span className="text-xs text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 rounded-md">
-                                                        {section.fields.length} {section.fields.length === 1 ? 'field' : 'fields'}
-                                                    </span>
-                                                    {section.properties.is_repeatable && (
-                                                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                                                            Repeatable
-                                                        </span>
-                                                    )}
-                                                    {(section.properties.platforms || []).map(p => (
-                                                        <span key={p} className="text-[10px] capitalize text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded">{p}</span>
-                                                    ))}
-                                                </div>
-
-                                                {/* Delete button — only visible on hover */}
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (sections.length <= 1) { showToast('Cannot delete', 'You must have at least one section', 'error'); return; }
-                                                        const next = sections.filter(s => s.id !== section.id);
-                                                        setSections(next);
-                                                        if (currentSectionId === section.id) setCurrentSectionId(next[0].id);
-                                                    }}
-                                                    className="absolute bottom-4 right-4 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
-                                                    title="Delete section"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-
-                                                {/* Enter arrow */}
-                                                <div className="absolute bottom-4 right-10 opacity-0 group-hover:opacity-100 transition-all text-[hsl(var(--primary))]">
-                                                    <Crumb className="w-4 h-4" />
+                                                <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                    {selectedField ? selectedField.type.replace(/_/g, ' ') : 'idle'}
                                                 </div>
                                             </div>
-                                        ))}
-
-                                        {/* Add section card */}
-                                        <button
-                                            onClick={addSection}
-                                            className="border-2 border-dashed border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/40 rounded-md p-6 flex flex-col items-center justify-center gap-3 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] transition-all hover:-translate-y-0.5 min-h-[140px]"
-                                        >
-                                            <div className="w-10 h-10 rounded-md border-2 border-dashed border-current flex items-center justify-center">
-                                                <span className="text-xl font-light">+</span>
+                                            <div className="max-h-[340px] overflow-y-auto hide-scrollbar pr-1">
+                                                {renderFlowVariableEditor()}
                                             </div>
-                                            <span className="text-sm font-semibold">Add Section</span>
-                                        </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1454,10 +2540,10 @@ const FormBuilder: React.FC = () => {
                             ═══════════════════════════════════════════════ */
                             <div
                                 key={`section-view-${currentSectionId}`}
-                                className={`p-12 min-h-full animate-in fade-in ${slideDir === 'forward' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
+                                className={`min-h-full px-8 py-8 lg:px-10 animate-in fade-in ${slideDir === 'forward' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
                                     } duration-300`}
                             >
-                                <div className="max-w-2xl mx-auto space-y-6">
+                                <div className="w-full max-w-5xl space-y-6">
 
                                     {/* ── Section selector chip ───────────────────────────── */}
                                     {(() => {
@@ -1501,10 +2587,36 @@ const FormBuilder: React.FC = () => {
                                         );
                                     })()}
 
+                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Widget Inserter</p>
+                                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">Add a widget to the selected section.</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <select
+                                                    value={inspectorWidgetType}
+                                                    onChange={(e) => setInspectorWidgetType(e.target.value as FieldType)}
+                                                    className="input-sm min-w-[180px]"
+                                                >
+                                                    {widgetLibrary.map((widget) => (
+                                                        <option key={widget.type} value={widget.type}>{widget.label}</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => addField(inspectorWidgetType)}
+                                                    className="rounded-md border border-[hsl(var(--primary))]/35 bg-[hsl(var(--primary))]/10 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--primary))] transition-all hover:bg-[hsl(var(--primary))]/15"
+                                                >
+                                                    Add Widget
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {fields.length === 0 ? (
                                         <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-md p-20 text-center text-[hsl(var(--text-tertiary))]">
-                                            <p className="text-lg font-medium">Select a widget to add a field</p>
-                                            <p className="text-sm mt-2">Use the widget library on the left to get started.</p>
+                                            <p className="text-lg font-medium">No widgets yet</p>
+                                            <p className="text-sm mt-2">Use the widget inserter above to add the first widget.</p>
                                         </div>
                                     ) : (
                                         fields.map((field) => (
@@ -1693,213 +2805,42 @@ const FormBuilder: React.FC = () => {
                                 </div>
                             </div>
                         )}
+                        </div>
                     </main>
 
-                    {/* Right Panel — Form settings in Form View, field/section properties in Section View */}
-                    <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
-                        <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
-                            <div className="grid grid-cols-2 gap-2">
-                                <div ref={multiActionMenuRef} className="relative">
-                                    <div className="w-full flex rounded-md overflow-hidden border border-[hsl(var(--primary))] shadow-lg shadow-black/10">
-                                        <button
-                                            onClick={handleSave}
-                                            disabled={isSaving || isPublishing}
-                                            className="flex-1 flex items-center justify-center px-3 py-2.5 bg-[hsl(var(--primary))] text-white hover:brightness-110 transition-all disabled:opacity-60"
-                                            title="Save draft"
-                                        >
-                                            <span className="font-semibold text-sm">{isSaving ? 'Saving...' : 'Save Draft'}</span>
-                                        </button>
+                    {/* Right Panel — Inspector Mode only */}
+                    {view === 'section' && (
+                        <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
+                        <div className="flex h-full flex-col">
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 px-3 pt-2">
+                                    <div className="flex items-end gap-1">
                                         <button
                                             onClick={() => {
-                                                setShowMultiActionMenu(prev => {
-                                                    const next = !prev;
-                                                    if (!next) setShowBackupTools(false);
-                                                    return next;
-                                                });
+                                                setPropertyTab('content');
+                                                setSelectedFieldId(null);
                                             }}
-                                            disabled={isSaving || isPublishing}
-                                            className="w-10 flex items-center justify-center bg-[hsl(var(--primary))] text-white border-l border-white/20 hover:brightness-110 transition-all disabled:opacity-60"
-                                            title="More actions"
-                                        >
-                                            <ChevronDown className="w-4 h-4" />
-                                        </button>
-                                    </div>
-
-                                    {showMultiActionMenu && (
-                                        <div className="absolute left-0 top-full mt-2 w-72 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-2xl z-50 overflow-hidden p-2 space-y-2">
-                                            <button
-                                                onClick={async () => {
-                                                    setShowMultiActionMenu(false);
-                                                    setShowBackupTools(false);
-                                                    await handlePublish();
-                                                }}
-                                                className="w-full text-left px-3 py-2.5 text-sm font-semibold text-[hsl(var(--success))] bg-[hsl(var(--success))]/12 hover:bg-[hsl(var(--success))]/18 rounded-md transition-all duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_1px_6px_rgba(34,197,94,0.10)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_0_0_1px_rgba(34,197,94,0.20),0_3px_10px_rgba(34,197,94,0.16)] flex items-center space-x-2"
-                                            >
-                                                <Zap className="w-4 h-4 text-[hsl(var(--success))]" />
-                                                <span>Publish</span>
-                                            </button>
-
-                                            <button
-                                                onClick={() => setShowBackupTools((prev) => !prev)}
-                                                className="w-full text-left px-3 py-2 text-xs font-semibold tracking-wide text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-colors flex items-center justify-between"
-                                            >
-                                                <span>Backup Tools</span>
-                                                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBackupTools ? 'rotate-180' : ''}`} />
-                                            </button>
-
-                                            {showBackupTools && (
-                                                <div className="px-1 py-1 bg-[hsl(var(--surface-elevated))]/20 rounded-md space-y-1.5">
-                                                    {[2, 3].map((slot) => {
-                                                        const backup = getSlotVersion(slot as 2 | 3);
-                                                        const shortLabel = slot === 2 ? 'A' : 'B';
-                                                        const isPreviewing = previewSlot === slot;
-                                                        const previewBlueprint = isPreviewing ? backup?.blueprint : null;
-                                                        const sectionCount = previewBlueprint?.ui?.length || 0;
-                                                        const fieldCount = previewBlueprint?.ui?.reduce((acc: number, s: any) => acc + ((s.children || []).length), 0) || 0;
-
-                                                        return (
-                                                            <div
-                                                                key={slot}
-                                                                className="group rounded-lg px-2 py-1.5 bg-gradient-to-r from-[hsl(var(--surface))] via-[hsl(var(--surface-elevated))]/55 to-[hsl(var(--surface))] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_8px_rgba(15,23,42,0.08)] transition-all duration-200 hover:brightness-[1.02] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(15,23,42,0.12)]"
-                                                            >
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <p className="text-[10px] font-medium text-[hsl(var(--text-tertiary))] truncate">
-                                                                        {backup ? `v${backup.version_number}` : 'Empty'}
-                                                                        {isPreviewing && backup ? ` · ${sectionCount}s ${fieldCount}f` : ''}
-                                                                    </p>
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span className="text-[11px] font-semibold text-[hsl(var(--text-primary))] w-3 text-center transition-colors group-hover:text-[hsl(var(--primary))]">{shortLabel}</span>
-                                                                        <button
-                                                                            onClick={async () => {
-                                                                                await handleSaveToBackup(slot as 2 | 3);
-                                                                            }}
-                                                                            className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
-                                                                            title={`Save current draft to backup ${shortLabel}`}
-                                                                        >
-                                                                            <Save className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => setPreviewSlot(isPreviewing ? null : (slot as 2 | 3))}
-                                                                            className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
-                                                                            title={`Preview backup ${shortLabel}`}
-                                                                        >
-                                                                            <Eye className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={async () => {
-                                                                                setShowMultiActionMenu(false);
-                                                                                setShowBackupTools(false);
-                                                                                await handleRestoreBackupToDraft(slot as 2 | 3);
-                                                                            }}
-                                                                            disabled={!backup}
-                                                                            className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-40"
-                                                                            title={`Restore backup ${shortLabel} into draft`}
-                                                                        >
-                                                                            <RotateCcw className="w-3.5 h-3.5 text-[hsl(var(--success))]" />
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="relative">
-                                    <button
-                                        onClick={() => {
-                                            if (view === 'section') {
-                                                setShowSimulatorMenu(!showSimulatorMenu);
-                                            } else {
-                                                navigate(`/simulator/${formId}`);
-                                            }
-                                        }}
-                                        className="w-full flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] px-3 py-2.5 rounded-md transition-all shadow-lg shadow-black/10 text-white"
-                                    >
-                                        <Play className="w-4 h-4" />
-                                        <span className="font-semibold text-sm">Simulator</span>
-                                    </button>
-
-                                    {showSimulatorMenu && (
-                                        <div className="absolute right-0 top-full mt-2 w-56 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-xl z-50 overflow-hidden">
-                                            <button
-                                                onClick={() => {
-                                                    setShowSimulatorMenu(false);
-                                                    navigate(`/simulator/${formId}`);
-                                                }}
-                                                className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors border-b border-[hsl(var(--border))] flex items-center space-x-2"
-                                            >
-                                                <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                                <span>Run From Beginning</span>
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setShowSimulatorMenu(false);
-                                                    navigate(`/simulator/${formId}?section=${currentSectionId}`);
-                                                }}
-                                                className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors flex items-center space-x-2"
-                                            >
-                                                <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                                <span>Run Current Section</span>
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {view === 'form' ? (
-                            /* Form View right panel: form-level settings */
-                            <div className="flex-1 overflow-y-auto p-6 hide-scrollbar animate-in fade-in duration-200">
-                                <h3 className="text-sm font-bold text-[hsl(var(--text-primary))] mb-5 flex items-center">
-                                    <Settings className="w-4 h-4 mr-2" />
-                                    Form Settings
-                                </h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="label">Form Title</label>
-                                        <input value={title} onChange={(e) => setTitle(e.target.value)} className="input" />
-                                    </div>
-                                    <div>
-                                        <label className="label">Sections</label>
-                                        <p className="text-2xl font-bold text-[hsl(var(--primary))]">{sections.length}</p>
-                                    </div>
-                                    <div>
-                                        <label className="label">Total Fields</label>
-                                        <p className="text-2xl font-bold text-[hsl(var(--primary))]">{sections.reduce((acc, s) => acc + s.fields.length, 0)}</p>
-                                    </div>
-                                    <div className="pt-2 border-t border-[hsl(var(--border))]">
-                                        <p className="text-xs text-[hsl(var(--text-tertiary))] italic">Click a section card to enter it and edit its fields and properties.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            /* Section View right panel: field + section properties/logic */
-                            <>
-                                <div className="p-6 border-b border-[hsl(var(--border))]">
-                                    <div className="flex bg-[hsl(var(--surface-elevated))] p-1 rounded-md">
-                                        <button
-                                            onClick={() => setPropertyTab('content')}
-                                            className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${propertyTab === 'content'
-                                                ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm'
-                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                            className={`flex items-center justify-center space-x-2 rounded-t-lg border border-b-0 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${!selectedField
+                                                ? 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--primary))]'
+                                                : 'border-transparent bg-transparent text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface))]/70 hover:text-[hsl(var(--text-secondary))]'
                                                 }`}
                                         >
                                             <Settings className="w-3 h-3" />
-                                            <span>Properties</span>
+                                            <span>Section Properties</span>
                                         </button>
                                         <button
-                                            onClick={() => setPropertyTab('logic')}
-                                            className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${propertyTab === 'logic'
-                                                ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm'
-                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                            onClick={() => {
+                                                setPropertyTab('content');
+                                                if (!selectedField) {
+                                                    showToast('Select a widget', 'Click a widget in the center pane to edit its properties.', 'info');
+                                                }
+                                            }}
+                                            className={`flex items-center justify-center space-x-2 rounded-t-lg border border-b-0 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${selectedField
+                                                ? 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--primary))]'
+                                                : 'border-transparent bg-transparent text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface))]/70 hover:text-[hsl(var(--text-secondary))]'
                                                 }`}
                                         >
-                                            <Zap className="w-3 h-3" />
-                                            <span>Logic</span>
+                                            <Type className="w-3 h-3" />
+                                            <span>Widget Properties</span>
                                         </button>
                                     </div>
                                 </div>
@@ -1912,7 +2853,6 @@ const FormBuilder: React.FC = () => {
                                                     {/* Section Title */}
                                                     <div>
                                                         <h3 className="text-sm font-bold text-[hsl(var(--text-primary))] mb-4 flex items-center">
-                                                            <Layout className="w-4 h-4 mr-2" />
                                                             Section Settings
                                                         </h3>
                                                         <label className="label">Section Title</label>
@@ -3326,8 +4266,224 @@ const FormBuilder: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
-                            </>
+                            </div>
+                        </aside>
+                    )}
+
+                    </div>
+
+                    </div>
+
+                    <aside className="flex h-full shrink-0 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55">
+                        {isBuilderConsoleOpen && (
+                            <div className="w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden">
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-4 py-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Builder Panel</p>
+                                            <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Form Console</h3>
+                                        </div>
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                            {view === 'flow' ? 'flow' : 'inspector'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div ref={multiActionMenuRef} className="relative">
+                                            <div className="w-full flex rounded-md overflow-hidden border border-[hsl(var(--primary))] shadow-lg shadow-black/10">
+                                                <button
+                                                    onClick={handleSave}
+                                                    disabled={isSaving || isPublishing}
+                                                    className="flex-1 flex items-center justify-center px-3 py-2.5 bg-[hsl(var(--primary))] text-white hover:brightness-110 transition-all disabled:opacity-60"
+                                                    title="Save draft"
+                                                >
+                                                    <span className="font-semibold text-sm">{isSaving ? 'Saving...' : 'Save Draft'}</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setShowMultiActionMenu(prev => {
+                                                            const next = !prev;
+                                                            if (!next) setShowBackupTools(false);
+                                                            return next;
+                                                        });
+                                                    }}
+                                                    disabled={isSaving || isPublishing}
+                                                    className="w-10 flex items-center justify-center bg-[hsl(var(--primary))] text-white border-l border-white/20 hover:brightness-110 transition-all disabled:opacity-60"
+                                                    title="More actions"
+                                                >
+                                                    <ChevronDown className="w-4 h-4" />
+                                                </button>
+                                            </div>
+
+                                            {showMultiActionMenu && (
+                                                <div className="absolute left-0 top-full mt-2 w-72 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-2xl z-50 overflow-hidden p-2 space-y-2">
+                                                    <button
+                                                        onClick={async () => {
+                                                            setShowMultiActionMenu(false);
+                                                            setShowBackupTools(false);
+                                                            await handlePublish();
+                                                        }}
+                                                        className="w-full text-left px-3 py-2.5 text-sm font-semibold text-[hsl(var(--success))] bg-[hsl(var(--success))]/12 hover:bg-[hsl(var(--success))]/18 rounded-md transition-all duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_1px_6px_rgba(34,197,94,0.10)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_0_0_1px_rgba(34,197,94,0.20),0_3px_10px_rgba(34,197,94,0.16)] flex items-center space-x-2"
+                                                    >
+                                                        <Zap className="w-4 h-4 text-[hsl(var(--success))]" />
+                                                        <span>Publish</span>
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => setShowBackupTools((prev) => !prev)}
+                                                        className="w-full text-left px-3 py-2 text-xs font-semibold tracking-wide text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-colors flex items-center justify-between"
+                                                    >
+                                                        <span>Backup Tools</span>
+                                                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBackupTools ? 'rotate-180' : ''}`} />
+                                                    </button>
+
+                                                    {showBackupTools && (
+                                                        <div className="px-1 py-1 bg-[hsl(var(--surface-elevated))]/20 rounded-md space-y-1.5">
+                                                            {[2, 3].map((slot) => {
+                                                                const backup = getSlotVersion(slot as 2 | 3);
+                                                                const shortLabel = slot === 2 ? 'A' : 'B';
+                                                                const isPreviewing = previewSlot === slot;
+                                                                const previewBlueprint = isPreviewing ? backup?.blueprint : null;
+                                                                const sectionCount = previewBlueprint?.ui?.length || 0;
+                                                                const fieldCount = previewBlueprint?.ui?.reduce((acc: number, s: any) => acc + ((s.children || []).length), 0) || 0;
+
+                                                                return (
+                                                                    <div
+                                                                        key={slot}
+                                                                        className="group rounded-lg px-2 py-1.5 bg-gradient-to-r from-[hsl(var(--surface))] via-[hsl(var(--surface-elevated))]/55 to-[hsl(var(--surface))] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_8px_rgba(15,23,42,0.08)] transition-all duration-200 hover:brightness-[1.02] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(15,23,42,0.12)]"
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <p className="text-[10px] font-medium text-[hsl(var(--text-tertiary))] truncate">
+                                                                                {backup ? `v${backup.version_number}` : 'Empty'}
+                                                                                {isPreviewing && backup ? ` · ${sectionCount}s ${fieldCount}f` : ''}
+                                                                            </p>
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <span className="text-[11px] font-semibold text-[hsl(var(--text-primary))] w-3 text-center transition-colors group-hover:text-[hsl(var(--primary))]">{shortLabel}</span>
+                                                                                <button
+                                                                                    onClick={async () => {
+                                                                                        await handleSaveToBackup(slot as 2 | 3);
+                                                                                    }}
+                                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
+                                                                                    title={`Save current draft to backup ${shortLabel}`}
+                                                                                >
+                                                                                    <Save className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => setPreviewSlot(isPreviewing ? null : (slot as 2 | 3))}
+                                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
+                                                                                    title={`Preview backup ${shortLabel}`}
+                                                                                >
+                                                                                    <Eye className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={async () => {
+                                                                                        setShowMultiActionMenu(false);
+                                                                                        setShowBackupTools(false);
+                                                                                        await handleRestoreBackupToDraft(slot as 2 | 3);
+                                                                                    }}
+                                                                                    disabled={!backup}
+                                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-40"
+                                                                                    title={`Restore backup ${shortLabel} into draft`}
+                                                                                >
+                                                                                    <RotateCcw className="w-3.5 h-3.5 text-[hsl(var(--success))]" />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => {
+                                                    if (view === 'section') {
+                                                        setShowSimulatorMenu(!showSimulatorMenu);
+                                                    } else {
+                                                        navigate(`/simulator/${formId}`);
+                                                    }
+                                                }}
+                                                className="w-full flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] px-3 py-2.5 rounded-md transition-all shadow-lg shadow-black/10 text-white"
+                                            >
+                                                <Play className="w-4 h-4" />
+                                                <span className="font-semibold text-sm">Simulator</span>
+                                            </button>
+
+                                            {showSimulatorMenu && (
+                                                <div className="absolute right-0 top-full mt-2 w-56 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-xl z-50 overflow-hidden">
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowSimulatorMenu(false);
+                                                            navigate(`/simulator/${formId}`);
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors border-b border-[hsl(var(--border))] flex items-center space-x-2"
+                                                    >
+                                                        <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                                        <span>Run From Beginning</span>
+                                                    </button>
+                                                    {view === 'section' && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowSimulatorMenu(false);
+                                                                navigate(`/simulator/${formId}?section=${currentSectionId}`);
+                                                            }}
+                                                            className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors flex items-center space-x-2"
+                                                        >
+                                                            <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                                            <span>Run Current Section</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-4 text-xs text-[hsl(var(--text-tertiary))] space-y-2">
+                                    <p className="font-semibold uppercase tracking-[0.18em]">Summary</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/50 px-3 py-2">
+                                            <p className="text-[10px] uppercase tracking-wider">Sections</p>
+                                            <p className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">{sections.length}</p>
+                                        </div>
+                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/50 px-3 py-2">
+                                            <p className="text-[10px] uppercase tracking-wider">Fields</p>
+                                            <p className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">{sections.reduce((acc, s) => acc + s.fields.length, 0)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         )}
+
+                        <div className="w-14 flex flex-col items-center gap-3 py-3 px-2">
+                            <button
+                                onClick={() => {
+                                    const next = !isBuilderConsoleOpen;
+                                    setIsBuilderConsoleOpen(next);
+                                    if (!next) {
+                                        setShowMultiActionMenu(false);
+                                        setShowBackupTools(false);
+                                        setShowSimulatorMenu(false);
+                                    }
+                                }}
+                                className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${isBuilderConsoleOpen
+                                    ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                    : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
+                                    }`}
+                                title="Toggle Form Console"
+                            >
+                                <Terminal className="w-4 h-4" />
+                            </button>
+                            <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
+                                Console
+                            </div>
+                        </div>
                     </aside>
 
                 </div>

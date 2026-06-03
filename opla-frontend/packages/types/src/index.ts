@@ -202,6 +202,13 @@ export interface FormSection {
   type: 'screen';
   title: string;
   template_id?: string;
+  layout?: {
+    x?: number;
+    y?: number;
+    width?: number;
+    collapsed?: boolean;
+    collapse_mode?: 'full' | 'summary' | 'title';
+  };
   render_mode: RenderMode;
   description?: string;
   platforms?: Platform[];

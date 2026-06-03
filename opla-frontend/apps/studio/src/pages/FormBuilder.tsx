@@ -1964,68 +1964,67 @@ const FormBuilder: React.FC = () => {
                     : 'border-[hsl(var(--border))] bg-[linear-gradient(90deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))]'
                     }`}>
                     <div className="flex items-center space-x-3">
-                        {view === 'section' ? (
-                            <>
-                                <button
-                                    onClick={exitSection}
-                                    className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-md transition-all text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
-                                    title="Back to Flow"
-                                >
-                                    <ArrowLeft className="w-5 h-5" />
-                                </button>
-                                <div className="w-10 h-10 bg-[hsl(var(--primary))] rounded-md flex items-center justify-center shadow-lg shadow-black/10">
-                                    <Layout className="w-6 h-6 text-white" />
-                                </div>
-                                <div className="flex min-w-0 items-center gap-3">
-                                    <input
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                        className="min-w-0 bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
-                                    />
-                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
-                                        Studio Builder
-                                    </div>
-                                    <div className="rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-secondary))]">
-                                        Inspector Mode
-                                    </div>
-                                    <div className="max-w-[220px] truncate rounded-full border border-[hsl(var(--primary))]/18 bg-[hsl(var(--primary))]/8 px-3 py-1 text-[11px] font-semibold text-[hsl(var(--primary))]">
-                                        {sections.find(s => s.id === currentSectionId)?.title || 'Section'}
-                                    </div>
-                                </div>
-                            </>
-                        ) : (
-                            /* Form View: title + back to dashboard */
-                            <>
-                                <button
-                                    onClick={() => navigate('/dashboard')}
-                                    className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-md transition-all text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
-                                    title="Back to Dashboard"
-                                >
-                                    <ArrowLeft className="w-5 h-5" />
-                                </button>
-                                <div className="w-10 h-10 bg-[hsl(var(--primary))] rounded-md flex items-center justify-center shadow-lg shadow-black/10">
-                                    <Layout className="w-6 h-6 text-white" />
-                                </div>
-                                <input
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    className="bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-md transition-all text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
+                            title="Back to Dashboard"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <div className="w-10 h-10 bg-[hsl(var(--primary))] rounded-md flex items-center justify-center shadow-lg shadow-black/10">
+                            <Layout className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex min-w-0 items-center gap-3">
+                            <input
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                className="min-w-0 bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
+                            />
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                Studio Builder
+                            </div>
+                            <div className="relative inline-grid grid-cols-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))]/92 p-0.5 shadow-sm">
+                                <div
+                                    className={`pointer-events-none absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-[linear-gradient(135deg,rgba(134,239,172,0.95),rgba(167,243,208,0.92))] shadow-[0_4px_10px_rgba(74,222,128,0.2)] transition-all duration-300 ${view === 'flow' ? 'left-0.5' : 'left-[calc(50%)]'
+                                        }`}
                                 />
-                                <div className="ml-4 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
-                                    Studio Builder
+                                <button
+                                    onClick={() => {
+                                        exitSection();
+                                    }}
+                                    className={`relative z-10 inline-flex min-w-[110px] items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${view === 'flow'
+                                        ? 'text-slate-950'
+                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
+                                        }`}
+                                >
+                                    <GitBranch className="h-3.5 w-3.5" />
+                                    <span>Flow Mode</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (!selectedSection) {
+                                            return;
+                                        }
+                                        enterSection(selectedSection.id);
+                                    }}
+                                    disabled={!selectedSection}
+                                    className={`relative z-10 inline-flex min-w-[110px] items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${view === 'section'
+                                        ? 'text-slate-950'
+                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
+                                        } ${!selectedSection ? 'cursor-not-allowed opacity-50' : ''}`}
+                                >
+                                    <Layout className="h-3.5 w-3.5" />
+                                    <span>Inspector Mode</span>
+                                </button>
+                            </div>
+                            {view === 'section' && (
+                                <div className="max-w-[220px] truncate rounded-full border border-[hsl(var(--primary))]/18 bg-[hsl(var(--primary))]/8 px-3 py-1 text-[11px] font-semibold text-[hsl(var(--primary))] animate-in fade-in duration-200">
+                                    {sections.find(s => s.id === currentSectionId)?.title || 'Section'}
                                 </div>
-                                <div className="rounded-full border border-[hsl(var(--primary))]/25 bg-[hsl(var(--primary))]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--primary))]">
-                                    Flow Mode
-                                </div>
-                            </>
-                        )}
+                            )}
+                        </div>
                     </div>
                     <div className="flex items-center space-x-3">
-                        {view === 'section' && (
-                            <div className="rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-secondary))]">
-                                Inspector Mode
-                            </div>
-                        )}
                         <div className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg border ${formMeta?.status === 'live'
                             ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))] border-[hsl(var(--success))]/30'
                             : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border-[hsl(var(--border))]'
@@ -2047,52 +2046,7 @@ const FormBuilder: React.FC = () => {
                         ? 'flex-col rounded-[28px] border border-[hsl(var(--border))] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.92))] shadow-[0_24px_60px_rgba(15,23,42,0.08)]'
                         : ''
                         }`}>
-                    {view === 'section' && (
-                        <div className="border-b border-[hsl(var(--border))] bg-[linear-gradient(90deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-5 py-3">
-                            <div className="flex flex-wrap items-center justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="relative inline-grid grid-cols-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))]/92 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-                                        <div
-                                            className="pointer-events-none absolute left-[calc(50%)] top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-full bg-[linear-gradient(135deg,rgba(134,239,172,0.95),rgba(167,243,208,0.92))] shadow-[0_8px_20px_rgba(74,222,128,0.28)] transition-all duration-300"
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                setSelectedFieldId(null);
-                                                setView('flow');
-                                            }}
-                                            className="relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-[hsl(var(--text-tertiary))] transition-colors hover:text-[hsl(var(--text-primary))]"
-                                        >
-                                            <GitBranch className="h-4 w-4" />
-                                            <span>Flow Mode</span>
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                if (!selectedSection) {
-                                                    return;
-                                                }
-                                                setSelectedFieldId(null);
-                                                setCurrentSectionId(selectedSection.id);
-                                                setView('section');
-                                            }}
-                                            disabled={!selectedSection}
-                                            className={`relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors ${!selectedSection ? 'cursor-not-allowed opacity-50' : ''}`}
-                                        >
-                                            <Layout className="h-4 w-4" />
-                                            <span>Inspector Mode</span>
-                                        </button>
-                                    </div>
 
-                                    <div className="min-w-0">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Inspector Canvas</p>
-                                        <div className="mt-1 flex items-center gap-2 text-sm text-[hsl(var(--text-primary))]">
-                                            <Layout className="h-4 w-4 text-[hsl(var(--primary))]" />
-                                            <span className="truncate font-semibold">{selectedSection?.title || 'Section'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="flex min-h-0 flex-1 overflow-hidden">
                     {/* Left Panel: Section Navigator — only in Section View */}
@@ -2159,67 +2113,7 @@ const FormBuilder: React.FC = () => {
                         ? 'bg-transparent'
                         : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.66),rgba(248,250,252,0.9))]'
                         }`}>
-                        {view === 'flow' && (
-                        <div className="border-b border-[hsl(var(--primary))]/15 bg-[linear-gradient(90deg,rgba(255,255,255,0.32),rgba(255,255,255,0.68))] px-5 py-3">
-                            <div className="flex flex-wrap items-center justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="relative inline-grid grid-cols-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))]/92 p-1 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-                                        <div
-                                            className={`pointer-events-none absolute top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-full bg-[linear-gradient(135deg,rgba(134,239,172,0.95),rgba(167,243,208,0.92))] shadow-[0_8px_20px_rgba(74,222,128,0.28)] transition-all duration-300 ${view === 'flow' ? 'left-1' : 'left-[calc(50%)]'
-                                                }`}
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                setSelectedFieldId(null);
-                                                setView('flow');
-                                            }}
-                                            className={`relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${view === 'flow'
-                                                ? 'text-slate-950'
-                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
-                                                }`}
-                                        >
-                                            <GitBranch className="h-4 w-4" />
-                                            <span>Flow Mode</span>
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                if (!selectedSection) {
-                                                    return;
-                                                }
-                                                setSelectedFieldId(null);
-                                                setCurrentSectionId(selectedSection.id);
-                                                setView('section');
-                                            }}
-                                            disabled={!selectedSection}
-                                            className={`relative z-10 inline-flex min-w-[148px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-[hsl(var(--text-tertiary))] transition-colors hover:text-[hsl(var(--text-primary))] ${!selectedSection ? 'cursor-not-allowed opacity-50' : ''}`}
-                                        >
-                                            <Layout className="h-4 w-4" />
-                                            <span>Inspector Mode</span>
-                                        </button>
-                                    </div>
 
-                                    <div className="min-w-0">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
-                                            {view === 'flow' ? 'Flow Overview' : 'Inspector Canvas'}
-                                        </p>
-                                        <div className="mt-1 flex items-center gap-2 text-sm text-[hsl(var(--text-primary))]">
-                                            {view === 'flow' ? (
-                                                <>
-                                                    <GitBranch className="h-4 w-4 text-[hsl(var(--primary))]" />
-                                                    <span className="font-semibold">Map sections, variables, and routing</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Layout className="h-4 w-4 text-[hsl(var(--primary))]" />
-                                                    <span className="truncate font-semibold">{selectedSection?.title || 'Section'}</span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        )}
 
                         <div className="min-h-0 flex-1 overflow-y-auto hide-scrollbar">
                         {view === 'flow' ? (
@@ -2228,34 +2122,28 @@ const FormBuilder: React.FC = () => {
                             ═══════════════════════════════════════════════ */
                             <div
                                 key="flow-view"
-                                className={`p-12 min-h-full animate-in fade-in ${slideDir === 'back' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
+                                className={`p-4 h-full flex flex-col overflow-hidden animate-in fade-in ${slideDir === 'back' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
                                     } duration-300`}
                             >
-                                <div className="mx-auto max-w-7xl">
-                                    <div className="mb-8 flex items-end justify-between gap-6">
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-[hsl(var(--text-primary))]">Form Flow</h2>
-                                            <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Arrange section nodes, inspect routing, and jump into detail editing from the canvas.</p>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                            <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">{sections.length} sections</span>
-                                            <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex h-[calc(100vh-12rem)] min-h-[860px] flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
-                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
+                                <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
+                                        <div className="flex items-center gap-4">
                                             <div>
                                                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Canvas</p>
-                                                <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Drag section headers to position them. Use field routes and logic to understand the full journey.</p>
+                                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">Drag headers to position them. Use routes to see connection logic.</p>
                                             </div>
-                                            <button
-                                                onClick={addSection}
-                                                className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm font-semibold text-[hsl(var(--text-primary))] transition-all hover:border-[hsl(var(--primary))]/40 hover:text-[hsl(var(--primary))]"
-                                            >
-                                                Add Section
-                                            </button>
+                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1">{sections.length} sections</span>
+                                                <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
+                                            </div>
                                         </div>
+                                        <button
+                                            onClick={addSection}
+                                            className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--text-primary))] transition-all hover:border-[hsl(var(--primary))]/40 hover:text-[hsl(var(--primary))]"
+                                        >
+                                            Add Section
+                                        </button>
+                                    </div>
 
                                         <div ref={flowCanvasRef} className="relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
                                             <svg className="pointer-events-none absolute left-0 top-0 h-[1600px] w-[1600px]" viewBox="0 0 1600 1600" fill="none">
@@ -2532,7 +2420,6 @@ const FormBuilder: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
-                                </div>
                             </div>
                         ) : (
                             /* ═══════════════════════════════════════════════
@@ -2540,7 +2427,7 @@ const FormBuilder: React.FC = () => {
                             ═══════════════════════════════════════════════ */
                             <div
                                 key={`section-view-${currentSectionId}`}
-                                className={`min-h-full px-8 py-8 lg:px-10 animate-in fade-in ${slideDir === 'forward' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
+                                className={`min-h-full p-4 lg:p-6 animate-in fade-in ${slideDir === 'forward' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
                                     } duration-300`}
                             >
                                 <div className="w-full max-w-5xl space-y-6">

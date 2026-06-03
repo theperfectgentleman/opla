@@ -542,7 +542,7 @@ const FormBuilder: React.FC = () => {
         };
     };
 
-    const addFieldToSection = (sectionId: string, type: FieldType, defaults?: Partial<FormField>) => {
+    const addFieldToSection = (sectionId: string, type: FieldType, defaults?: Partial<FormField>, insertAtTop?: boolean) => {
         const newField: FormField = {
             id: `field_${Date.now()}`,
             type,
@@ -550,7 +550,7 @@ const FormBuilder: React.FC = () => {
             required: false,
             ...buildFieldTypeDefaults(type, defaults),
         };
-        setSections(prev => prev.map(p => p.id === sectionId ? { ...p, fields: [...p.fields, newField] } : p));
+        setSections(prev => prev.map(p => p.id === sectionId ? { ...p, fields: insertAtTop ? [newField, ...p.fields] : [...p.fields, newField] } : p));
         setCurrentSectionId(sectionId);
         setSelectedFieldId(newField.id);
         return newField;
@@ -1089,8 +1089,58 @@ const FormBuilder: React.FC = () => {
         loadTemplates();
     }, [currentOrg?.id]);
 
-    const addField = (type: FieldType, defaults?: Partial<FormField>) => {
-        addFieldToSection(currentSectionId, type, defaults);
+    const addField = (type: FieldType, defaults?: Partial<FormField>, insertAtTop?: boolean) => {
+        addFieldToSection(currentSectionId, type, defaults, insertAtTop);
+    };
+
+    const longPressTimeoutRef = React.useRef<any>(null);
+    const isLongPressActiveRef = React.useRef<boolean>(false);
+
+    const handlePlusButtonMouseDown = (e: React.MouseEvent) => {
+        if (e.shiftKey) {
+            addField(inspectorWidgetType, undefined, true);
+            return;
+        }
+        isLongPressActiveRef.current = false;
+        longPressTimeoutRef.current = setTimeout(() => {
+            isLongPressActiveRef.current = true;
+            addField(inspectorWidgetType, undefined, true);
+            showToast('Added to top', `Widget inserted at the top of the list`, 'success');
+        }, 1000);
+    };
+
+    const handlePlusButtonMouseUp = (e: React.MouseEvent) => {
+        if (longPressTimeoutRef.current) {
+            clearTimeout(longPressTimeoutRef.current);
+        }
+        if (!isLongPressActiveRef.current && !e.shiftKey) {
+            addField(inspectorWidgetType);
+        }
+    };
+
+    const handlePlusButtonMouseLeave = () => {
+        if (longPressTimeoutRef.current) {
+            clearTimeout(longPressTimeoutRef.current);
+        }
+    };
+
+    const handlePlusButtonTouchStart = () => {
+        isLongPressActiveRef.current = false;
+        longPressTimeoutRef.current = setTimeout(() => {
+            isLongPressActiveRef.current = true;
+            addField(inspectorWidgetType, undefined, true);
+            showToast('Added to top', `Widget inserted at the top of the list`, 'success');
+        }, 1000);
+    };
+
+    const handlePlusButtonTouchEnd = (e: React.TouchEvent) => {
+        if (longPressTimeoutRef.current) {
+            clearTimeout(longPressTimeoutRef.current);
+        }
+        if (!isLongPressActiveRef.current) {
+            e.preventDefault();
+            addField(inspectorWidgetType);
+        }
     };
 
     const copyField = (fieldId: string) => {
@@ -2085,9 +2135,9 @@ const FormBuilder: React.FC = () => {
                 );
             case 'radio_group':
                 return (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-row flex-wrap gap-x-4 gap-y-1.5">
                         {(field.options || [{ label: 'Option A', value: 'a' }, { label: 'Option B', value: 'b' }]).map((opt, idx) => (
-                            <label key={idx} className="flex items-center gap-2.5 text-xs text-[hsl(var(--text-secondary))] cursor-not-allowed">
+                            <label key={idx} className="flex items-center gap-2 text-xs text-[hsl(var(--text-secondary))] cursor-not-allowed select-none">
                                 <span className={`w-3.5 h-3.5 rounded-full border border-[hsl(var(--border))]/85 flex items-center justify-center shrink-0`}>
                                     {idx === 0 && <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))]" />}
                                 </span>
@@ -2098,9 +2148,9 @@ const FormBuilder: React.FC = () => {
                 );
             case 'checkbox_group':
                 return (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-row flex-wrap gap-x-4 gap-y-1.5">
                         {(field.options || [{ label: 'Option A', value: 'a' }, { label: 'Option B', value: 'b' }]).map((opt, idx) => (
-                            <label key={idx} className="flex items-center gap-2.5 text-xs text-[hsl(var(--text-secondary))] cursor-not-allowed">
+                            <label key={idx} className="flex items-center gap-2 text-xs text-[hsl(var(--text-secondary))] cursor-not-allowed select-none">
                                 <span className={`w-3.5 h-3.5 rounded border border-[hsl(var(--border))]/85 flex items-center justify-center shrink-0`}>
                                     {idx === 0 && <span className="w-2 h-2 bg-[hsl(var(--primary))] rounded-sm" />}
                                 </span>
@@ -2111,70 +2161,69 @@ const FormBuilder: React.FC = () => {
                 );
             case 'textarea':
                 return (
-                    <textarea 
-                        placeholder={field.placeholder || "Write narrative overview summary response..."} 
-                        rows={2} 
-                        className={`w-full text-xs px-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} outline-none resize-none cursor-not-allowed ${textSecColor}`} 
-                        disabled
-                    />
+                    <div className={`w-full text-xs px-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} text-[hsl(var(--text-tertiary))] italic cursor-not-allowed truncate select-none`}>
+                        {field.placeholder || "Write multiple lines response..."}
+                    </div>
                 );
             case 'gps_capture':
                 return (
-                    <div className="flex items-center flex-wrap gap-2 justify-between">
-                        <div className="bg-[hsl(var(--primary))]/5 border border-[hsl(var(--primary))]/10 rounded-lg px-3 py-1.5 text-xs text-[hsl(var(--primary))] font-mono flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
-                            <span>Lat: 5.6037° N, Lon: 0.1870° W (Mock Location)</span>
+                    <div className="flex items-center gap-3 justify-between">
+                        <div className="bg-[hsl(var(--primary))]/5 border border-[hsl(var(--primary))]/10 rounded-lg px-2.5 py-1 text-[11px] text-[hsl(var(--primary))] font-mono flex items-center gap-1 truncate select-none">
+                            <MapPin className="w-3 h-3 text-[hsl(var(--primary))] shrink-0" />
+                            <span className="truncate">Lat: 5.6037°, Lon: -0.1870°</span>
                         </div>
-                        <button className="bg-[hsl(var(--primary))] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-sm" disabled>Capture Location</button>
+                        <button className="bg-[hsl(var(--primary))] text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-sm shrink-0" disabled>Capture</button>
                     </div>
                 );
             case 'photo_capture':
                 return (
-                    <div className={`flex flex-col items-center justify-center border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/50 p-4 rounded-xl text-center select-none text-[hsl(var(--text-tertiary))]`}>
-                        <Camera className="w-6 h-6 mb-1 text-[hsl(var(--text-tertiary))]" />
-                        <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))]">No camera feed active</span>
-                        <span className="text-[9px]">Click template button to initialize system lens</span>
+                    <div className={`flex items-center gap-2.5 border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/50 px-3 py-1.5 rounded-xl text-[hsl(var(--text-tertiary))] select-none`}>
+                        <Camera className="w-4 h-4 text-[hsl(var(--text-tertiary))] shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block leading-none">No camera feed active</span>
+                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] block mt-0.5 leading-none">Click to initialize system lens</span>
+                        </div>
                     </div>
                 );
             case 'file_upload':
                 return (
-                    <div className={`border-2 border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/40 p-4 rounded-xl text-center flex flex-col items-center justify-center text-[hsl(var(--text-tertiary))]`}>
-                        <FileText className="w-6 h-6 mb-1 text-[hsl(var(--text-tertiary))]" />
-                        <span className="text-xs font-semibold text-[hsl(var(--text-secondary))]">Drag &amp; drop compliance logs here</span>
-                        <span className="text-[9px]">PDF, PNG, JPG files up to 10MB</span>
+                    <div className={`border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/40 px-3 py-1.5 rounded-xl flex items-center gap-2.5 text-[hsl(var(--text-tertiary))] select-none`}>
+                        <FileText className="w-4 h-4 text-[hsl(var(--text-tertiary))] shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block leading-none">Drag &amp; drop files here</span>
+                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] block mt-0.5 leading-none">PDF, PNG, JPG up to 10MB</span>
+                        </div>
                     </div>
                 );
             case 'signature_pad':
                 return (
-                    <div className={`border border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))] h-16 rounded-lg relative flex items-center justify-center select-none text-[hsl(var(--text-tertiary))] font-serif italic`}>
-                        <span className="text-xs">Draw your signature mark on this line preview...</span>
-                        <div className="absolute bottom-2 left-2 right-2 border-t border-dashed border-[hsl(var(--border))]/40"></div>
+                    <div className={`border border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))] h-9 px-3 rounded-lg relative flex items-center justify-between select-none text-[hsl(var(--text-tertiary))] font-serif italic`}>
+                        <span className="text-xs">Draw signature mark...</span>
+                        <div className="absolute bottom-2.5 left-2 right-2 border-t border-dashed border-[hsl(var(--border))]/40"></div>
                     </div>
                 );
             case 'barcode_scanner':
                 return (
-                    <div className="flex flex-col gap-2">
-                        <div className="bg-slate-900 dark:bg-slate-950 aspect-video max-h-24 rounded-lg flex items-center justify-center relative overflow-hidden select-none">
-                            <div className="absolute inset-0 border-2 border-[hsl(var(--primary))]/20"></div>
-                            <div className="w-full h-0.5 bg-rose-500 absolute animate-pulse"></div>
-                            <span className="text-[10px] text-slate-400 font-mono z-10">Initializing live lens feed...</span>
-                        </div>
+                    <div className={`flex items-center gap-2.5 ${surfaceColor} px-3 py-1.5 rounded-lg border ${borderStyle} relative overflow-hidden select-none`}>
+                        <div className="w-1 h-full bg-rose-500 absolute left-0 top-0 animate-pulse" />
+                        <Barcode className="w-4 h-4 text-[hsl(var(--primary))] shrink-0" />
+                        <span className="text-[10px] text-[hsl(var(--text-secondary))] font-mono">Initializing scanner lens feed...</span>
                     </div>
                 );
             case 'audio_recorder':
                 return (
-                    <div className="flex items-center gap-3">
-                        <button className="bg-rose-500/10 hover:bg-rose-500/15 text-rose-500 rounded-full w-8 h-8 flex items-center justify-center text-sm border border-rose-500/20 outline-none" disabled>
-                            <Mic className="w-4 h-4 text-rose-500" />
+                    <div className="flex items-center gap-2.5">
+                        <button className="bg-rose-500/10 hover:bg-rose-500/15 text-rose-500 rounded-full w-7 h-7 flex items-center justify-center text-sm border border-rose-500/20 outline-none shrink-0" disabled>
+                            <Mic className="w-3.5 h-3.5 text-rose-500" />
                         </button>
-                        <div className="flex-1 h-4 bg-[hsl(var(--surface-elevated))] rounded-full overflow-hidden flex items-center gap-0.5 px-2">
-                            <span className="h-2 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
-                            <span className="h-3 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
-                            <span className="h-1.5 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
-                            <span className="h-2.5 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
-                            <span className="h-1 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                        <div className="flex-1 h-3.5 bg-[hsl(var(--surface-elevated))] rounded-full overflow-hidden flex items-center gap-0.5 px-2">
+                            <span className="h-1.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-2.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-1 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-2 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-0.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
                         </div>
-                        <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))] select-none">0:00</span>
+                        <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))] select-none shrink-0">0:00</span>
                     </div>
                 );
             case 'lookup_list':
@@ -2191,29 +2240,88 @@ const FormBuilder: React.FC = () => {
                 );
             case 'object_collection':
                 return (
-                    <div className={`border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/40 p-4 rounded-xl text-center flex flex-col items-center justify-center text-[hsl(var(--text-tertiary))]`}>
-                        <Layers className="w-6 h-6 mb-1 text-[hsl(var(--text-tertiary))]" />
-                        <span className="text-xs font-semibold text-[hsl(var(--text-secondary))]">Object Collection Area</span>
-                        <span className="text-[9px]">Holds repeating items of type: <strong className="text-[hsl(var(--primary))] font-mono">{field.object_schema_key || 'Unnamed Object'}</strong></span>
+                    <div className={`border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/40 px-3 py-1.5 rounded-xl flex items-center gap-2.5 text-[hsl(var(--text-tertiary))] select-none`}>
+                        <Layers className="w-4 h-4 text-[hsl(var(--text-tertiary))] shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block leading-none">Object Collection Area</span>
+                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] block mt-0.5 leading-none truncate">Type: <strong className="text-[hsl(var(--primary))] font-mono">{field.object_schema_key || 'Unnamed Object'}</strong></span>
+                        </div>
                     </div>
                 );
             case 'object_instance':
                 return (
-                    <div className={`border border-[hsl(var(--border))]/85 bg-[hsl(var(--surface))] p-4 rounded-xl flex items-center justify-between text-[hsl(var(--text-secondary))]`}>
-                        <div className="flex items-center gap-2">
-                            <Database className="w-5 h-5 text-[hsl(var(--primary))]" />
-                            <div>
-                                <p className="text-xs font-semibold text-[hsl(var(--text-primary))]">{field.object_schema_key || 'Object Reference'}</p>
-                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Single reference definition</p>
+                    <div className={`border border-[hsl(var(--border))]/85 bg-[hsl(var(--surface))] p-2.5 rounded-xl flex items-center justify-between text-[hsl(var(--text-secondary))] select-none`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Database className="w-4 h-4 text-[hsl(var(--primary))] shrink-0" />
+                            <div className="min-w-0">
+                                <p className="text-xs font-semibold text-[hsl(var(--text-primary))] truncate">{field.object_schema_key || 'Object Reference'}</p>
                             </div>
                         </div>
-                        <span className="text-[10px] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 rounded border border-[hsl(var(--border))]/30 text-[hsl(var(--text-secondary))] font-mono">Catalog Source</span>
+                        <span className="text-[9px] bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded border border-[hsl(var(--border))]/30 text-[hsl(var(--text-secondary))] font-mono shrink-0">Catalog Source</span>
+                    </div>
+                );
+            case 'toggle':
+                return (
+                    <div className="flex items-center gap-3 select-none">
+                        <div className="w-8 h-4.5 bg-[hsl(var(--primary))] rounded-full p-0.5 flex items-center justify-end select-none shrink-0">
+                            <div className="w-3.5 h-3.5 bg-white rounded-full shadow-sm" />
+                        </div>
+                        <span className="text-xs text-[hsl(var(--text-secondary))] font-medium">
+                            {field.options?.find(o => o.value === 'true')?.label ?? 'Yes'}
+                        </span>
+                    </div>
+                );
+            case 'rating_scale': {
+                const minVal = Number(field.min) || 1;
+                const maxVal = Number(field.max) || 5;
+                const minLbl = field.min_label || 'Min Label';
+                const maxLbl = field.max_label || 'Max Label';
+                return (
+                    <div className="flex items-center justify-between gap-3 py-1 select-none">
+                        <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider truncate max-w-[100px]">
+                            {minLbl}
+                        </span>
+                        <div className="flex items-center gap-1 justify-center flex-1 max-w-[180px] flex-wrap">
+                            {Array.from({ length: maxVal - minVal + 1 }).map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="w-6.5 h-6.5 rounded-lg bg-[hsl(var(--surface-elevated))]/70 border border-[hsl(var(--border))]/40 flex items-center justify-center text-[11px] font-semibold text-[hsl(var(--text-secondary))]"
+                                >
+                                    {minVal + i}
+                                </div>
+                            ))}
+                        </div>
+                        <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider text-right truncate max-w-[100px]">
+                            {maxLbl}
+                        </span>
+                    </div>
+                );
+            }
+            case 'matrix_table':
+                return (
+                    <div className={`flex items-center gap-3 border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/40 px-3 py-2 rounded-xl text-[hsl(var(--text-tertiary))] select-none`}>
+                        <Table2 className="w-4 h-4 text-[hsl(var(--text-tertiary))] shrink-0" />
+                        <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
+                            <div className="text-left">
+                                <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block leading-none">Matrix Table Grid</span>
+                                <span className="text-[9px] text-[hsl(var(--text-tertiary))] block mt-0.5 leading-none">
+                                    {(field.table_rows || []).length || 3} rows × {(field.table_columns || []).length || 5} columns
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                                <span className="w-2.5 h-2.5 rounded-full border border-[hsl(var(--border))]/80 flex items-center justify-center">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))]" />
+                                </span>
+                                <span className="w-2.5 h-2.5 rounded-full border border-[hsl(var(--border))]/80" />
+                                <span className="w-2.5 h-2.5 rounded-full border border-[hsl(var(--border))]/80" />
+                            </div>
+                        </div>
                     </div>
                 );
             default:
                 return (
                     <div className="h-12 bg-white/40 dark:bg-black/20 rounded-lg px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
-                        {field.type.replace(/input_|_/g, ' ').trim()} preview
+                        {(field.type as string).replace(/input_|_/g, ' ').trim()} preview
                         {field.default_value && <span className="ml-2 text-[10px] font-mono bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded text-[hsl(var(--primary))]">{field.default_value}</span>}
                         {field.is_sensitive && <span className="ml-1 text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded">🔒 sensitive</span>}
                     </div>
@@ -2566,7 +2674,7 @@ const FormBuilder: React.FC = () => {
                                                                                     setDragOverFieldId(null);
                                                                                 }}
                                                                                 className={`relative overflow-hidden rounded-xl border transition-all ${isSelectedField
-                                                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/4 shadow-sm'
+                                                                                    ? 'border-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/4 shadow-sm'
                                                                                     : dragOverFieldId === field.id
                                                                                         ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/3'
                                                                                         : 'border-transparent bg-[hsl(var(--surface-elevated))]/60 hover:bg-[hsl(var(--surface-elevated))]/95'
@@ -2711,75 +2819,81 @@ const FormBuilder: React.FC = () => {
                                         const sec = sections.find(s => s.id === currentSectionId)!;
                                         const isSelected = selectedFieldId === null;
                                         return (
-                                            <div
-                                                onClick={() => setSelectedFieldId(null)}
-                                                className={`w-full flex flex-wrap items-center justify-between gap-4 px-5 py-4 rounded-xl border transition-all text-left group cursor-pointer ${isSelected
-                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/5 shadow-sm shadow-[hsl(var(--primary))]/5'
-                                                    : 'border-transparent bg-[hsl(var(--surface-elevated))]/45 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-transparent'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-4 flex-1 min-w-0">
-                                                    {/* Section icon */}
-                                                    <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 transition-all ${isSelected
-                                                        ? 'bg-[hsl(var(--primary))] text-white'
-                                                        : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] group-hover:bg-[hsl(var(--primary))]/10 group-hover:text-[hsl(var(--primary))]'
-                                                        }`}>
-                                                        <Layout className="w-5 h-5" />
-                                                    </div>
+                                            <div className="sticky -top-4 lg:-top-6 z-30 bg-[hsl(var(--background))] py-2.5 -my-2.5 border-b border-[hsl(var(--border))]/10">
+                                                <div
+                                                    onClick={() => setSelectedFieldId(null)}
+                                                    className={`w-full flex flex-col gap-4 px-5 py-4 rounded-xl border transition-all text-left group cursor-pointer ${isSelected
+                                                        ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/5 shadow-sm shadow-[hsl(var(--primary))]/5'
+                                                        : 'border-transparent bg-[hsl(var(--surface-elevated))]/45 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-transparent'
+                                                        }`}
+                                                >
+                                                    {/* Row 1: Section Name and field count */}
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            {/* Section icon */}
+                                                            <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-all ${isSelected
+                                                                ? 'bg-[hsl(var(--primary))] text-white'
+                                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] group-hover:bg-[hsl(var(--primary))]/10 group-hover:text-[hsl(var(--primary))]'
+                                                                }`}>
+                                                                <Layout className="w-4.5 h-4.5" />
+                                                            </div>
 
-                                                    {/* Section info */}
-                                                    <div className="min-w-0">
-                                                        <p className={`font-bold text-sm truncate ${isSelected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-primary))]'}`}>
-                                                            {sec.title}
-                                                        </p>
-                                                        <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">
-                                                            {sec.fields.length} field{sec.fields.length !== 1 ? 's' : ''} · {sec.properties.render_mode} mode
+                                                            {/* Section info */}
+                                                            <div className="min-w-0">
+                                                                <p className={`font-bold text-sm truncate ${isSelected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-primary))]'}`}>
+                                                                    {sec.title}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Field count and status */}
+                                                        <div className="text-xs text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/60 px-2.5 py-1 rounded-md border border-[hsl(var(--border))]/25 shadow-sm">
+                                                            {sec.fields.length} field{sec.fields.length !== 1 ? 's' : ''} · <span className="capitalize">{sec.properties.render_mode} mode</span>
                                                             {sec.properties.shuffle_options && ' · shuffled'}
-                                                        </p>
+                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                <div className="flex-1 flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
-                                                    <div className="relative w-full max-w-md" ref={smartDropdownRef}>
-                                                        <div className="flex items-stretch rounded-xl border border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))] shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[hsl(var(--primary))]/20 focus-within:border-[hsl(var(--primary))] transition-all duration-200 w-full">
-                                                            
-                                                            {/* Main Area: Toggle Search Dropdown */}
-                                                            <button
-                                                                onClick={() => {
-                                                                    setIsSmartDropdownOpen(!isSmartDropdownOpen);
-                                                                    setSmartSearchQuery('');
-                                                                }}
-                                                                className="flex-1 bg-transparent hover:bg-[hsl(var(--surface-elevated))]/40 active:bg-[hsl(var(--surface-elevated))]/80 text-left px-4 py-2.5 flex items-center justify-between text-[hsl(var(--text-primary))] transition-all duration-150 outline-none select-none"
-                                                                title="Click to search widgets & change active item"
-                                                            >
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className="text-[hsl(var(--primary))] shrink-0">
-                                                                        {getWidget(inspectorWidgetType)?.icon || <Type className="w-4 h-4" />}
-                                                                    </span>
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-[8px] text-[hsl(var(--text-tertiary))] uppercase font-bold tracking-wider leading-none">Add Widget</span>
-                                                                        <span className="text-xs font-bold text-[hsl(var(--text-primary))] mt-0.5">
-                                                                            {getWidget(inspectorWidgetType)?.label || inspectorWidgetType}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                                <ChevronDown className="w-4 h-4 text-[hsl(var(--text-tertiary))]/60 transition-transform" />
-                                                            </button>
-
-                                                            {/* Right Side: Insert Active Widget */}
-                                                            <div className="flex items-center pr-3 pl-1 border-l border-[hsl(var(--border))]/85 bg-transparent">
+                                                    {/* Row 2: Widget Component taking full width */}
+                                                    <div className="w-full flex items-center justify-between gap-4" onClick={(e) => e.stopPropagation()}>
+                                                        <div className="relative w-full" ref={smartDropdownRef}>
+                                                            <div className="flex items-stretch rounded-xl border border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))] shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[hsl(var(--primary))]/20 focus-within:border-[hsl(var(--primary))] transition-all duration-200 w-full">
+                                                                
+                                                                {/* Main Area: Toggle Search Dropdown */}
                                                                 <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        addField(inspectorWidgetType);
+                                                                    onClick={() => {
+                                                                        setIsSmartDropdownOpen(!isSmartDropdownOpen);
+                                                                        setSmartSearchQuery('');
                                                                     }}
-                                                                    className="w-7 h-7 rounded-lg flex items-center justify-center bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-white transition-all duration-150 active:scale-95 outline-none"
-                                                                    title="Insert active widget"
+                                                                    className="flex-1 bg-transparent hover:bg-[hsl(var(--surface-elevated))]/40 active:bg-[hsl(var(--surface-elevated))]/80 text-left px-4 py-2.5 flex items-center justify-between text-[hsl(var(--text-primary))] transition-all duration-150 outline-none select-none"
+                                                                    title="Click to search widgets & change active item"
+                                                                >
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className="text-[hsl(var(--primary))] shrink-0">
+                                                                            {getWidget(inspectorWidgetType)?.icon || <Type className="w-4 h-4" />}
+                                                                        </span>
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-[8px] text-[hsl(var(--text-tertiary))] uppercase font-bold tracking-wider leading-none">Add Widget</span>
+                                                                            <span className="text-xs font-bold text-[hsl(var(--text-primary))] mt-0.5">
+                                                                                {getWidget(inspectorWidgetType)?.label || inspectorWidgetType}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <ChevronDown className="w-4 h-4 text-[hsl(var(--text-tertiary))]/60 transition-transform" />
+                                                                </button>
+
+                                                                {/* Right Side: Insert Active Widget */}
+                                                                <button
+                                                                    onMouseDown={handlePlusButtonMouseDown}
+                                                                    onMouseUp={handlePlusButtonMouseUp}
+                                                                    onMouseLeave={handlePlusButtonMouseLeave}
+                                                                    onTouchStart={handlePlusButtonTouchStart}
+                                                                    onTouchEnd={handlePlusButtonTouchEnd}
+                                                                    className="px-4 flex items-center justify-center bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-white transition-all duration-150 outline-none select-none border-l border-[hsl(var(--border))]/85 active:scale-95 active:bg-[hsl(var(--primary))]/20"
+                                                                    title="Click to insert at bottom. Long-press or Shift+Click to insert at top."
                                                                 >
                                                                     <Plus className="w-4 h-4 stroke-[2.5]" />
                                                                 </button>
                                                             </div>
-                                                        </div>
 
                                                         {/* Dropdown Panel */}
                                                         {isSmartDropdownOpen && (
@@ -2891,11 +3005,10 @@ const FormBuilder: React.FC = () => {
                                                         )}
                                                     </div>
                                                 </div>
-
-
                                             </div>
-                                        );
-                                    })()}
+                                        </div>
+                                    );
+                                })()}
 
                                     {fields.length === 0 ? (
                                         <div className="bg-[hsl(var(--surface-elevated))]/30 border border-dashed border-[hsl(var(--border))]/40 rounded-2xl p-20 text-center text-[hsl(var(--text-tertiary))]">
@@ -2931,7 +3044,7 @@ const FormBuilder: React.FC = () => {
                                                     setSelectedFieldId(field.id);
                                                 }}
                                                 className={`p-6 rounded-xl group relative transition-all shadow-sm cursor-pointer border ${selectedFieldId === field.id
-                                                    ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/4 shadow-md shadow-[hsl(var(--primary))]/5'
+                                                    ? 'border-[hsl(var(--primary))] ring-2 ring-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/4 shadow-md shadow-[hsl(var(--primary))]/5'
                                                     : dragOverFieldId === field.id
                                                         ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/3 border-dashed'
                                                         : 'border-transparent bg-[hsl(var(--surface))] shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.05)] hover:bg-[hsl(var(--surface-elevated))]/20 hover:border-transparent'
@@ -3001,83 +3114,24 @@ const FormBuilder: React.FC = () => {
                                                     </div>
                                                 </div>
                                                 {/* Field preview */}
-                                                {field.type === 'matrix_table' ? (
-                                                    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))]/50">
-                                                        <table className="w-full text-[11px] border-collapse">
-                                                            <thead>
-                                                                <tr className="bg-[hsl(var(--primary))]/6 border-b border-[hsl(var(--border))]/40">
-                                                                    <th className="p-2 text-left font-semibold text-[hsl(var(--text-secondary))] w-28"></th>
-                                                                    {(field.table_columns || []).slice(0, 4).map(col => (
-                                                                        <th key={col.id} className="p-2 text-center font-semibold text-[hsl(var(--text-secondary))] max-w-[60px] truncate">{col.label}</th>
-                                                                    ))}
-                                                                    {(field.table_columns || []).length > 4 && (
-                                                                        <th className="p-2 text-center text-[hsl(var(--text-tertiary))] italic">+{(field.table_columns || []).length - 4}</th>
-                                                                    )}
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {(field.table_rows || []).slice(0, 3).map((row, rIdx) => (
-                                                                    <tr key={row.id} className={`border-b border-[hsl(var(--border))]/30 last:border-b-0 ${rIdx % 2 === 0 ? 'bg-[hsl(var(--surface))]' : 'bg-[hsl(var(--surface-elevated))]/60'}`}>
-                                                                        <td className="p-2 text-[hsl(var(--text-secondary))] font-medium truncate max-w-[112px]">{row.label}</td>
-                                                                        {(field.table_columns || []).slice(0, 4).map(col => (
-                                                                            <td key={col.id} className="p-2 text-center">
-                                                                                {(field.table_cell_type === 'radio' || !field.table_cell_type) && <span className="inline-block w-3 h-3 rounded-full border-2 border-[hsl(var(--border))]" />}
-                                                                                {field.table_cell_type === 'checkbox' && <span className="inline-block w-3 h-3 rounded border-2 border-[hsl(var(--border))]" />}
-                                                                                {field.table_cell_type === 'text' && <span className="inline-block w-10 h-2.5 bg-[hsl(var(--border))] rounded-sm" />}
-                                                                                {field.table_cell_type === 'number' && <span className="inline-block w-6 h-2.5 bg-[hsl(var(--border))] rounded-sm" />}
-                                                                                {field.table_cell_type === 'dropdown' && <span className="inline-block w-10 h-2.5 bg-[hsl(var(--border))] rounded-sm" />}
-                                                                            </td>
-                                                                        ))}
-                                                                        {(field.table_columns || []).length > 4 && <td />}
-                                                                    </tr>
-                                                                ))}
-                                                                {(field.table_rows || []).length > 3 && (
-                                                                    <tr>
-                                                                        <td colSpan={(field.table_columns || []).length + 1} className="p-1.5 text-center text-[10px] text-[hsl(var(--text-tertiary))] italic bg-[hsl(var(--surface-elevated))]/40">
-                                                                            +{(field.table_rows || []).length - 3} more rows
-                                                                        </td>
-                                                                    </tr>
-                                                                )}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                ) : field.type === 'rating_scale' ? (
-                                                    <div className="space-y-4 py-2">
-                                                        <div className="flex justify-between text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider">
-                                                            <span>{field.min_label || 'Min label'}</span>
-                                                            <span>{field.max_label || 'Max label'}</span>
-                                                        </div>
-                                                        <div className="flex items-center justify-between gap-1.5">
+                                                {field.type === 'rating_scale' ? (
+                                                    <div className="flex items-center justify-between gap-4 py-1.5">
+                                                        <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider truncate max-w-[120px] select-none">
+                                                            {field.min_label || 'Min label'}
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5 flex-1 justify-center max-w-[240px] flex-wrap">
                                                             {Array.from({ length: (Number(field.max) || 5) - (Number(field.min) || 1) + 1 }).map((_, i) => (
                                                                 <div
                                                                     key={i}
-                                                                    className="flex-1 h-10 rounded-lg bg-[hsl(var(--surface-elevated))]/70 flex items-center justify-center text-xs font-bold text-[hsl(var(--text-tertiary))]"
+                                                                    className="w-7 h-7 rounded-lg bg-[hsl(var(--surface-elevated))]/70 border border-[hsl(var(--border))]/40 flex items-center justify-center text-xs font-semibold text-[hsl(var(--text-secondary))] select-none"
                                                                 >
                                                                     {(Number(field.min) || 1) + i}
                                                                 </div>
                                                             ))}
                                                         </div>
-                                                    </div>
-                                                ) : field.type === 'toggle' ? (
-                                                    <div className="flex rounded-lg bg-[hsl(var(--surface-elevated))]/60 overflow-hidden">
-                                                        {[
-                                                            { val: 'true',  label: field.options?.find(o => o.value === 'true')?.label  ?? 'Yes' },
-                                                            { val: 'false', label: field.options?.find(o => o.value === 'false')?.label ?? 'No'  },
-                                                        ].map(({ val, label }, idx) => {
-                                                            const active = (field.default_value ?? '') === val;
-                                                            return (
-                                                                <div
-                                                                    key={val}
-                                                                    className={`flex-1 py-3 flex items-center justify-center text-xs font-bold ${
-                                                                        active
-                                                                            ? 'bg-[hsl(var(--primary))] text-white'
-                                                                            : 'bg-[hsl(var(--surface-elevated))]/50 text-[hsl(var(--text-tertiary))]'
-                                                                    } ${idx === 1 ? 'border-l border-[hsl(var(--border))]/40' : ''}`}
-                                                                >
-                                                                    {label}
-                                                                </div>
-                                                            );
-                                                        })}
+                                                        <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider text-right truncate max-w-[120px] select-none">
+                                                            {field.max_label || 'Max label'}
+                                                        </span>
                                                     </div>
                                                 ) : (
                                                     renderWidgetPreview(field)

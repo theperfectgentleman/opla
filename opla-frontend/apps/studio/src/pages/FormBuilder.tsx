@@ -9,7 +9,7 @@ import {
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal,
     Layers, Copy, MoveRight, Table2, Database,
-    Eye, RotateCcw, Star
+    Eye, RotateCcw, Star, Search, Plus
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -260,6 +260,57 @@ const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNo
     { type: 'object_instance', label: 'Object Reference', icon: <FileText className="w-4 h-4" /> },
 ];
 
+const widgetCategoryMap: Record<FieldType, string> = {
+    input_text: 'Standard Inputs',
+    input_number: 'Standard Inputs',
+    email_input: 'Standard Inputs',
+    phone_input: 'Standard Inputs',
+    textarea: 'Standard Inputs',
+    date_picker: 'Time & Date',
+    time_picker: 'Time & Date',
+    dropdown: 'Selection Widgets',
+    radio_group: 'Selection Widgets',
+    checkbox_group: 'Selection Widgets',
+    toggle: 'Selection Widgets',
+    gps_capture: 'Device Metrics',
+    barcode_scanner: 'Device Metrics',
+    photo_capture: 'Media Input',
+    file_upload: 'Media Input',
+    audio_recorder: 'Media Input',
+    signature_pad: 'Advanced Inputs',
+    matrix_table: 'Advanced Inputs',
+    lookup_list: 'Advanced Inputs',
+    rating_scale: 'Advanced Inputs',
+    object_collection: 'Advanced Inputs',
+    object_instance: 'Advanced Inputs',
+};
+
+const widgetHints: Record<FieldType, string> = {
+    input_text: 'Standard text response single-line text entry field',
+    input_number: 'Numeric only text input with custom increment boundaries',
+    email_input: 'Validated contact address format query input text box',
+    phone_input: 'Contact telephone numeric format input placeholder',
+    date_picker: 'Calendar dropdown select widget to stamp standard format dates',
+    time_picker: 'Clock dial select interface to stamp standard format times',
+    dropdown: 'Compact select dropdown containing customizable choices',
+    radio_group: 'Radio-button choices layout. Single option select only',
+    checkbox_group: 'Multi-checkbox list selector. Allows multiple options',
+    toggle: 'Sleek active toggles list for binary state choices',
+    textarea: 'Rich or plain multiple lines responsive narrative description box',
+    gps_capture: 'Locates coordinate position via mobile GPS hardware integration',
+    barcode_scanner: 'Decodes Barcode/QR values directly from active video capture streams',
+    photo_capture: 'Triggers integrated cameras to upload images directly to canvas',
+    file_upload: 'Drag-and-drop secure file selector panel attachment',
+    audio_recorder: 'Captures live audio logs using secure user mic attachments',
+    signature_pad: 'Cursive digital scribble signature trace-pad block container',
+    matrix_table: 'Multidimensional choice grid system listing rating scales',
+    lookup_list: 'Fetches and suggests items from remote dynamic APIs',
+    rating_scale: 'Responsive 5-star custom visual scale review meter widget',
+    object_collection: 'Manage a repeating collection of custom object structures',
+    object_instance: 'Reference a single structured data object or catalog item',
+};
+
+
 const FLOW_NODE_WIDTH = 320;
 const FLOW_NODE_GAP_X = 380;
 const FLOW_NODE_GAP_Y = 220;
@@ -343,6 +394,9 @@ const FormBuilder: React.FC = () => {
     const [showBackupTools, setShowBackupTools] = useState(false);
     const [isBuilderConsoleOpen, setIsBuilderConsoleOpen] = useState(false);
     const [inspectorWidgetType, setInspectorWidgetType] = useState<FieldType>('input_text');
+    const [isSmartDropdownOpen, setIsSmartDropdownOpen] = useState(false);
+    const [smartSearchQuery, setSmartSearchQuery] = useState('');
+    const smartDropdownRef = React.useRef<HTMLDivElement | null>(null);
     const [initialHash, setInitialHash] = useState<string>('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -374,6 +428,9 @@ const FormBuilder: React.FC = () => {
             if (multiActionMenuRef.current && !multiActionMenuRef.current.contains(event.target as Node)) {
                 setShowMultiActionMenu(false);
                 setShowBackupTools(false);
+            }
+            if (smartDropdownRef.current && !smartDropdownRef.current.contains(event.target as Node)) {
+                setIsSmartDropdownOpen(false);
             }
         };
 
@@ -1947,6 +2004,223 @@ const FormBuilder: React.FC = () => {
         }
     };
 
+    const renderWidgetPreview = (field: FormField) => {
+        const borderStyle = "border-[hsl(var(--border))]/80";
+        const textSecColor = "text-[hsl(var(--text-secondary))]";
+        const surfaceColor = "bg-[hsl(var(--surface))]";
+
+        switch(field.type) {
+            case 'input_text':
+                return (
+                    <div className="relative max-w-sm">
+                        <input 
+                            type="text" 
+                            placeholder={field.placeholder || "Respond here..."} 
+                            className={`w-full text-xs px-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} outline-none cursor-not-allowed ${textSecColor}`} 
+                            disabled 
+                        />
+                    </div>
+                );
+            case 'input_number':
+                return (
+                    <div className={`flex items-center max-w-[150px] ${surfaceColor} rounded-lg border ${borderStyle} overflow-hidden`}>
+                        <button className="px-2.5 py-1.5 bg-[hsl(var(--surface-elevated))] text-xs font-bold border-r border-[hsl(var(--border))]/40 text-[hsl(var(--text-secondary))]" disabled>-</button>
+                        <input type="text" value={field.default_value || "0"} className={`w-full text-center text-xs outline-none bg-transparent text-[hsl(var(--text-primary))]`} disabled />
+                        <button className="px-2.5 py-1.5 bg-[hsl(var(--surface-elevated))] text-xs font-bold border-l border-[hsl(var(--border))]/40 text-[hsl(var(--text-secondary))]" disabled>+</button>
+                    </div>
+                );
+            case 'email_input':
+                return (
+                    <div className="relative max-w-sm flex items-center">
+                        <span className="absolute left-3 text-xs text-[hsl(var(--text-tertiary))]">@</span>
+                        <input 
+                            type="email" 
+                            placeholder={field.placeholder || "example@domain.com"} 
+                            className={`w-full text-xs pl-7 pr-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} outline-none cursor-not-allowed ${textSecColor}`} 
+                            disabled 
+                        />
+                    </div>
+                );
+            case 'phone_input':
+                return (
+                    <div className="relative max-w-sm flex items-center">
+                        <span className="absolute left-3 text-xs text-[hsl(var(--text-tertiary))]">📞</span>
+                        <input 
+                            type="tel" 
+                            placeholder={field.placeholder || "+1 (555) 019-2834"} 
+                            className={`w-full text-xs pl-8 pr-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} outline-none cursor-not-allowed ${textSecColor}`} 
+                            disabled 
+                        />
+                    </div>
+                );
+            case 'date_picker':
+                return (
+                    <div className="relative max-w-xs">
+                        <input 
+                            type="date" 
+                            className={`w-full text-xs px-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} outline-none ${textSecColor} cursor-not-allowed`} 
+                            disabled 
+                        />
+                    </div>
+                );
+            case 'time_picker':
+                return (
+                    <div className="flex items-center gap-2 max-w-xs">
+                        <select className={`text-xs ${surfaceColor} border border-[hsl(var(--border))]/60 px-2 py-1.5 rounded-lg ${textSecColor}`} disabled><option>12</option></select>
+                        <span className="font-bold text-[hsl(var(--text-tertiary))]">:</span>
+                        <select className={`text-xs ${surfaceColor} border border-[hsl(var(--border))]/60 px-2 py-1.5 rounded-lg ${textSecColor}`} disabled><option>00</option></select>
+                        <select className={`text-xs ${surfaceColor} border border-[hsl(var(--border))]/60 px-2 py-1.5 rounded-lg ${textSecColor}`} disabled><option>PM</option></select>
+                    </div>
+                );
+            case 'dropdown':
+                return (
+                    <div className="relative max-w-xs">
+                        <select className={`w-full appearance-none text-xs px-3 py-2 ${surfaceColor} border border-[hsl(var(--border))]/60 rounded-lg ${textSecColor} outline-none`} disabled>
+                            <option>Select from options...</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                            <ChevronDown className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                        </div>
+                    </div>
+                );
+            case 'radio_group':
+                return (
+                    <div className="flex flex-col gap-2">
+                        {(field.options || [{ label: 'Option A', value: 'a' }, { label: 'Option B', value: 'b' }]).map((opt, idx) => (
+                            <label key={idx} className="flex items-center gap-2.5 text-xs text-[hsl(var(--text-secondary))] cursor-not-allowed">
+                                <span className={`w-3.5 h-3.5 rounded-full border border-[hsl(var(--border))]/85 flex items-center justify-center shrink-0`}>
+                                    {idx === 0 && <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))]" />}
+                                </span>
+                                <span>{opt.label}</span>
+                            </label>
+                        ))}
+                    </div>
+                );
+            case 'checkbox_group':
+                return (
+                    <div className="flex flex-col gap-2">
+                        {(field.options || [{ label: 'Option A', value: 'a' }, { label: 'Option B', value: 'b' }]).map((opt, idx) => (
+                            <label key={idx} className="flex items-center gap-2.5 text-xs text-[hsl(var(--text-secondary))] cursor-not-allowed">
+                                <span className={`w-3.5 h-3.5 rounded border border-[hsl(var(--border))]/85 flex items-center justify-center shrink-0`}>
+                                    {idx === 0 && <span className="w-2 h-2 bg-[hsl(var(--primary))] rounded-sm" />}
+                                </span>
+                                <span>{opt.label}</span>
+                            </label>
+                        ))}
+                    </div>
+                );
+            case 'textarea':
+                return (
+                    <textarea 
+                        placeholder={field.placeholder || "Write narrative overview summary response..."} 
+                        rows={2} 
+                        className={`w-full text-xs px-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} outline-none resize-none cursor-not-allowed ${textSecColor}`} 
+                        disabled
+                    />
+                );
+            case 'gps_capture':
+                return (
+                    <div className="flex items-center flex-wrap gap-2 justify-between">
+                        <div className="bg-[hsl(var(--primary))]/5 border border-[hsl(var(--primary))]/10 rounded-lg px-3 py-1.5 text-xs text-[hsl(var(--primary))] font-mono flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                            <span>Lat: 5.6037° N, Lon: 0.1870° W (Mock Location)</span>
+                        </div>
+                        <button className="bg-[hsl(var(--primary))] text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-sm" disabled>Capture Location</button>
+                    </div>
+                );
+            case 'photo_capture':
+                return (
+                    <div className={`flex flex-col items-center justify-center border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/50 p-4 rounded-xl text-center select-none text-[hsl(var(--text-tertiary))]`}>
+                        <Camera className="w-6 h-6 mb-1 text-[hsl(var(--text-tertiary))]" />
+                        <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))]">No camera feed active</span>
+                        <span className="text-[9px]">Click template button to initialize system lens</span>
+                    </div>
+                );
+            case 'file_upload':
+                return (
+                    <div className={`border-2 border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/40 p-4 rounded-xl text-center flex flex-col items-center justify-center text-[hsl(var(--text-tertiary))]`}>
+                        <FileText className="w-6 h-6 mb-1 text-[hsl(var(--text-tertiary))]" />
+                        <span className="text-xs font-semibold text-[hsl(var(--text-secondary))]">Drag &amp; drop compliance logs here</span>
+                        <span className="text-[9px]">PDF, PNG, JPG files up to 10MB</span>
+                    </div>
+                );
+            case 'signature_pad':
+                return (
+                    <div className={`border border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))] h-16 rounded-lg relative flex items-center justify-center select-none text-[hsl(var(--text-tertiary))] font-serif italic`}>
+                        <span className="text-xs">Draw your signature mark on this line preview...</span>
+                        <div className="absolute bottom-2 left-2 right-2 border-t border-dashed border-[hsl(var(--border))]/40"></div>
+                    </div>
+                );
+            case 'barcode_scanner':
+                return (
+                    <div className="flex flex-col gap-2">
+                        <div className="bg-slate-900 dark:bg-slate-950 aspect-video max-h-24 rounded-lg flex items-center justify-center relative overflow-hidden select-none">
+                            <div className="absolute inset-0 border-2 border-[hsl(var(--primary))]/20"></div>
+                            <div className="w-full h-0.5 bg-rose-500 absolute animate-pulse"></div>
+                            <span className="text-[10px] text-slate-400 font-mono z-10">Initializing live lens feed...</span>
+                        </div>
+                    </div>
+                );
+            case 'audio_recorder':
+                return (
+                    <div className="flex items-center gap-3">
+                        <button className="bg-rose-500/10 hover:bg-rose-500/15 text-rose-500 rounded-full w-8 h-8 flex items-center justify-center text-sm border border-rose-500/20 outline-none" disabled>
+                            <Mic className="w-4 h-4 text-rose-500" />
+                        </button>
+                        <div className="flex-1 h-4 bg-[hsl(var(--surface-elevated))] rounded-full overflow-hidden flex items-center gap-0.5 px-2">
+                            <span className="h-2 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-3 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-1.5 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-2.5 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-1 w-1 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                        </div>
+                        <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))] select-none">0:00</span>
+                    </div>
+                );
+            case 'lookup_list':
+                return (
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            placeholder={field.placeholder || "Search database records list..."} 
+                            className={`w-full text-xs px-3 py-2 ${surfaceColor} rounded-lg border ${borderStyle} outline-none cursor-not-allowed ${textSecColor} pr-8`} 
+                            disabled 
+                        />
+                        <div className="absolute right-3 top-2.5 text-xs text-[hsl(var(--text-tertiary))]"><Database className="w-3.5 h-3.5" /></div>
+                    </div>
+                );
+            case 'object_collection':
+                return (
+                    <div className={`border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/40 p-4 rounded-xl text-center flex flex-col items-center justify-center text-[hsl(var(--text-tertiary))]`}>
+                        <Layers className="w-6 h-6 mb-1 text-[hsl(var(--text-tertiary))]" />
+                        <span className="text-xs font-semibold text-[hsl(var(--text-secondary))]">Object Collection Area</span>
+                        <span className="text-[9px]">Holds repeating items of type: <strong className="text-[hsl(var(--primary))] font-mono">{field.object_schema_key || 'Unnamed Object'}</strong></span>
+                    </div>
+                );
+            case 'object_instance':
+                return (
+                    <div className={`border border-[hsl(var(--border))]/85 bg-[hsl(var(--surface))] p-4 rounded-xl flex items-center justify-between text-[hsl(var(--text-secondary))]`}>
+                        <div className="flex items-center gap-2">
+                            <Database className="w-5 h-5 text-[hsl(var(--primary))]" />
+                            <div>
+                                <p className="text-xs font-semibold text-[hsl(var(--text-primary))]">{field.object_schema_key || 'Object Reference'}</p>
+                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Single reference definition</p>
+                            </div>
+                        </div>
+                        <span className="text-[10px] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 rounded border border-[hsl(var(--border))]/30 text-[hsl(var(--text-secondary))] font-mono">Catalog Source</span>
+                    </div>
+                );
+            default:
+                return (
+                    <div className="h-12 bg-white/40 dark:bg-black/20 rounded-lg px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
+                        {field.type.replace(/input_|_/g, ' ').trim()} preview
+                        {field.default_value && <span className="ml-2 text-[10px] font-mono bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded text-[hsl(var(--primary))]">{field.default_value}</span>}
+                        {field.is_sensitive && <span className="ml-1 text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded">🔒 sensitive</span>}
+                    </div>
+                );
+        }
+    };
+
     return (
         <StudioLayout
             activeNav="forms"
@@ -2426,6 +2700,7 @@ const FormBuilder: React.FC = () => {
                             ═══════════════════════════════════════════════ */
                             <div
                                 key={`section-view-${currentSectionId}`}
+                                onClick={() => setSelectedFieldId(null)}
                                 className={`min-h-full p-4 lg:p-6 animate-in fade-in ${slideDir === 'forward' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
                                     } duration-300`}
                             >
@@ -2464,31 +2739,160 @@ const FormBuilder: React.FC = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                                                    <select
-                                                        value={inspectorWidgetType}
-                                                        onChange={(e) => setInspectorWidgetType(e.target.value as FieldType)}
-                                                        className="input-sm min-w-[160px] text-xs py-1.5"
-                                                    >
-                                                        {widgetLibrary.map((widget) => (
-                                                            <option key={widget.type} value={widget.type}>{widget.label}</option>
-                                                        ))}
-                                                    </select>
-                                                    <button
-                                                        onClick={() => addField(inspectorWidgetType)}
-                                                        className="rounded-lg border border-transparent bg-[hsl(var(--primary))]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[hsl(var(--primary))] transition-all hover:bg-[hsl(var(--primary))]/20 shadow-sm"
-                                                    >
-                                                        Add Widget
-                                                    </button>
+                                                <div className="flex-1 flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="relative w-full max-w-md" ref={smartDropdownRef}>
+                                                        <div className="flex items-stretch rounded-xl border border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))] shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[hsl(var(--primary))]/20 focus-within:border-[hsl(var(--primary))] transition-all duration-200 w-full">
+                                                            
+                                                            {/* Main Area: Toggle Search Dropdown */}
+                                                            <button
+                                                                onClick={() => {
+                                                                    setIsSmartDropdownOpen(!isSmartDropdownOpen);
+                                                                    setSmartSearchQuery('');
+                                                                }}
+                                                                className="flex-1 bg-transparent hover:bg-[hsl(var(--surface-elevated))]/40 active:bg-[hsl(var(--surface-elevated))]/80 text-left px-4 py-2.5 flex items-center justify-between text-[hsl(var(--text-primary))] transition-all duration-150 outline-none select-none"
+                                                                title="Click to search widgets & change active item"
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-[hsl(var(--primary))] shrink-0">
+                                                                        {getWidget(inspectorWidgetType)?.icon || <Type className="w-4 h-4" />}
+                                                                    </span>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[8px] text-[hsl(var(--text-tertiary))] uppercase font-bold tracking-wider leading-none">Add Widget</span>
+                                                                        <span className="text-xs font-bold text-[hsl(var(--text-primary))] mt-0.5">
+                                                                            {getWidget(inspectorWidgetType)?.label || inspectorWidgetType}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <ChevronDown className="w-4 h-4 text-[hsl(var(--text-tertiary))]/60 transition-transform" />
+                                                            </button>
+
+                                                            {/* Right Side: Insert Active Widget */}
+                                                            <div className="flex items-center pr-3 pl-1 border-l border-[hsl(var(--border))]/85 bg-transparent">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        addField(inspectorWidgetType);
+                                                                    }}
+                                                                    className="w-7 h-7 rounded-lg flex items-center justify-center bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-white transition-all duration-150 active:scale-95 outline-none"
+                                                                    title="Insert active widget"
+                                                                >
+                                                                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Dropdown Panel */}
+                                                        {isSmartDropdownOpen && (
+                                                            <div className="absolute right-0 mt-2 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-2xl rounded-2xl z-50 overflow-hidden flex flex-col w-[360px] max-h-[420px] transition-all duration-200 animate-in fade-in slide-in-from-top-2">
+                                                                
+                                                                {/* Search Input Block */}
+                                                                <div className="p-3 bg-[hsl(var(--surface-elevated))]/60 border-b border-[hsl(var(--border))]/45 sticky top-0 flex items-center gap-2">
+                                                                    <Search className="w-4 h-4 text-[hsl(var(--text-tertiary))]" />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={smartSearchQuery}
+                                                                        onChange={(e) => setSmartSearchQuery(e.target.value)}
+                                                                        placeholder="Type to filter options..."
+                                                                        className="w-full bg-transparent text-xs text-[hsl(var(--text-primary))] placeholder-[hsl(var(--text-tertiary))] outline-none font-medium"
+                                                                        autoFocus
+                                                                    />
+                                                                    {smartSearchQuery && (
+                                                                        <button 
+                                                                            onClick={() => setSmartSearchQuery('')} 
+                                                                            className="text-[10px] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] font-semibold px-1"
+                                                                        >
+                                                                            Clear
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* List of Categorized Widgets */}
+                                                                <div className="flex-1 overflow-y-auto hide-scrollbar p-1.5 divide-y divide-[hsl(var(--border))]/20">
+                                                                    {(() => {
+                                                                        const filteredWidgets = widgetLibrary.filter(widget => {
+                                                                            const query = smartSearchQuery.toLowerCase().trim();
+                                                                            if (!query) return true;
+                                                                            const hint = widgetHints[widget.type]?.toLowerCase() || '';
+                                                                            const label = widget.label.toLowerCase();
+                                                                            return label.includes(query) || hint.includes(query);
+                                                                        });
+
+                                                                        // Group by categories
+                                                                        const categories = [...new Set(widgetLibrary.map(w => widgetCategoryMap[w.type]))];
+
+                                                                        return categories.map(category => {
+                                                                            const items = filteredWidgets.filter(w => widgetCategoryMap[w.type] === category);
+                                                                            if (items.length === 0) return null;
+
+                                                                            return (
+                                                                                <div key={category} className="py-2 first:pt-1 last:pb-1">
+                                                                                    <div className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-[0.15em] px-3 py-1.5 select-none">
+                                                                                        {category}
+                                                                                    </div>
+                                                                                    <div className="space-y-0.5">
+                                                                                        {items.map(widget => {
+                                                                                            const isActive = widget.type === inspectorWidgetType;
+                                                                                            return (
+                                                                                                <button
+                                                                                                    key={widget.type}
+                                                                                                    onClick={() => {
+                                                                                                        setInspectorWidgetType(widget.type);
+                                                                                                        addField(widget.type);
+                                                                                                        setIsSmartDropdownOpen(false);
+                                                                                                    }}
+                                                                                                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between rounded-lg transition-all duration-150 group ${
+                                                                                                        isActive 
+                                                                                                            ? 'bg-[hsl(var(--primary))]/10 border border-[hsl(var(--primary))]/20 text-[hsl(var(--primary))]' 
+                                                                                                            : 'border border-transparent hover:bg-[hsl(var(--surface-elevated))]/65 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'
+                                                                                                    }`}
+                                                                                                >
+                                                                                                    <div className="flex items-center gap-3 min-w-0">
+                                                                                                        <span className={`text-sm shrink-0 transition-colors ${isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--primary))]'}`}>
+                                                                                                            {widget.icon}
+                                                                                                        </span>
+                                                                                                        <div className="flex flex-col min-w-0">
+                                                                                                            <span className="font-semibold truncate">{widget.label}</span>
+                                                                                                            <span className="text-[10px] text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--text-secondary))] truncate mt-0.5">
+                                                                                                                {widgetHints[widget.type]}
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    {isActive && <span className="text-xs text-[hsl(var(--primary))] font-bold pl-2 select-none">✓</span>}
+                                                                                                </button>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        });
+                                                                    })()}
+                                                                </div>
+
+                                                                {/* Footer match count */}
+                                                                <div className="px-3 py-2 bg-[hsl(var(--surface-elevated))]/40 border-t border-[hsl(var(--border))]/40 flex items-center justify-between text-[10px] text-[hsl(var(--text-tertiary))] font-medium">
+                                                                    <span>
+                                                                        Matches:{' '}
+                                                                        <strong className="text-[hsl(var(--text-secondary))]">
+                                                                            {
+                                                                                widgetLibrary.filter(widget => {
+                                                                                    const query = smartSearchQuery.toLowerCase().trim();
+                                                                                    if (!query) return true;
+                                                                                    const hint = widgetHints[widget.type]?.toLowerCase() || '';
+                                                                                    const label = widget.label.toLowerCase();
+                                                                                    return label.includes(query) || hint.includes(query);
+                                                                                }).length
+                                                                            }
+                                                                        </strong>{' '}
+                                                                        / {widgetLibrary.length}
+                                                                    </span>
+                                                                    <span>Auto-inserts on select</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
 
-                                                {/* Indicator */}
-                                                <div className={`text-xs font-bold uppercase tracking-widest transition-all px-2.5 py-1 rounded-lg ${isSelected
-                                                    ? 'bg-[hsl(var(--primary))]/15 text-[hsl(var(--primary))]'
-                                                    : 'text-[hsl(var(--text-tertiary))] opacity-0 group-hover:opacity-100'
-                                                    }`}>
-                                                    {isSelected ? 'selected' : 'select'}
-                                                </div>
+
                                             </div>
                                         );
                                     })()}
@@ -2522,7 +2926,10 @@ const FormBuilder: React.FC = () => {
                                                     dragFieldIdRef.current = null;
                                                     setDragOverFieldId(null);
                                                 }}
-                                                onClick={() => setSelectedFieldId(field.id)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedFieldId(field.id);
+                                                }}
                                                 className={`p-6 rounded-xl group relative transition-all shadow-sm cursor-pointer border ${selectedFieldId === field.id
                                                     ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/4 shadow-md shadow-[hsl(var(--primary))]/5'
                                                     : dragOverFieldId === field.id
@@ -2673,11 +3080,7 @@ const FormBuilder: React.FC = () => {
                                                         })}
                                                     </div>
                                                 ) : (
-                                                    <div className="h-12 bg-white/40 dark:bg-black/20 rounded-lg px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
-                                                        {field.type.replace(/input_|_/g, ' ').trim()} preview
-                                                        {field.default_value && <span className="ml-2 text-[10px] font-mono bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded text-[hsl(var(--primary))]">{field.default_value}</span>}
-                                                        {field.is_sensitive && <span className="ml-1 text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded">🔒 sensitive</span>}
-                                                    </div>
+                                                    renderWidgetPreview(field)
                                                 )}
                                             </div>
                                         ))

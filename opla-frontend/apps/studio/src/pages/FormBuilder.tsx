@@ -1153,12 +1153,12 @@ const FormBuilder: React.FC = () => {
         if (!section || !selectedField) {
             return (
                 <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section Quick Settings</p>
                         <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">{section?.title || 'No section selected'}</h4>
                         <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Select a variable from any section card to edit its widget properties here without leaving Flow Overview.</p>
                     </div>
-                    <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))]/80 px-6 text-center">
+                    <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[hsl(var(--border))]/55 bg-[hsl(var(--surface-elevated))]/30 px-6 text-center">
                         <div>
                             <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">No variable selected</p>
                             <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Click a variable row inside any section card to populate the docked editor.</p>
@@ -1202,9 +1202,9 @@ const FormBuilder: React.FC = () => {
                                 <button
                                     key={value}
                                     onClick={() => updateField(selectedField.id, { default_value: value || undefined })}
-                                    className={`rounded-md border px-3 py-2 text-xs font-semibold transition-all ${active
-                                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                        : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                    className={`rounded-xl px-3 py-2 text-xs font-semibold transition-all ${active
+                                        ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                        : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                         }`}
                                 >
                                     {label}
@@ -1229,7 +1229,7 @@ const FormBuilder: React.FC = () => {
         return (
             <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
                 <div className="space-y-4">
-                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section Quick Settings</p>
                         <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title}</h4>
                         <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">These section-level settings stay available while you edit a variable from the flow canvas.</p>
@@ -1243,9 +1243,9 @@ const FormBuilder: React.FC = () => {
                                             <button
                                                 key={mode}
                                                 onClick={() => updateCurrentSectionProperties({ render_mode: mode })}
-                                                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-all ${active
-                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                    : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                                className={`rounded-xl px-3 py-2 text-xs font-semibold transition-all ${active
+                                                    ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                    : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                                     }`}
                                             >
                                                 {mode === 'list' ? 'List' : 'Single'}
@@ -1255,7 +1255,7 @@ const FormBuilder: React.FC = () => {
                                 </div>
                             </div>
 
-                            <label className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                            <label className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-3.5 cursor-pointer border border-transparent hover:bg-[hsl(var(--surface-elevated))] transition-all">
                                 <div>
                                     <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Shuffle Options</p>
                                     <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Randomize choice order in this section.</p>
@@ -1270,20 +1270,20 @@ const FormBuilder: React.FC = () => {
 
                             <button
                                 onClick={() => enterSection(section.id)}
-                                className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                                className="w-full rounded-xl bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3 py-2.5 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all flex items-center justify-center border border-transparent hover:text-[hsl(var(--primary))] shadow-sm"
                             >
                                 Open Full Section Editor
                             </button>
                         </div>
                     </div>
 
-                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Basic Widgets</p>
                                 <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">Swap widget type</h4>
                             </div>
-                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                            <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] shadow-sm border border-[hsl(var(--border))]/20">
                                 {currentWidget?.label || selectedField.type}
                             </div>
                         </div>
@@ -1296,9 +1296,9 @@ const FormBuilder: React.FC = () => {
                                     <button
                                         key={type}
                                         onClick={() => changeFieldType(selectedField.id, type)}
-                                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-all ${active
-                                            ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                            : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                        className={`flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold transition-all ${active
+                                            ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                            : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                             }`}
                                     >
                                         <span className="shrink-0 text-[hsl(var(--primary))]">{widget.icon}</span>
@@ -1311,7 +1311,7 @@ const FormBuilder: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Variable Editor</p>
@@ -1320,14 +1320,14 @@ const FormBuilder: React.FC = () => {
                             </div>
                             <button
                                 onClick={() => enterSection(section.id)}
-                                className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                                className="rounded-xl bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all flex items-center justify-center border border-transparent hover:text-[hsl(var(--primary))] shadow-sm"
                             >
                                 Open Full Inspector
                             </button>
                         </div>
 
                         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                            <div className="space-y-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 p-4">
+                            <div className="space-y-4 rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-4">
                                 <div>
                                     <label className="label">Label</label>
                                     <input
@@ -1344,7 +1344,7 @@ const FormBuilder: React.FC = () => {
                                         className="input font-mono text-xs"
                                     />
                                 </div>
-                                <label className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
+                                <label className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface))]/70 p-3.5 cursor-pointer shadow-sm">
                                     <div>
                                         <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Required</p>
                                         <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Make this variable mandatory.</p>
@@ -1368,12 +1368,12 @@ const FormBuilder: React.FC = () => {
                                 )}
                             </div>
 
-                            <div className="space-y-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 p-4">
+                            <div className="space-y-4 rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-4">
                                 <div>
                                     <label className="label">Platforms</label>
                                     <div className="grid grid-cols-3 gap-2">
                                         {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => (
-                                            <label key={platform} className="flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-xs font-medium capitalize text-[hsl(var(--text-secondary))]">
+                                            <label key={platform} className="flex items-center gap-2 rounded-xl bg-[hsl(var(--surface))]/70 px-3 py-2.5 text-xs font-semibold capitalize text-[hsl(var(--text-secondary))] cursor-pointer hover:bg-[hsl(var(--surface))] transition-all shadow-sm">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedField.platforms?.includes(platform) || false}
@@ -1401,7 +1401,7 @@ const FormBuilder: React.FC = () => {
                                         { key: 'is_sensitive', label: 'Sensitive' },
                                         { key: 'exclude_from_export', label: 'Exclude Export' },
                                     ].map(({ key, label }) => (
-                                        <label key={key} className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2">
+                                        <label key={key} className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface))]/70 px-3 py-2.5 cursor-pointer hover:bg-[hsl(var(--surface))] transition-all shadow-sm">
                                             <span className="text-xs font-semibold text-[hsl(var(--text-secondary))]">{label}</span>
                                             <input
                                                 type="checkbox"
@@ -1417,7 +1417,7 @@ const FormBuilder: React.FC = () => {
                     </div>
 
                     {['dropdown', 'radio_group', 'checkbox_group', 'toggle'].includes(selectedField.type) && (
-                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
                                     <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Choice Editor</p>
@@ -1430,7 +1430,7 @@ const FormBuilder: React.FC = () => {
                                             const label = `Option ${nextIndex}`;
                                             updateField(selectedField.id, { options: [...(selectedField.options || []), { label, value: toSmartValue(label) }] });
                                         }}
-                                        className="rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                                        className="rounded-xl bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all flex items-center justify-center border border-transparent hover:text-[hsl(var(--primary))] shadow-sm"
                                     >
                                         Add Option
                                     </button>
@@ -1453,9 +1453,9 @@ const FormBuilder: React.FC = () => {
                                             <button
                                                 key={yes}
                                                 onClick={() => updateField(selectedField.id, { options: [{ label: yes, value: 'true' }, { label: no, value: 'false' }] })}
-                                                className={`rounded-lg border px-3 py-3 text-left text-xs font-semibold transition-all ${active
-                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                    : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                                className={`rounded-xl px-3 py-3 text-left text-xs font-semibold transition-all ${active
+                                                    ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                    : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                                     }`}
                                             >
                                                 {yes} / {no}
@@ -1466,7 +1466,7 @@ const FormBuilder: React.FC = () => {
                             ) : (
                                 <div className="mt-4 grid gap-3 xl:grid-cols-2">
                                     {(selectedField.options || []).map((option, index) => (
-                                        <div key={`${option.value}_${index}`} className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 p-3">
+                                        <div key={`${option.value}_${index}`} className="rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-3">
                                             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_auto]">
                                                 <input
                                                     value={option.label}
@@ -1490,7 +1490,7 @@ const FormBuilder: React.FC = () => {
                                                 />
                                                 <button
                                                     onClick={() => updateField(selectedField.id, { options: (selectedField.options || []).filter((_, optionIndex) => optionIndex !== index) })}
-                                                    className="rounded-md border border-[hsl(var(--border))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-tertiary))] transition-all hover:border-[hsl(var(--error))]/40 hover:text-[hsl(var(--error))]"
+                                                    className="rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] px-3 py-2 text-xs font-semibold transition-all"
                                                 >
                                                     Remove
                                                 </button>
@@ -1517,7 +1517,7 @@ const FormBuilder: React.FC = () => {
                     )}
 
                     {selectedField.type === 'input_number' && (
-                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Number Rules</p>
                             <div className="mt-4 grid gap-4 lg:grid-cols-3">
                                 <div>
@@ -1552,7 +1552,7 @@ const FormBuilder: React.FC = () => {
                     )}
 
                     {selectedField.type === 'rating_scale' && (
-                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Scale Configuration</p>
                             <div className="mt-4 grid gap-4 lg:grid-cols-4">
                                 <div>
@@ -1594,7 +1594,7 @@ const FormBuilder: React.FC = () => {
                     )}
 
                     {['date_picker', 'time_picker'].includes(selectedField.type) && (
-                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Range Limits</p>
                             <div className="mt-4 grid gap-4 lg:grid-cols-2">
                                 <div>
@@ -1620,7 +1620,7 @@ const FormBuilder: React.FC = () => {
                     )}
 
                     {['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
-                        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4">
+                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Validation</p>
                             <div className="mt-4 grid gap-4 lg:grid-cols-2">
                                 <div>
@@ -2051,15 +2051,15 @@ const FormBuilder: React.FC = () => {
                     <div className="flex min-h-0 flex-1 overflow-hidden">
                     {/* Left Panel: Section Navigator — only in Section View */}
                     {view === 'section' && (
-                        <aside className="w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex h-full overflow-hidden animate-in slide-in-from-left-4 fade-in duration-300">
-                            <div className="flex w-14 flex-col items-center gap-2 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/80 px-2 py-3">
+                        <aside className="w-80 border-r border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex h-full overflow-hidden animate-in slide-in-from-left-4 fade-in duration-300">
+                            <div className="flex w-14 flex-col items-center gap-2 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/80 px-2 py-3">
                                 <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))] shadow-[inset_2px_0_0_hsl(var(--primary))]">
                                     <Layers className="w-4 h-4" />
                                 </span>
                             </div>
 
                             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
+                                <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
                                     <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section List</p>
@@ -2070,7 +2070,7 @@ const FormBuilder: React.FC = () => {
                                                 addSection();
                                                 setSelectedFieldId(null);
                                             }}
-                                            className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                            className="rounded-md border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
                                         >
                                             + Section
                                         </button>
@@ -2089,8 +2089,8 @@ const FormBuilder: React.FC = () => {
                                                     setSelectedFieldId(null);
                                                 }}
                                                 className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
-                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/8 shadow-[0_0_0_1px_hsl(var(--primary))_inset]'
-                                                    : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] hover:border-[hsl(var(--border-hover))]'
+                                                    ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/6 text-[hsl(var(--primary))] shadow-sm'
+                                                    : 'border-transparent bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80'
                                                     }`}
                                             >
                                                 <div className="flex items-start justify-between gap-3">
@@ -2130,16 +2130,15 @@ const FormBuilder: React.FC = () => {
                                         <div className="flex items-center gap-4">
                                             <div>
                                                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Canvas</p>
-                                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">Drag headers to position them. Use routes to see connection logic.</p>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1">{sections.length} sections</span>
-                                                <span className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2.5 py-1">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
+                                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{sections.length} sections</span>
+                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
+                                                </div>
                                             </div>
                                         </div>
                                         <button
                                             onClick={addSection}
-                                            className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--text-primary))] transition-all hover:border-[hsl(var(--primary))]/40 hover:text-[hsl(var(--primary))]"
+                                            className="rounded-xl border border-transparent bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3.5 py-1.5 text-xs font-bold text-[hsl(var(--text-primary))] transition-all hover:text-[hsl(var(--primary))] shadow-sm"
                                         >
                                             Add Section
                                         </button>
@@ -2193,9 +2192,9 @@ const FormBuilder: React.FC = () => {
                                                     return (
                                                         <div
                                                             key={section.id}
-                                                            className={`absolute rounded-2xl border shadow-lg transition-all ${isActive
-                                                                ? 'border-[hsl(var(--primary))] bg-[hsl(var(--surface))] shadow-[0_14px_40px_rgba(15,23,42,0.16)]'
-                                                                : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))]/95 shadow-[0_10px_30px_rgba(15,23,42,0.08)] hover:border-[hsl(var(--primary))]/40'
+                                                            className={`absolute rounded-2xl border transition-all ${isActive
+                                                                ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--surface))] shadow-[0_14px_40px_rgba(15,23,42,0.08)]'
+                                                                : 'border-[hsl(var(--border))]/40 bg-[hsl(var(--surface))]/95 shadow-[0_8px_30px_rgba(15,23,42,0.04)] hover:border-[hsl(var(--primary))]/25'
                                                                 }`}
                                                             style={{ left: layout.x, top: layout.y, width: layout.width || FLOW_NODE_WIDTH }}
                                                         >
@@ -2210,7 +2209,7 @@ const FormBuilder: React.FC = () => {
                                                                     setDraggingSectionId(section.id);
                                                                     setSectionDragOffset({ x: event.clientX - rect.left, y: event.clientY - rect.top });
                                                                 }}
-                                                                className="flex cursor-grab items-start justify-between rounded-t-2xl border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/80 px-4 py-3 active:cursor-grabbing"
+                                                                className="flex cursor-grab items-start justify-between rounded-t-2xl border-b border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/80 px-4 py-3 active:cursor-grabbing"
                                                             >
                                                                 <div className="min-w-0">
                                                                     <div className="flex items-center gap-2">
@@ -2225,7 +2224,7 @@ const FormBuilder: React.FC = () => {
                                                                 </div>
                                                                 <button
                                                                     onClick={() => enterSection(section.id)}
-                                                                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]"
+                                                                    className="rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))] shadow-sm"
                                                                 >
                                                                     Edit
                                                                 </button>
@@ -2266,7 +2265,7 @@ const FormBuilder: React.FC = () => {
                                                                 {collapseMode !== 'title' && (
                                                                     <div className="space-y-2">
                                                                     {section.fields.length === 0 ? (
-                                                                        <div className="rounded-lg border border-dashed border-[hsl(var(--border))] px-3 py-4 text-center text-[11px] text-[hsl(var(--text-tertiary))]">No fields yet</div>
+                                                                        <div className="rounded-xl border border-dashed border-[hsl(var(--border))]/55 bg-[hsl(var(--surface-elevated))]/30 px-3 py-4 text-center text-[11px] text-[hsl(var(--text-tertiary))]">No fields yet</div>
                                                                     ) : visibleFields.map((field) => {
                                                                         const isDeleteRevealed = swipedFieldId === field.id;
                                                                         const currentSwipeOffset = isDeleteRevealed ? swipeOffset : 0;
@@ -2292,11 +2291,11 @@ const FormBuilder: React.FC = () => {
                                                                                     setDragEnabledFieldId(null);
                                                                                     setDragOverFieldId(null);
                                                                                 }}
-                                                                                className={`relative overflow-hidden rounded-lg border transition-all hover:border-[hsl(var(--primary))]/30 ${isSelectedField
-                                                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/6 shadow-[0_0_0_1px_hsl(var(--primary))_inset]'
+                                                                                className={`relative overflow-hidden rounded-xl border transition-all ${isSelectedField
+                                                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/4 shadow-sm'
                                                                                     : dragOverFieldId === field.id
-                                                                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/5'
-                                                                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))]'
+                                                                                        ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/3'
+                                                                                        : 'border-transparent bg-[hsl(var(--surface-elevated))]/60 hover:bg-[hsl(var(--surface-elevated))]/95'
                                                                                     }`}
                                                                             >
                                                                                 <button
@@ -2365,17 +2364,17 @@ const FormBuilder: React.FC = () => {
                                                                 )}
                                                             </div>
 
-                                                            <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-4 py-3">
+                                                            <div className="flex items-center justify-between border-t border-[hsl(var(--border))]/40 px-4 py-3">
                                                                 <button
                                                                     onClick={() => addFieldToSection(section.id, 'input_text')}
-                                                                    className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:text-[hsl(var(--primary))]"
+                                                                    className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:text-[hsl(var(--primary))]"
                                                                 >
                                                                     Add Variable
                                                                 </button>
                                                                 <div className="flex items-center gap-2">
                                                                     <button
                                                                         onClick={() => updateSectionLayout(section.id, { collapse_mode: getNextCollapseMode(collapseMode) })}
-                                                                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))]"
+                                                                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))]"
                                                                         title="Cycle card collapse mode"
                                                                     >
                                                                         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapseMode === 'title' ? '-rotate-90' : collapseMode === 'summary' ? 'rotate-0' : 'rotate-180'}`} />
@@ -2405,13 +2404,13 @@ const FormBuilder: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="shrink-0 border-t border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/60 px-5 py-4">
+                                        <div className="shrink-0 border-t border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/60 px-5 py-4">
                                             <div className="mb-3 flex items-center justify-between gap-3">
                                                 <div>
                                                     <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Docked Editor</p>
                                                     <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Flow Variable Editor</h3>
                                                 </div>
-                                                <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                <div className="rounded-lg border border-[hsl(var(--border))]/20 bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] shadow-sm">
                                                     {selectedField ? selectedField.type.replace(/_/g, ' ') : 'idle'}
                                                 </div>
                                             </div>
@@ -2432,35 +2431,55 @@ const FormBuilder: React.FC = () => {
                             >
                                 <div className="w-full max-w-5xl space-y-6">
 
-                                    {/* ── Section selector chip ───────────────────────────── */}
+                                    {/* ── Section selector chip with integrated Widget Inserter ───────────────────────────── */}
                                     {(() => {
                                         const sec = sections.find(s => s.id === currentSectionId)!;
                                         const isSelected = selectedFieldId === null;
                                         return (
-                                            <button
+                                            <div
                                                 onClick={() => setSelectedFieldId(null)}
-                                                className={`w-full flex items-center gap-4 px-5 py-4 rounded-md border-2 transition-all text-left group ${isSelected
-                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/6 shadow-md shadow-[hsl(var(--primary))]/10'
-                                                    : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] hover:border-[hsl(var(--primary))]/40 hover:bg-[hsl(var(--primary))]/3'
+                                                className={`w-full flex flex-wrap items-center justify-between gap-4 px-5 py-4 rounded-xl border transition-all text-left group cursor-pointer ${isSelected
+                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/5 shadow-sm shadow-[hsl(var(--primary))]/5'
+                                                    : 'border-transparent bg-[hsl(var(--surface-elevated))]/45 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-transparent'
                                                     }`}
                                             >
-                                                {/* Section icon */}
-                                                <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 transition-all ${isSelected
-                                                    ? 'bg-[hsl(var(--primary))] text-white'
-                                                    : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] group-hover:bg-[hsl(var(--primary))]/10 group-hover:text-[hsl(var(--primary))]'
-                                                    }`}>
-                                                    <Layout className="w-5 h-5" />
+                                                <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                    {/* Section icon */}
+                                                    <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 transition-all ${isSelected
+                                                        ? 'bg-[hsl(var(--primary))] text-white'
+                                                        : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] group-hover:bg-[hsl(var(--primary))]/10 group-hover:text-[hsl(var(--primary))]'
+                                                        }`}>
+                                                        <Layout className="w-5 h-5" />
+                                                    </div>
+
+                                                    {/* Section info */}
+                                                    <div className="min-w-0">
+                                                        <p className={`font-bold text-sm truncate ${isSelected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-primary))]'}`}>
+                                                            {sec.title}
+                                                        </p>
+                                                        <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">
+                                                            {sec.fields.length} field{sec.fields.length !== 1 ? 's' : ''} · {sec.properties.render_mode} mode
+                                                            {sec.properties.shuffle_options && ' · shuffled'}
+                                                        </p>
+                                                    </div>
                                                 </div>
 
-                                                {/* Section info */}
-                                                <div className="flex-1 min-w-0">
-                                                    <p className={`font-bold text-sm truncate ${isSelected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-primary))]'}`}>
-                                                        {sec.title}
-                                                    </p>
-                                                    <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">
-                                                        {sec.fields.length} field{sec.fields.length !== 1 ? 's' : ''} · {sec.properties.render_mode} mode
-                                                        {sec.properties.shuffle_options && ' · shuffled'}
-                                                    </p>
+                                                <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                                                    <select
+                                                        value={inspectorWidgetType}
+                                                        onChange={(e) => setInspectorWidgetType(e.target.value as FieldType)}
+                                                        className="input-sm min-w-[160px] text-xs py-1.5"
+                                                    >
+                                                        {widgetLibrary.map((widget) => (
+                                                            <option key={widget.type} value={widget.type}>{widget.label}</option>
+                                                        ))}
+                                                    </select>
+                                                    <button
+                                                        onClick={() => addField(inspectorWidgetType)}
+                                                        className="rounded-lg border border-transparent bg-[hsl(var(--primary))]/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[hsl(var(--primary))] transition-all hover:bg-[hsl(var(--primary))]/20 shadow-sm"
+                                                    >
+                                                        Add Widget
+                                                    </button>
                                                 </div>
 
                                                 {/* Indicator */}
@@ -2470,40 +2489,14 @@ const FormBuilder: React.FC = () => {
                                                     }`}>
                                                     {isSelected ? 'selected' : 'select'}
                                                 </div>
-                                            </button>
+                                            </div>
                                         );
                                     })()}
 
-                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3">
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Widget Inserter</p>
-                                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">Add a widget to the selected section.</p>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <select
-                                                    value={inspectorWidgetType}
-                                                    onChange={(e) => setInspectorWidgetType(e.target.value as FieldType)}
-                                                    className="input-sm min-w-[180px]"
-                                                >
-                                                    {widgetLibrary.map((widget) => (
-                                                        <option key={widget.type} value={widget.type}>{widget.label}</option>
-                                                    ))}
-                                                </select>
-                                                <button
-                                                    onClick={() => addField(inspectorWidgetType)}
-                                                    className="rounded-md border border-[hsl(var(--primary))]/35 bg-[hsl(var(--primary))]/10 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--primary))] transition-all hover:bg-[hsl(var(--primary))]/15"
-                                                >
-                                                    Add Widget
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     {fields.length === 0 ? (
-                                        <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-md p-20 text-center text-[hsl(var(--text-tertiary))]">
+                                        <div className="bg-[hsl(var(--surface-elevated))]/30 border border-dashed border-[hsl(var(--border))]/40 rounded-2xl p-20 text-center text-[hsl(var(--text-tertiary))]">
                                             <p className="text-lg font-medium">No widgets yet</p>
-                                            <p className="text-sm mt-2">Use the widget inserter above to add the first widget.</p>
+                                            <p className="text-sm mt-2">Use the widget inserter in the header above to add the first widget.</p>
                                         </div>
                                     ) : (
                                         fields.map((field) => (
@@ -2530,11 +2523,11 @@ const FormBuilder: React.FC = () => {
                                                     setDragOverFieldId(null);
                                                 }}
                                                 onClick={() => setSelectedFieldId(field.id)}
-                                                className={`p-6 rounded-md group relative transition-all shadow-sm cursor-pointer border ${selectedFieldId === field.id
-                                                    ? 'border-[hsl(var(--primary))] border-2 bg-[hsl(var(--primary))]/5 shadow-lg shadow-[hsl(var(--primary))]/5'
+                                                className={`p-6 rounded-xl group relative transition-all shadow-sm cursor-pointer border ${selectedFieldId === field.id
+                                                    ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/4 shadow-md shadow-[hsl(var(--primary))]/5'
                                                     : dragOverFieldId === field.id
                                                         ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/3 border-dashed'
-                                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] hover:border-[hsl(var(--border-hover))]'
+                                                        : 'border-transparent bg-[hsl(var(--surface))] shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.05)] hover:bg-[hsl(var(--surface-elevated))]/20 hover:border-transparent'
                                                     }`}
                                             >
                                                 <div className="flex justify-between items-start mb-4">
@@ -2602,13 +2595,13 @@ const FormBuilder: React.FC = () => {
                                                 </div>
                                                 {/* Field preview */}
                                                 {field.type === 'matrix_table' ? (
-                                                    <div className="overflow-hidden rounded-md border border-[hsl(var(--border))]">
+                                                    <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))]/50">
                                                         <table className="w-full text-[11px] border-collapse">
                                                             <thead>
-                                                                <tr className="bg-[hsl(var(--primary))]/8">
-                                                                    <th className="p-2 text-left font-semibold text-[hsl(var(--text-secondary))] border-r border-[hsl(var(--border))] w-28"></th>
+                                                                <tr className="bg-[hsl(var(--primary))]/6 border-b border-[hsl(var(--border))]/40">
+                                                                    <th className="p-2 text-left font-semibold text-[hsl(var(--text-secondary))] w-28"></th>
                                                                     {(field.table_columns || []).slice(0, 4).map(col => (
-                                                                        <th key={col.id} className="p-2 text-center font-semibold text-[hsl(var(--text-secondary))] border-r border-[hsl(var(--border))] last:border-r-0 max-w-[60px] truncate">{col.label}</th>
+                                                                        <th key={col.id} className="p-2 text-center font-semibold text-[hsl(var(--text-secondary))] max-w-[60px] truncate">{col.label}</th>
                                                                     ))}
                                                                     {(field.table_columns || []).length > 4 && (
                                                                         <th className="p-2 text-center text-[hsl(var(--text-tertiary))] italic">+{(field.table_columns || []).length - 4}</th>
@@ -2617,10 +2610,10 @@ const FormBuilder: React.FC = () => {
                                                             </thead>
                                                             <tbody>
                                                                 {(field.table_rows || []).slice(0, 3).map((row, rIdx) => (
-                                                                    <tr key={row.id} className={rIdx % 2 === 0 ? 'bg-[hsl(var(--surface))]' : 'bg-[hsl(var(--surface-elevated))]/60'}>
-                                                                        <td className="p-2 text-[hsl(var(--text-secondary))] border-r border-[hsl(var(--border))] font-medium truncate max-w-[112px]">{row.label}</td>
+                                                                    <tr key={row.id} className={`border-b border-[hsl(var(--border))]/30 last:border-b-0 ${rIdx % 2 === 0 ? 'bg-[hsl(var(--surface))]' : 'bg-[hsl(var(--surface-elevated))]/60'}`}>
+                                                                        <td className="p-2 text-[hsl(var(--text-secondary))] font-medium truncate max-w-[112px]">{row.label}</td>
                                                                         {(field.table_columns || []).slice(0, 4).map(col => (
-                                                                            <td key={col.id} className="p-2 text-center border-r border-[hsl(var(--border))] last:border-r-0">
+                                                                            <td key={col.id} className="p-2 text-center">
                                                                                 {(field.table_cell_type === 'radio' || !field.table_cell_type) && <span className="inline-block w-3 h-3 rounded-full border-2 border-[hsl(var(--border))]" />}
                                                                                 {field.table_cell_type === 'checkbox' && <span className="inline-block w-3 h-3 rounded border-2 border-[hsl(var(--border))]" />}
                                                                                 {field.table_cell_type === 'text' && <span className="inline-block w-10 h-2.5 bg-[hsl(var(--border))] rounded-sm" />}
@@ -2651,7 +2644,7 @@ const FormBuilder: React.FC = () => {
                                                             {Array.from({ length: (Number(field.max) || 5) - (Number(field.min) || 1) + 1 }).map((_, i) => (
                                                                 <div
                                                                     key={i}
-                                                                    className="flex-1 h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/50 flex items-center justify-center text-xs font-bold text-[hsl(var(--text-tertiary))]"
+                                                                    className="flex-1 h-10 rounded-lg bg-[hsl(var(--surface-elevated))]/70 flex items-center justify-center text-xs font-bold text-[hsl(var(--text-tertiary))]"
                                                                 >
                                                                     {(Number(field.min) || 1) + i}
                                                                 </div>
@@ -2659,7 +2652,7 @@ const FormBuilder: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 ) : field.type === 'toggle' ? (
-                                                    <div className="flex rounded-md border border-[hsl(var(--border))] overflow-hidden">
+                                                    <div className="flex rounded-lg bg-[hsl(var(--surface-elevated))]/60 overflow-hidden">
                                                         {[
                                                             { val: 'true',  label: field.options?.find(o => o.value === 'true')?.label  ?? 'Yes' },
                                                             { val: 'false', label: field.options?.find(o => o.value === 'false')?.label ?? 'No'  },
@@ -2672,7 +2665,7 @@ const FormBuilder: React.FC = () => {
                                                                         active
                                                                             ? 'bg-[hsl(var(--primary))] text-white'
                                                                             : 'bg-[hsl(var(--surface-elevated))]/50 text-[hsl(var(--text-tertiary))]'
-                                                                    } ${idx === 1 ? 'border-l border-[hsl(var(--border))]' : ''}`}
+                                                                    } ${idx === 1 ? 'border-l border-[hsl(var(--border))]/40' : ''}`}
                                                                 >
                                                                     {label}
                                                                 </div>
@@ -2680,7 +2673,7 @@ const FormBuilder: React.FC = () => {
                                                         })}
                                                     </div>
                                                 ) : (
-                                                    <div className="h-12 bg-white/50 dark:bg-black/20 border border-[hsl(var(--border))] rounded-md px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
+                                                    <div className="h-12 bg-white/40 dark:bg-black/20 rounded-lg px-4 flex items-center text-[hsl(var(--text-tertiary))] text-sm italic">
                                                         {field.type.replace(/input_|_/g, ' ').trim()} preview
                                                         {field.default_value && <span className="ml-2 text-[10px] font-mono bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded text-[hsl(var(--primary))]">{field.default_value}</span>}
                                                         {field.is_sensitive && <span className="ml-1 text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-1.5 py-0.5 rounded">🔒 sensitive</span>}
@@ -2695,42 +2688,40 @@ const FormBuilder: React.FC = () => {
                         </div>
                     </main>
 
-                    {/* Right Panel — Inspector Mode only */}
-                    {view === 'section' && (
-                        <aside className="w-80 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
-                        <div className="flex h-full flex-col">
-                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/35 px-3 pt-2">
-                                    <div className="flex items-end gap-1">
-                                        <button
-                                            onClick={() => {
-                                                setPropertyTab('content');
-                                                setSelectedFieldId(null);
-                                            }}
-                                            className={`flex items-center justify-center space-x-2 rounded-t-lg border border-b-0 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${!selectedField
-                                                ? 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--primary))]'
-                                                : 'border-transparent bg-transparent text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface))]/70 hover:text-[hsl(var(--text-secondary))]'
-                                                }`}
-                                        >
-                                            <Settings className="w-3 h-3" />
-                                            <span>Section Properties</span>
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setPropertyTab('content');
-                                                if (!selectedField) {
-                                                    showToast('Select a widget', 'Click a widget in the center pane to edit its properties.', 'info');
-                                                }
-                                            }}
-                                            className={`flex items-center justify-center space-x-2 rounded-t-lg border border-b-0 px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all ${selectedField
-                                                ? 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--primary))]'
-                                                : 'border-transparent bg-transparent text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface))]/70 hover:text-[hsl(var(--text-secondary))]'
-                                                }`}
-                                        >
-                                            <Type className="w-3 h-3" />
-                                            <span>Widget Properties</span>
-                                        </button>
-                                    </div>
-                                </div>
+                     {/* Right Panel — Inspector Mode only */}
+                     {view === 'section' && (
+                         <aside className="w-80 border-l border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
+                         <div className="flex h-full flex-col">
+                                 <div className="bg-[hsl(var(--surface-elevated))] p-1 rounded-xl mx-4 mt-4 mb-2 flex gap-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+                                         <button
+                                             onClick={() => {
+                                                 setPropertyTab('content');
+                                                 setSelectedFieldId(null);
+                                             }}
+                                             className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${!selectedField
+                                                 ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
+                                                 : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
+                                                 }`}
+                                         >
+                                             <Settings className="w-3.5 h-3.5" />
+                                             <span>Section</span>
+                                         </button>
+                                         <button
+                                             onClick={() => {
+                                                 setPropertyTab('content');
+                                                 if (!selectedField) {
+                                                     showToast('Select a widget', 'Click a widget in the center pane to edit its properties.', 'info');
+                                                 }
+                                             }}
+                                             className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${selectedField
+                                                 ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
+                                                 : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
+                                                 }`}
+                                         >
+                                             <Type className="w-3.5 h-3.5" />
+                                             <span>Widget</span>
+                                         </button>
+                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6 hide-scrollbar">
                                     {propertyTab === 'content' ? (
@@ -2774,9 +2765,9 @@ const FormBuilder: React.FC = () => {
                                                                     <button
                                                                         key={mode}
                                                                         onClick={() => updateCurrentSectionProperties({ render_mode: mode })}
-                                                                        className={`flex flex-col items-center gap-2 p-3 rounded-md border-2 transition-all text-xs font-semibold ${isActive
-                                                                            ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
-                                                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                                                        className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-xs font-semibold ${isActive
+                                                                            ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))] shadow-sm'
+                                                                            : 'border-transparent bg-[hsl(var(--surface-elevated))]/80 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                                                             }`}
                                                                     >
                                                                         {mode === 'list' ? (
@@ -2805,7 +2796,7 @@ const FormBuilder: React.FC = () => {
                                                             {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => {
                                                                 const currentProps = sections.find(p => p.id === currentSectionId)?.properties;
                                                                 return (
-                                                                    <label key={platform} className="flex items-center space-x-3 p-2 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] cursor-pointer hover:border-[hsl(var(--border-hover))] transition-all">
+                                                                    <label key={platform} className="flex items-center space-x-3 p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl border border-transparent cursor-pointer hover:bg-[hsl(var(--surface-elevated))] transition-all">
                                                                         <input
                                                                             type="checkbox"
                                                                             checked={currentProps?.platforms?.includes(platform) ?? true}
@@ -2824,7 +2815,7 @@ const FormBuilder: React.FC = () => {
                                                         </div>
                                                     </div>
                                                     {/* Shuffle Options */}
-                                                    <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                    <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
                                                         <div>
                                                             <p className="text-sm font-semibold">Shuffle Options</p>
                                                             <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Randomise choice order at runtime</p>
@@ -2839,7 +2830,7 @@ const FormBuilder: React.FC = () => {
 
                                                     {/* Repeatable */}
                                                     <div className="space-y-3">
-                                                        <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                        <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
                                                             <div>
                                                                 <p className="text-sm font-semibold">Repeatable Section</p>
                                                                 <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">Allow filling this section multiple times</p>
@@ -2867,10 +2858,10 @@ const FormBuilder: React.FC = () => {
                                                     </div>
 
                                                     {/* Save as Template */}
-                                                    <div className="pt-4 border-t border-[hsl(var(--border))]">
+                                                    <div className="pt-4">
                                                         <button
                                                             onClick={() => setIsSaveTemplateModalOpen(true)}
-                                                            className="w-full py-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 text-[hsl(var(--primary))] font-semibold rounded-md transition-all flex items-center justify-center gap-2"
+                                                            className="w-full py-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 border border-transparent text-[hsl(var(--primary))] font-semibold rounded-md transition-all flex items-center justify-center gap-2"
                                                         >
                                                             <Save className="w-4 h-4" />
                                                             Save as Template
@@ -2913,7 +2904,7 @@ const FormBuilder: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                    <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
                                                         <label className="text-sm font-semibold !mb-0">Required Field</label>
                                                         <input
                                                             type="checkbox"
@@ -2942,8 +2933,8 @@ const FormBuilder: React.FC = () => {
                                                                             key={ct}
                                                                             onClick={() => updateField(selectedField.id, { table_cell_type: ct })}
                                                                             className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all capitalize ${(selectedField.table_cell_type || 'radio') === ct
-                                                                                ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                                                : 'border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--border-hover))]'
+                                                                                ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))] shadow-sm'
+                                                                                : 'border-transparent bg-[hsl(var(--surface-elevated))]/80 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                                                                 }`}
                                                                         >
                                                                             {ct}
@@ -2954,7 +2945,7 @@ const FormBuilder: React.FC = () => {
 
                                                             {/* Allow Multiple — only for checkbox */}
                                                             {selectedField.table_cell_type === 'checkbox' && (
-                                                                <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                                <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
                                                                     <div>
                                                                         <p className="text-sm font-semibold">Allow Multiple per Row</p>
                                                                         <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Check more than one cell per row</p>
@@ -2972,7 +2963,7 @@ const FormBuilder: React.FC = () => {
                                                             <div>
                                                                 <div className="flex items-center justify-between mb-2">
                                                                     <label className="label !mb-0 text-xs">Columns (Scale Points)</label>
-                                                                    <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg p-0.5">
+                                                                    <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))]/80 rounded-lg p-0.5">
                                                                         <button
                                                                             onClick={() => {
                                                                                 const cols = selectedField.table_columns || [];
@@ -3023,7 +3014,7 @@ const FormBuilder: React.FC = () => {
                                                                             const n = cols.length + 1;
                                                                             updateField(selectedField.id, { table_columns: [...cols, { id: `col_${Date.now()}`, label: `Column ${n}` }] });
                                                                         }}
-                                                                        className="w-full py-1.5 border-2 border-dashed border-[hsl(var(--border))] rounded-md text-[10px] font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                                        className="w-full py-1.5 border border-dashed border-[hsl(var(--border))]/75 bg-[hsl(var(--surface-elevated))]/40 rounded-xl text-[10px] font-semibold text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/45 hover:text-[hsl(var(--primary))] transition-all"
                                                                     >
                                                                         + Add Column
                                                                     </button>
@@ -3034,7 +3025,7 @@ const FormBuilder: React.FC = () => {
                                                             <div>
                                                                 <div className="flex items-center justify-between mb-2">
                                                                     <label className="label !mb-0 text-xs">Rows (Statements)</label>
-                                                                    <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg p-0.5">
+                                                                    <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))]/80 rounded-lg p-0.5">
                                                                         <button
                                                                             onClick={() => {
                                                                                 const rows = selectedField.table_rows || [];
@@ -3085,7 +3076,7 @@ const FormBuilder: React.FC = () => {
                                                                             const n = rows.length + 1;
                                                                             updateField(selectedField.id, { table_rows: [...rows, { id: `row_${Date.now()}`, label: `Statement ${n}` }] });
                                                                         }}
-                                                                        className="w-full py-1.5 border-2 border-dashed border-[hsl(var(--border))] rounded-md text-[10px] font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                                        className="w-full py-1.5 border border-dashed border-[hsl(var(--border))]/75 bg-[hsl(var(--surface-elevated))]/40 rounded-xl text-[10px] font-semibold text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/45 hover:text-[hsl(var(--primary))] transition-all"
                                                                     >
                                                                         + Add Row
                                                                     </button>
@@ -3128,7 +3119,7 @@ const FormBuilder: React.FC = () => {
                                                             </div>
 
                                                             {selectedField.catalog_source_type === 'project_catalog' && (
-                                                                <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3 space-y-3">
+                                                                <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/70 p-4 space-y-3">
                                                                     <div className="flex items-start justify-between gap-3">
                                                                         <div>
                                                                             <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Catalog Snapshot</p>
@@ -3163,7 +3154,7 @@ const FormBuilder: React.FC = () => {
                                                                         </select>
                                                                     </div>
                                                                     <div className="space-y-2">
-                                                                        <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                                        <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
                                                                             <div>
                                                                                 <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Allow Adding</p>
                                                                                 <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Users can add new items</p>
@@ -3175,7 +3166,7 @@ const FormBuilder: React.FC = () => {
                                                                                 className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
                                                                             />
                                                                         </div>
-                                                                        <div className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))]">
+                                                                        <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
                                                                             <div>
                                                                                 <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Allow Removing</p>
                                                                                 <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Users can remove items</p>
@@ -3201,18 +3192,18 @@ const FormBuilder: React.FC = () => {
                                                                     </div>
                                                                     <button
                                                                         onClick={addSelectedObjectProperty}
-                                                                        className="rounded-md border border-[hsl(var(--border))] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:border-[hsl(var(--primary))]/40 hover:text-[hsl(var(--primary))]"
+                                                                        className="rounded-md border border-transparent px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:bg-[hsl(var(--surface-elevated))]/80 hover:text-[hsl(var(--primary))]"
                                                                     >
                                                                         Add Property
                                                                     </button>
                                                                 </div>
 
                                                                 {selectedObjectProperties.length === 0 ? (
-                                                                    <div className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-4 text-center text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                                    <div className="rounded-xl border border-dashed border-[hsl(var(--border))]/55 bg-[hsl(var(--surface-elevated))]/40 p-4 text-center text-[11px] text-[hsl(var(--text-tertiary))]">
                                                                         No row properties defined yet.
                                                                     </div>
                                                                 ) : selectedObjectProperties.map((property, propertyIndex) => (
-                                                                    <div key={`${property.key}_${propertyIndex}`} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3 space-y-3">
+                                                                    <div key={`${property.key}_${propertyIndex}`} className="rounded-xl bg-[hsl(var(--surface-elevated))]/70 p-4 space-y-3">
                                                                         <div className="flex items-center justify-between gap-2">
                                                                             <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
                                                                                 Property {propertyIndex + 1}
@@ -3298,7 +3289,7 @@ const FormBuilder: React.FC = () => {
                                                                             </div>
                                                                         )}
 
-                                                                        <label className="flex items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-3 cursor-pointer">
+                                                                        <label className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface))] p-4 cursor-pointer shadow-sm">
                                                                             <div>
                                                                                 <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Required</p>
                                                                                 <p className="text-[10px] text-[hsl(var(--text-tertiary))]">This row property must be present before submit.</p>
@@ -3357,10 +3348,10 @@ const FormBuilder: React.FC = () => {
                                                                                     { label: no, value: 'false' },
                                                                                 ],
                                                                             })}
-                                                                            className={`py-2 px-3 rounded-md border text-xs font-semibold transition-all ${
+                                                                            className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
                                                                                 isActive
-                                                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                                                    : 'border-[hsl(var(--border))] hover:border-[hsl(var(--border-hover))] text-[hsl(var(--text-secondary))]'
+                                                                                    ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                                                                    : 'border-transparent bg-[hsl(var(--surface-elevated))]/80 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                                                             }`}
                                                                         >
                                                                             {yes} / {no}
@@ -3376,7 +3367,7 @@ const FormBuilder: React.FC = () => {
                                                             <label className="label">Choices</label>
                                                             <div className="space-y-2">
                                                                 {(selectedField.options || []).map((opt, idx) => (
-                                                                    <div key={idx} className="p-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] space-y-2">
+                                                                    <div key={idx} className="p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-2">
                                                                         <div className="flex items-center gap-2">
                                                                             <span className="text-[hsl(var(--text-tertiary))] cursor-grab select-none text-xs">⠿</span>
                                                                             <input
@@ -3437,7 +3428,7 @@ const FormBuilder: React.FC = () => {
                                                                         const label = `Option ${n}`;
                                                                         updateField(selectedField.id, { options: [...(selectedField.options || []), { label, value: toSmartValue(label) }] });
                                                                     }}
-                                                                    className="w-full py-2 border-2 border-dashed border-[hsl(var(--border))] rounded-md text-xs font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                                    className="w-full py-2 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
                                                                 >
                                                                     + Add Option
                                                                 </button>
@@ -3447,15 +3438,15 @@ const FormBuilder: React.FC = () => {
 
                                                     {selectedField.type === 'lookup_list' && (
                                                         <div className="space-y-4">
-                                                            <div className="flex bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-md p-1 w-full text-sm">
+                                                            <div className="flex gap-1 bg-[hsl(var(--surface-elevated))]/60 p-1 rounded-xl w-full text-xs">
                                                                 <button
-                                                                    className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${selectedField.lookup_source_type === 'preset' ? 'bg-[hsl(var(--primary))] text-white shadow-sm' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'}`}
+                                                                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${selectedField.lookup_source_type === 'preset' ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent hover:bg-transparent'}`}
                                                                     onClick={() => updateField(selectedField.id, { lookup_source_type: 'preset' })}
                                                                 >
                                                                     Preset Data
                                                                 </button>
                                                                 <button
-                                                                    className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${selectedField.lookup_source_type === 'custom' ? 'bg-[hsl(var(--primary))] text-white shadow-sm' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'}`}
+                                                                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${selectedField.lookup_source_type === 'custom' ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent hover:bg-transparent'}`}
                                                                     onClick={() => updateField(selectedField.id, { lookup_source_type: 'custom' })}
                                                                 >
                                                                     Custom List (CSV)
@@ -3526,7 +3517,7 @@ const FormBuilder: React.FC = () => {
                                                                             }
                                                                             showToast('Data Validated', `Successfully parsed ${parsedCount} rows from your CSV data.`, 'success');
                                                                         }}
-                                                                        className="w-full py-2.5 bg-[hsl(var(--background))] hover:bg-[hsl(var(--primary))]/10 border border-[hsl(var(--border))] rounded-lg text-sm font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all flex items-center justify-center space-x-2"
+                                                                        className="w-full py-2.5 bg-[hsl(var(--surface-elevated))]/60 hover:bg-[hsl(var(--primary))]/10 border border-transparent rounded-xl text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all flex items-center justify-center space-x-2 shadow-sm"
                                                                     >
                                                                         <CheckSquare className="w-4 h-4" />
                                                                         <span>Validate Data Structure</span>
@@ -3553,7 +3544,11 @@ const FormBuilder: React.FC = () => {
                                                                     <button
                                                                         key={preset.label}
                                                                         onClick={() => updateField(selectedField.id, { mask: preset.val })}
-                                                                        className={`px-2 py-1 text-[10px] rounded-md font-medium border transition-all ${selectedField.mask === preset.val || (!selectedField.mask && preset.val === '') ? 'bg-[hsl(var(--primary))]/10 border-[hsl(var(--primary))] text-[hsl(var(--primary))]' : 'bg-[hsl(var(--surface))] border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'}`}
+                                                                        className={`px-2.5 py-1 text-[10px] rounded-lg font-semibold transition-all ${
+                                                                            selectedField.mask === preset.val || (!selectedField.mask && preset.val === '')
+                                                                                ? 'bg-[hsl(var(--primary))]/10 border border-[hsl(var(--primary))]/30 text-[hsl(var(--primary))]'
+                                                                                : 'bg-[hsl(var(--surface-elevated))]/60 border border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]/90 hover:text-[hsl(var(--text-primary))]'
+                                                                        }`}
                                                                     >
                                                                         {preset.label}
                                                                     </button>
@@ -3692,7 +3687,7 @@ const FormBuilder: React.FC = () => {
                                                         <label className="label">Platforms</label>
                                                         <div className="grid grid-cols-1 gap-2">
                                                             {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => (
-                                                                <label key={platform} className="flex items-center space-x-3 p-2 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] cursor-pointer hover:border-[hsl(var(--border-hover))] transition-all">
+                                                                <label key={platform} className="flex items-center space-x-3 p-2.5 bg-[hsl(var(--surface-elevated))]/60 rounded-xl border border-transparent cursor-pointer hover:bg-[hsl(var(--surface-elevated))] transition-all">
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={selectedField.platforms?.includes(platform) || false}
@@ -3753,10 +3748,10 @@ const FormBuilder: React.FC = () => {
                                                                             <button
                                                                                 key={value}
                                                                                 onClick={() => updateField(selectedField.id, { default_value: value || undefined })}
-                                                                                className={`flex-1 py-2 rounded-md border text-xs font-semibold transition-all ${
+                                                                                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
                                                                                     active
-                                                                                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                                                        : 'border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border-hover))]'
+                                                                                        ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                                                        : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
                                                                                 }`}
                                                                             >
                                                                                 {label}
@@ -3791,7 +3786,7 @@ const FormBuilder: React.FC = () => {
                                                                 { key: 'is_sensitive', label: 'Sensitive', desc: 'Contains PII or health data' },
                                                                 { key: 'exclude_from_export', label: 'Exclude from Export', desc: 'Hide from data views & CSV exports' },
                                                             ].map(({ key, label, desc }) => (
-                                                                <label key={key} className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] cursor-pointer hover:border-[hsl(var(--border-hover))] transition-all">
+                                                                <label key={key} className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl border border-transparent cursor-pointer hover:bg-[hsl(var(--surface-elevated))] transition-all">
                                                                     <div>
                                                                         <p className="text-sm font-semibold">{label}</p>
                                                                         <p className="text-[10px] text-[hsl(var(--text-tertiary))]">{desc}</p>
@@ -3823,7 +3818,7 @@ const FormBuilder: React.FC = () => {
 
                                                     <div className="space-y-4">
                                                         {logic.filter(r => r.type === 'field_visibility' && r.target_id === selectedField.id).map(rule => (
-                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] space-y-4 relative group">
+                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group">
                                                                 <button
                                                                     onClick={() => removeLogicRule(rule.id)}
                                                                     className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
@@ -3833,14 +3828,14 @@ const FormBuilder: React.FC = () => {
 
                                                                 {/* Timing badge */}
                                                                 <div className="flex items-center justify-between">
-                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">IF</span>
-                                                                    <div className="flex items-center bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg p-0.5 gap-0.5">
+                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
+                                                                    <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
                                                                         {(['pre', 'post'] as const).map(t => (
                                                                             <button
                                                                                 key={t}
                                                                                 onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                    ? 'bg-[hsl(var(--primary))] text-white'
+                                                                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
+                                                                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
                                                                                     : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
                                                                                     }`}
                                                                             >
@@ -3914,7 +3909,7 @@ const FormBuilder: React.FC = () => {
                                                                 action: 'show',
                                                                 conditions: [{ field: '', operator: 'eq', value: '' }]
                                                             })}
-                                                            className="w-full py-3 border-2 border-dashed border-[hsl(var(--border))] rounded-md text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                            className="w-full py-3 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
                                                         >
                                                             + Add Visibility Rule
                                                         </button>
@@ -3934,7 +3929,7 @@ const FormBuilder: React.FC = () => {
                                                     <div className="space-y-2">
                                                         <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Visibility</p>
                                                         {logic.filter(r => r.type === 'section_visibility' && r.source_id === currentSectionId).map(rule => (
-                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] space-y-4 relative group">
+                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group">
                                                                 <button
                                                                     onClick={() => removeLogicRule(rule.id)}
                                                                     className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
@@ -3944,14 +3939,14 @@ const FormBuilder: React.FC = () => {
 
                                                                 {/* Timing badge */}
                                                                 <div className="flex items-center justify-between">
-                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">IF</span>
-                                                                    <div className="flex items-center bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg p-0.5 gap-0.5">
+                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
+                                                                    <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
                                                                         {(['pre', 'post'] as const).map(t => (
                                                                             <button
                                                                                 key={t}
                                                                                 onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                    ? 'bg-[hsl(var(--primary))] text-white'
+                                                                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
+                                                                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
                                                                                     : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
                                                                                     }`}
                                                                             >
@@ -4031,7 +4026,7 @@ const FormBuilder: React.FC = () => {
                                                                 action: 'show',
                                                                 conditions: [{ field: '', operator: 'eq', value: '' }]
                                                             })}
-                                                            className="w-full py-2.5 border-2 border-dashed border-[hsl(var(--border))] rounded-md text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
                                                         >
                                                             + Add Visibility Rule
                                                         </button>
@@ -4143,7 +4138,7 @@ const FormBuilder: React.FC = () => {
                                                                 target_id: '',
                                                                 conditions: [{ field: '', operator: 'eq', value: '' }]
                                                             })}
-                                                            className="w-full py-2.5 border-2 border-dashed border-[hsl(var(--border))] rounded-md text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
                                                         >
                                                             + Add Skip Rule
                                                         </button>

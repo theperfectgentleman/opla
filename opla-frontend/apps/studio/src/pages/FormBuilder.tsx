@@ -452,11 +452,17 @@ const FormBuilder: React.FC = () => {
                     setIsSectionListOpen(false);
                 }
             }
+            if (swipedFieldId) {
+                const swipedCard = document.getElementById(`field-card-${swipedFieldId}`);
+                if (swipedCard && !swipedCard.contains(event.target as Node)) {
+                    closeVariableSwipe();
+                }
+            }
         };
 
         document.addEventListener('mousedown', handleOutsideClick);
         return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }, []);
+    }, [swipedFieldId]);
 
     const enterSection = (sectionId: string) => {
         setSlideDir('forward');
@@ -679,10 +685,17 @@ const FormBuilder: React.FC = () => {
             (event.currentTarget as HTMLDivElement).releasePointerCapture(event.pointerId);
         }
 
-        const shouldReveal = swipe.swiping && swipeOffset <= -(VARIABLE_DELETE_REVEAL_WIDTH / 2);
+        const deltaX = event.clientX - swipe.startX;
+        const finalOffset = swipe.swiping ? Math.max(-VARIABLE_DELETE_REVEAL_WIDTH, Math.min(0, swipe.offset + deltaX)) : swipeOffset;
+        const shouldReveal = swipe.swiping && finalOffset <= -(VARIABLE_DELETE_REVEAL_WIDTH / 2);
+
         setSwipedFieldId(shouldReveal ? fieldId : null);
         setSwipeOffset(shouldReveal ? -VARIABLE_DELETE_REVEAL_WIDTH : 0);
-        swipeStateRef.current = { fieldId: null, startX: 0, startY: 0, offset: 0, swiping: false };
+
+        // Delay resetting the swiping flag so that the follow-up browser click event knows it was swiping
+        setTimeout(() => {
+            swipeStateRef.current = { fieldId: null, startX: 0, startY: 0, offset: 0, swiping: false };
+        }, 0);
     };
 
     const closeVariableSwipe = () => {
@@ -2204,6 +2217,7 @@ const FormBuilder: React.FC = () => {
                                                                         const isSelectedField = currentSectionId === section.id && selectedFieldId === field.id;
                                                                         return (
                                                                             <div
+                                                                                id={`field-card-${field.id}`}
                                                                                 key={field.id}
                                                                                 onDragOver={(event) => {
                                                                                     event.preventDefault();

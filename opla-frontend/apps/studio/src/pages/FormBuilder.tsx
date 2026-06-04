@@ -392,7 +392,19 @@ const FormBuilder: React.FC = () => {
     const [showSimulatorMenu, setShowSimulatorMenu] = useState(false);
     const [showMultiActionMenu, setShowMultiActionMenu] = useState(false);
     const [showBackupTools, setShowBackupTools] = useState(false);
-    const [isBuilderConsoleOpen, setIsBuilderConsoleOpen] = useState(false);
+    const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'section' | 'widget' | 'console'>('section');
+    const [isSectionListOpen, setIsSectionListOpen] = useState(false);
+    const sectionListRef = React.useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (selectedFieldId) {
+            setActiveSidebarTab('widget');
+            setIsRightSidebarOpen(true);
+        } else {
+            setActiveSidebarTab('section');
+        }
+    }, [selectedFieldId]);
     const [inspectorWidgetType, setInspectorWidgetType] = useState<FieldType>('input_text');
     const [isSmartDropdownOpen, setIsSmartDropdownOpen] = useState(false);
     const [smartSearchQuery, setSmartSearchQuery] = useState('');
@@ -432,6 +444,12 @@ const FormBuilder: React.FC = () => {
             if (smartDropdownRef.current && !smartDropdownRef.current.contains(event.target as Node)) {
                 setIsSmartDropdownOpen(false);
             }
+            if (sectionListRef.current && !sectionListRef.current.contains(event.target as Node)) {
+                const trigger = document.getElementById('section-list-trigger');
+                if (!trigger || !trigger.contains(event.target as Node)) {
+                    setIsSectionListOpen(false);
+                }
+            }
         };
 
         document.addEventListener('mousedown', handleOutsideClick);
@@ -443,11 +461,14 @@ const FormBuilder: React.FC = () => {
         setCurrentSectionId(sectionId);
         setSelectedFieldId(null);
         setView('section');
+        setIsRightSidebarOpen(true);
+        setActiveSidebarTab('section');
     };
     const exitSection = () => {
         setSlideDir('back');
         setSelectedFieldId(null);
         setView('flow');
+        setIsSectionListOpen(false);
     };
 
     const currentSectionIndex = sections.findIndex(p => p.id === currentSectionId) !== -1 ? sections.findIndex(p => p.id === currentSectionId) : 0;
@@ -976,20 +997,6 @@ const FormBuilder: React.FC = () => {
         setHasUnsavedChanges(false);
     };
 
-    const basicTypes: FieldType[] = [
-        'input_text',
-        'input_number',
-        'email_input',
-        'phone_input',
-        'date_picker',
-        'time_picker',
-        'dropdown',
-        'radio_group',
-        'checkbox_group',
-        'toggle',
-        'textarea',
-        'rating_scale'
-    ];
 
     const getWidget = (type: FieldType) => widgetLibrary.find((w) => w.type === type);
 
@@ -1189,27 +1196,6 @@ const FormBuilder: React.FC = () => {
         setSections(prev => prev.map(p => ({ ...p, fields: p.fields.map(f => f.id === id ? { ...f, ...patch } : f) })));
     };
 
-    const changeFieldType = (fieldId: string, nextType: FieldType) => {
-        const widgetDefaults = getWidget(nextType)?.defaults;
-        setSections((prev) => prev.map((section) => ({
-            ...section,
-            fields: section.fields.map((field) => {
-                if (field.id !== fieldId) {
-                    return field;
-                }
-                const typeDefaults = buildFieldTypeDefaults(nextType, widgetDefaults);
-                return {
-                    ...field,
-                    ...typeDefaults,
-                    type: nextType,
-                    id: field.id,
-                    label: field.label,
-                    required: field.required,
-                    platforms: field.platforms?.length ? field.platforms : typeDefaults.platforms,
-                };
-            }),
-        })));
-    };
 
     const updateFieldId = (oldId: string, newId: string) => {
         setSections(prev => prev.map(p => ({ ...p, fields: p.fields.map(f => f.id === oldId ? { ...f, id: newId } : f) })));
@@ -1254,507 +1240,6 @@ const FormBuilder: React.FC = () => {
         setLogic(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
     };
 
-    const renderFlowVariableEditor = () => {
-        const section = sections.find((candidate) => candidate.id === currentSectionId) || selectedSection;
-
-        if (!section || !selectedField) {
-            return (
-                <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section Quick Settings</p>
-                        <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">{section?.title || 'No section selected'}</h4>
-                        <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Select a variable from any section card to edit its widget properties here without leaving Flow Overview.</p>
-                    </div>
-                    <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[hsl(var(--border))]/55 bg-[hsl(var(--surface-elevated))]/30 px-6 text-center">
-                        <div>
-                            <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">No variable selected</p>
-                            <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Click a variable row inside any section card to populate the docked editor.</p>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        const currentWidget = getWidget(selectedField.type);
-        const renderDefaultValueControl = () => {
-            if (selectedField.type === 'matrix_table') {
-                return null;
-            }
-
-            if (['dropdown', 'radio_group'].includes(selectedField.type)) {
-                return (
-                    <select
-                        value={selectedField.default_value || ''}
-                        onChange={(event) => updateField(selectedField.id, { default_value: event.target.value || undefined })}
-                        className="input py-2"
-                    >
-                        <option value="">No Default</option>
-                        {(selectedField.options || []).map((option, index) => (
-                            <option key={`${option.value}_${index}`} value={option.value}>{option.label}</option>
-                        ))}
-                    </select>
-                );
-            }
-
-            if (selectedField.type === 'toggle') {
-                return (
-                    <div className="grid grid-cols-3 gap-2">
-                        {[
-                            { label: selectedField.options?.find((option) => option.value === 'true')?.label ?? 'Yes', value: 'true' },
-                            { label: selectedField.options?.find((option) => option.value === 'false')?.label ?? 'No', value: 'false' },
-                            { label: 'None', value: '' },
-                        ].map(({ label, value }) => {
-                            const active = (selectedField.default_value ?? '') === value;
-                            return (
-                                <button
-                                    key={value}
-                                    onClick={() => updateField(selectedField.id, { default_value: value || undefined })}
-                                    className={`rounded-xl px-3 py-2 text-xs font-semibold transition-all ${active
-                                        ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                        : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                        }`}
-                                >
-                                    {label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                );
-            }
-
-            return (
-                <input
-                    type={selectedField.type === 'input_number' ? 'number' : selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'text'}
-                    value={selectedField.default_value || ''}
-                    onChange={(event) => updateField(selectedField.id, { default_value: event.target.value || undefined })}
-                    className="input"
-                    placeholder="Optional default value"
-                />
-            );
-        };
-
-        return (
-            <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-                <div className="space-y-4">
-                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section Quick Settings</p>
-                        <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title}</h4>
-                        <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">These section-level settings stay available while you edit a variable from the flow canvas.</p>
-                        <div className="mt-4 space-y-3">
-                            <div>
-                                <label className="label mb-2">Render Mode</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {(['list', 'single'] as RenderMode[]).map((mode) => {
-                                        const active = section.properties.render_mode === mode;
-                                        return (
-                                            <button
-                                                key={mode}
-                                                onClick={() => updateCurrentSectionProperties({ render_mode: mode })}
-                                                className={`rounded-xl px-3 py-2 text-xs font-semibold transition-all ${active
-                                                    ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                    : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                    }`}
-                                            >
-                                                {mode === 'list' ? 'List' : 'Single'}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <label className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-3.5 cursor-pointer border border-transparent hover:bg-[hsl(var(--surface-elevated))] transition-all">
-                                <div>
-                                    <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Shuffle Options</p>
-                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Randomize choice order in this section.</p>
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={!!section.properties.shuffle_options}
-                                    onChange={(event) => updateCurrentSectionProperties({ shuffle_options: event.target.checked })}
-                                    className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
-                                />
-                            </label>
-
-                            <button
-                                onClick={() => enterSection(section.id)}
-                                className="w-full rounded-xl bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3 py-2.5 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all flex items-center justify-center border border-transparent hover:text-[hsl(var(--primary))] shadow-sm"
-                            >
-                                Open Full Section Editor
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Basic Widgets</p>
-                                <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">Swap widget type</h4>
-                            </div>
-                            <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] shadow-sm border border-[hsl(var(--border))]/20">
-                                {currentWidget?.label || selectedField.type}
-                            </div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 gap-2">
-                            {basicTypes.map((type) => {
-                                const widget = getWidget(type);
-                                if (!widget) return null;
-                                const active = selectedField.type === type;
-                                return (
-                                    <button
-                                        key={type}
-                                        onClick={() => changeFieldType(selectedField.id, type)}
-                                        className={`flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-semibold transition-all ${active
-                                            ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                            : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                            }`}
-                                    >
-                                        <span className="shrink-0 text-[hsl(var(--primary))]">{widget.icon}</span>
-                                        <span className="truncate">{widget.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-4">
-                    <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Variable Editor</p>
-                                <h4 className="mt-2 text-base font-semibold text-[hsl(var(--text-primary))]">{selectedField.label}</h4>
-                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">Editing inside {section.title}. Changes save into the same draft blueprint as Section View.</p>
-                            </div>
-                            <button
-                                onClick={() => enterSection(section.id)}
-                                className="rounded-xl bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all flex items-center justify-center border border-transparent hover:text-[hsl(var(--primary))] shadow-sm"
-                            >
-                                Open Full Inspector
-                            </button>
-                        </div>
-
-                        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                            <div className="space-y-4 rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-4">
-                                <div>
-                                    <label className="label">Label</label>
-                                    <input
-                                        value={selectedField.label}
-                                        onChange={(event) => updateField(selectedField.id, { label: event.target.value })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Bind Key</label>
-                                    <input
-                                        value={selectedField.id}
-                                        onChange={(event) => updateFieldId(selectedField.id, event.target.value)}
-                                        className="input font-mono text-xs"
-                                    />
-                                </div>
-                                <label className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface))]/70 p-3.5 cursor-pointer shadow-sm">
-                                    <div>
-                                        <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Required</p>
-                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Make this variable mandatory.</p>
-                                    </div>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedField.required}
-                                        onChange={(event) => updateField(selectedField.id, { required: event.target.checked })}
-                                        className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
-                                    />
-                                </label>
-                                {['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
-                                    <div>
-                                        <label className="label">Placeholder</label>
-                                        <input
-                                            value={selectedField.placeholder || ''}
-                                            onChange={(event) => updateField(selectedField.id, { placeholder: event.target.value })}
-                                            className="input"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="space-y-4 rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-4">
-                                <div>
-                                    <label className="label">Platforms</label>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => (
-                                            <label key={platform} className="flex items-center gap-2 rounded-xl bg-[hsl(var(--surface))]/70 px-3 py-2.5 text-xs font-semibold capitalize text-[hsl(var(--text-secondary))] cursor-pointer hover:bg-[hsl(var(--surface))] transition-all shadow-sm">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedField.platforms?.includes(platform) || false}
-                                                    onChange={(event) => {
-                                                        const next = new Set(selectedField.platforms || []);
-                                                        if (event.target.checked) next.add(platform);
-                                                        else next.delete(platform);
-                                                        updateField(selectedField.id, { platforms: Array.from(next) });
-                                                    }}
-                                                    className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
-                                                />
-                                                <span>{platform}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="label">Default Value</label>
-                                    {renderDefaultValueControl()}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    {[
-                                        { key: 'is_sensitive', label: 'Sensitive' },
-                                        { key: 'exclude_from_export', label: 'Exclude Export' },
-                                    ].map(({ key, label }) => (
-                                        <label key={key} className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface))]/70 px-3 py-2.5 cursor-pointer hover:bg-[hsl(var(--surface))] transition-all shadow-sm">
-                                            <span className="text-xs font-semibold text-[hsl(var(--text-secondary))]">{label}</span>
-                                            <input
-                                                type="checkbox"
-                                                checked={!!(selectedField as any)[key]}
-                                                onChange={(event) => updateField(selectedField.id, { [key]: event.target.checked } as any)}
-                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))]"
-                                            />
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {['dropdown', 'radio_group', 'checkbox_group', 'toggle'].includes(selectedField.type) && (
-                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <div>
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Choice Editor</p>
-                                    <h4 className="mt-2 text-sm font-semibold text-[hsl(var(--text-primary))]">Options and routing</h4>
-                                </div>
-                                {selectedField.type !== 'toggle' && (
-                                    <button
-                                        onClick={() => {
-                                            const nextIndex = (selectedField.options?.length || 0) + 1;
-                                            const label = `Option ${nextIndex}`;
-                                            updateField(selectedField.id, { options: [...(selectedField.options || []), { label, value: toSmartValue(label) }] });
-                                        }}
-                                        className="rounded-xl bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-all flex items-center justify-center border border-transparent hover:text-[hsl(var(--primary))] shadow-sm"
-                                    >
-                                        Add Option
-                                    </button>
-                                )}
-                            </div>
-
-                            {selectedField.type === 'toggle' ? (
-                                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                    {[
-                                        { yes: 'Yes', no: 'No' },
-                                        { yes: 'True', no: 'False' },
-                                        { yes: 'On', no: 'Off' },
-                                        { yes: 'Agree', no: 'Disagree' },
-                                        { yes: 'Enabled', no: 'Disabled' },
-                                        { yes: 'Allow', no: 'Deny' },
-                                    ].map(({ yes, no }) => {
-                                        const currentYes = selectedField.options?.find((option) => option.value === 'true')?.label;
-                                        const active = currentYes === yes;
-                                        return (
-                                            <button
-                                                key={yes}
-                                                onClick={() => updateField(selectedField.id, { options: [{ label: yes, value: 'true' }, { label: no, value: 'false' }] })}
-                                                className={`rounded-xl px-3 py-3 text-left text-xs font-semibold transition-all ${active
-                                                    ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                    : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                    }`}
-                                            >
-                                                {yes} / {no}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                                    {(selectedField.options || []).map((option, index) => (
-                                        <div key={`${option.value}_${index}`} className="rounded-xl bg-[hsl(var(--surface-elevated))]/60 p-3">
-                                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_auto]">
-                                                <input
-                                                    value={option.label}
-                                                    onChange={(event) => {
-                                                        const nextOptions = [...(selectedField.options || [])];
-                                                        nextOptions[index] = { ...nextOptions[index], label: event.target.value, value: nextOptions[index].value || toSmartValue(event.target.value) };
-                                                        updateField(selectedField.id, { options: nextOptions });
-                                                    }}
-                                                    className="input text-sm"
-                                                    placeholder="Label"
-                                                />
-                                                <input
-                                                    value={option.value}
-                                                    onChange={(event) => {
-                                                        const nextOptions = [...(selectedField.options || [])];
-                                                        nextOptions[index] = { ...nextOptions[index], value: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') };
-                                                        updateField(selectedField.id, { options: nextOptions });
-                                                    }}
-                                                    className="input font-mono text-xs"
-                                                    placeholder="value_key"
-                                                />
-                                                <button
-                                                    onClick={() => updateField(selectedField.id, { options: (selectedField.options || []).filter((_, optionIndex) => optionIndex !== index) })}
-                                                    className="rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] px-3 py-2 text-xs font-semibold transition-all"
-                                                >
-                                                    Remove
-                                                </button>
-                                            </div>
-                                            <select
-                                                value={option.skip_to || ''}
-                                                onChange={(event) => {
-                                                    const nextOptions = [...(selectedField.options || [])];
-                                                    nextOptions[index] = { ...nextOptions[index], skip_to: event.target.value || undefined };
-                                                    updateField(selectedField.id, { options: nextOptions });
-                                                }}
-                                                className="input mt-3 py-2 text-xs"
-                                            >
-                                                <option value="">No route change</option>
-                                                {sections.map((candidateSection) => (
-                                                    <option key={candidateSection.id} value={candidateSection.id}>{candidateSection.title}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {selectedField.type === 'input_number' && (
-                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Number Rules</p>
-                            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                                <div>
-                                    <label className="label">Min Value</label>
-                                    <input
-                                        type="number"
-                                        value={selectedField.min || ''}
-                                        onChange={(event) => updateField(selectedField.id, { min: parseInt(event.target.value, 10) || undefined })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Max Value</label>
-                                    <input
-                                        type="number"
-                                        value={selectedField.max || ''}
-                                        onChange={(event) => updateField(selectedField.id, { max: parseInt(event.target.value, 10) || undefined })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div className="lg:col-span-3">
-                                    <label className="label">Computed Formula</label>
-                                    <input
-                                        value={selectedField.formula || ''}
-                                        onChange={(event) => updateField(selectedField.id, { formula: event.target.value || undefined })}
-                                        className="input font-mono text-xs"
-                                        placeholder="e.g. sum(line_items.line_total)"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {selectedField.type === 'rating_scale' && (
-                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Scale Configuration</p>
-                            <div className="mt-4 grid gap-4 lg:grid-cols-4">
-                                <div>
-                                    <label className="label">Min Value</label>
-                                    <input
-                                        type="number"
-                                        value={selectedField.min || 1}
-                                        onChange={(event) => updateField(selectedField.id, { min: parseInt(event.target.value, 10) || 1 })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Max Value</label>
-                                    <input
-                                        type="number"
-                                        value={selectedField.max || 5}
-                                        onChange={(event) => updateField(selectedField.id, { max: parseInt(event.target.value, 10) || 5 })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Min Label</label>
-                                    <input
-                                        value={selectedField.min_label || ''}
-                                        onChange={(event) => updateField(selectedField.id, { min_label: event.target.value })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Max Label</label>
-                                    <input
-                                        value={selectedField.max_label || ''}
-                                        onChange={(event) => updateField(selectedField.id, { max_label: event.target.value })}
-                                        className="input"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {['date_picker', 'time_picker'].includes(selectedField.type) && (
-                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Range Limits</p>
-                            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                                <div>
-                                    <label className="label">Min {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
-                                    <input
-                                        type={selectedField.type === 'date_picker' ? 'date' : 'time'}
-                                        value={selectedField.min || ''}
-                                        onChange={(event) => updateField(selectedField.id, { min: event.target.value || undefined })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Max {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
-                                    <input
-                                        type={selectedField.type === 'date_picker' ? 'date' : 'time'}
-                                        value={selectedField.max || ''}
-                                        onChange={(event) => updateField(selectedField.id, { max: event.target.value || undefined })}
-                                        className="input"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
-                        <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/50 p-4">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Validation</p>
-                            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                                <div>
-                                    <label className="label">Min Length</label>
-                                    <input
-                                        type="number"
-                                        value={selectedField.minLength || ''}
-                                        onChange={(event) => updateField(selectedField.id, { minLength: parseInt(event.target.value, 10) || undefined })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Max Length</label>
-                                    <input
-                                        type="number"
-                                        value={selectedField.maxLength || ''}
-                                        onChange={(event) => updateField(selectedField.id, { maxLength: parseInt(event.target.value, 10) || undefined })}
-                                        className="input"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
 
     const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
     const [templateName, setTemplateName] = useState('');
@@ -2400,9 +1885,16 @@ const FormBuilder: React.FC = () => {
                                 </button>
                             </div>
                             {view === 'section' && (
-                                <div className="max-w-[220px] truncate rounded-full border border-[hsl(var(--primary))]/18 bg-[hsl(var(--primary))]/8 px-3 py-1 text-[11px] font-semibold text-[hsl(var(--primary))] animate-in fade-in duration-200">
-                                    {sections.find(s => s.id === currentSectionId)?.title || 'Section'}
-                                </div>
+                                <button
+                                    id="section-list-trigger"
+                                    onClick={() => setIsSectionListOpen(!isSectionListOpen)}
+                                    className="flex items-center gap-2 max-w-[220px] truncate rounded-full border border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/8 hover:bg-[hsl(var(--primary))]/12 px-3 py-1.5 text-[11px] font-semibold text-[hsl(var(--primary))] shadow-sm transition-all animate-in fade-in duration-200"
+                                    title="View sections list"
+                                >
+                                    <Layers className="w-3.5 h-3.5" />
+                                    <span>{sections.find(s => s.id === currentSectionId)?.title || 'Section'}</span>
+                                    <ChevronDown className={`w-3 h-3 transition-transform ${isSectionListOpen ? 'rotate-180' : ''}`} />
+                                </button>
                             )}
                         </div>
                     </div>
@@ -2430,10 +1922,10 @@ const FormBuilder: React.FC = () => {
                         }`}>
 
 
-                    <div className="flex min-h-0 flex-1 overflow-hidden">
+                    <div className="flex min-h-0 flex-1 overflow-hidden relative">
                     {/* Left Panel: Section Navigator — only in Section View */}
-                    {view === 'section' && (
-                        <aside className="w-80 border-r border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex h-full overflow-hidden animate-in slide-in-from-left-4 fade-in duration-300">
+                    {view === 'section' && isSectionListOpen && (
+                        <aside ref={sectionListRef} className="absolute left-4 top-3 bottom-4 z-40 w-80 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex h-auto overflow-hidden rounded-2xl shadow-2xl animate-in slide-in-from-left-4 fade-in duration-300">
                             <div className="flex w-14 flex-col items-center gap-2 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/80 px-2 py-3">
                                 <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))] shadow-[inset_2px_0_0_hsl(var(--primary))]">
                                     <Layers className="w-4 h-4" />
@@ -2451,6 +1943,7 @@ const FormBuilder: React.FC = () => {
                                             onClick={() => {
                                                 addSection();
                                                 setSelectedFieldId(null);
+                                                setIsSectionListOpen(false);
                                             }}
                                             className="rounded-md border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
                                         >
@@ -2469,6 +1962,7 @@ const FormBuilder: React.FC = () => {
                                                 onClick={() => {
                                                     setCurrentSectionId(section.id);
                                                     setSelectedFieldId(null);
+                                                    setIsSectionListOpen(false);
                                                 }}
                                                 className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
                                                     ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/6 text-[hsl(var(--primary))] shadow-sm'
@@ -2786,20 +2280,6 @@ const FormBuilder: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="shrink-0 border-t border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/60 px-5 py-4">
-                                            <div className="mb-3 flex items-center justify-between gap-3">
-                                                <div>
-                                                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Docked Editor</p>
-                                                    <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Flow Variable Editor</h3>
-                                                </div>
-                                                <div className="rounded-lg border border-[hsl(var(--border))]/20 bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] shadow-sm">
-                                                    {selectedField ? selectedField.type.replace(/_/g, ' ') : 'idle'}
-                                                </div>
-                                            </div>
-                                            <div className="max-h-[340px] overflow-y-auto hide-scrollbar pr-1">
-                                                {renderFlowVariableEditor()}
-                                            </div>
-                                        </div>
                                     </div>
                             </div>
                         ) : (
@@ -3145,47 +2625,71 @@ const FormBuilder: React.FC = () => {
                         </div>
                     </main>
 
-                     {/* Right Panel — Inspector Mode only */}
-                     {view === 'section' && (
-                         <aside className="w-80 border-l border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden">
-                         <div className="flex h-full flex-col">
-                                 <div className="bg-[hsl(var(--surface-elevated))] p-1 rounded-xl mx-4 mt-4 mb-2 flex gap-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
-                                         <button
-                                             onClick={() => {
-                                                 setPropertyTab('content');
-                                                 setSelectedFieldId(null);
-                                             }}
-                                             className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${!selectedField
-                                                 ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
-                                                 : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
-                                                 }`}
-                                         >
-                                             <Settings className="w-3.5 h-3.5" />
-                                             <span>Section</span>
-                                         </button>
-                                         <button
-                                             onClick={() => {
-                                                 setPropertyTab('content');
-                                                 if (!selectedField) {
-                                                     showToast('Select a widget', 'Click a widget in the center pane to edit its properties.', 'info');
-                                                 }
-                                             }}
-                                             className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${selectedField
-                                                 ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
-                                                 : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
-                                                 }`}
-                                         >
-                                             <Type className="w-3.5 h-3.5" />
-                                             <span>Widget</span>
-                                         </button>
-                                 </div>
 
-                                <div className="flex-1 overflow-y-auto p-6 hide-scrollbar">
-                                    {propertyTab === 'content' ? (
-                                        <>
-                                            {!selectedField ? (
-                                                <div className="space-y-5 animate-in fade-in duration-200">
-                                                    {/* Section Title */}
+                    </div>
+
+                    </div>
+
+                    <aside className="flex h-full shrink-0 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55">
+                        {isRightSidebarOpen && (
+                            <div className="w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden animate-in slide-in-from-right-4 fade-in duration-300">
+                                {/* Top Tab Bar */}
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-3 py-2 flex gap-1">
+                                    {(['section', 'widget', 'console'] as const).map((tab) => {
+                                        const label = tab === 'section' ? 'Section' : tab === 'widget' ? 'Widget' : 'Console';
+                                        const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
+                                        const isActive = activeSidebarTab === tab;
+                                        return (
+                                            <button
+                                                key={tab}
+                                                onClick={() => {
+                                                    setActiveSidebarTab(tab);
+                                                }}
+                                                className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                                    isActive
+                                                        ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
+                                                        : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
+                                                }`}
+                                            >
+                                                <Icon className="w-3.5 h-3.5" />
+                                                <span>{label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Tab Contents */}
+                                <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col">
+                                    {activeSidebarTab === 'section' && (
+                                        <div className="flex-1 flex flex-col">
+                                            {/* Sub-tab Pill Selector */}
+                                            <div className="px-4 pt-4 pb-2 flex gap-2">
+                                                <button
+                                                    onClick={() => setPropertyTab('content')}
+                                                    className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
+                                                        propertyTab === 'content'
+                                                            ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
+                                                            : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
+                                                    }`}
+                                                >
+                                                    Settings
+                                                </button>
+                                                <button
+                                                    onClick={() => setPropertyTab('logic')}
+                                                    className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
+                                                        propertyTab === 'logic'
+                                                            ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
+                                                            : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
+                                                    }`}
+                                                >
+                                                    Logic Rules
+                                                </button>
+                                            </div>
+
+                                            <div className="flex-1 p-6 pt-2 overflow-y-auto hide-scrollbar">
+                                                {propertyTab === 'content' ? (
+                                                    <div className="space-y-5 animate-in fade-in duration-200">
+                                                                                                            {/* Section Title */}
                                                     <div>
                                                         <h3 className="text-sm font-bold text-[hsl(var(--text-primary))] mb-4 flex items-center">
                                                             Section Settings
@@ -3335,9 +2839,275 @@ const FormBuilder: React.FC = () => {
                                                     </div>
 
                                                     <p className="text-[hsl(var(--text-tertiary))] text-xs italic">Select a field in the canvas to see its individual properties.</p>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
+
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-6 animate-in fade-in duration-200">
+                                                                                                            <div className="flex items-center justify-between">
+                                                        <h3 className="text-sm font-bold flex items-center">
+                                                            <GitBranch className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
+                                                            Section Logic
+                                                        </h3>
+                                                    </div>
+                                                    <p className="text-[hsl(var(--text-secondary))] text-xs">Control this section's visibility and navigation.</p>
+
+                                                    {/* Section Visibility Rules */}
+                                                    <div className="space-y-2">
+                                                        <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Visibility</p>
+                                                        {logic.filter(r => r.type === 'section_visibility' && r.source_id === currentSectionId).map(rule => (
+                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group">
+                                                                <button
+                                                                    onClick={() => removeLogicRule(rule.id)}
+                                                                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
+
+                                                                {/* Timing badge */}
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
+                                                                    <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
+                                                                        {(['pre', 'post'] as const).map(t => (
+                                                                            <button
+                                                                                key={t}
+                                                                                onClick={() => updateLogicRule(rule.id, { timing: t })}
+                                                                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
+                                                                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
+                                                                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                                    }`}
+                                                                            >
+                                                                                {t}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-3">
+                                                                    {rule.conditions.map((cond, cIdx) => (
+                                                                        <div key={cIdx} className="space-y-2">
+                                                                            <select
+                                                                                value={cond.field}
+                                                                                onChange={(e) => {
+                                                                                    const newConds = [...rule.conditions];
+                                                                                    newConds[cIdx].field = e.target.value;
+                                                                                    updateLogicRule(rule.id, { conditions: newConds });
+                                                                                }}
+                                                                                className="input-sm w-full py-1.5"
+                                                                            >
+                                                                                <option value="">Select Field...</option>
+                                                                                {sections.flatMap(p => p.fields).map(f => (
+                                                                                    <option key={f.id} value={f.id}>{f.label}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                            <div className="flex space-x-2">
+                                                                                <select
+                                                                                    value={cond.operator}
+                                                                                    onChange={(e) => {
+                                                                                        const newConds = [...rule.conditions];
+                                                                                        newConds[cIdx].operator = e.target.value as any;
+                                                                                        updateLogicRule(rule.id, { conditions: newConds });
+                                                                                    }}
+                                                                                    className="input-sm w-1/2 py-1.5"
+                                                                                >
+                                                                                    <option value="eq">Equals</option>
+                                                                                    <option value="neq">Not Equal</option>
+                                                                                    <option value="contains">Contains</option>
+                                                                                    <option value="gt">Greater Than</option>
+                                                                                    <option value="lt">Less Than</option>
+                                                                                </select>
+                                                                                <input
+                                                                                    value={cond.value}
+                                                                                    onChange={(e) => {
+                                                                                        const newConds = [...rule.conditions];
+                                                                                        newConds[cIdx].value = e.target.value;
+                                                                                        updateLogicRule(rule.id, { conditions: newConds });
+                                                                                    }}
+                                                                                    placeholder="Value"
+                                                                                    className="input-sm w-1/2 py-1.5"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+                                                                    <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">THEN</span>
+                                                                    <select
+                                                                        value={rule.action}
+                                                                        onChange={(e) => updateLogicRule(rule.id, { action: e.target.value as any })}
+                                                                        className="bg-transparent border-none text-[hsl(var(--primary))] font-bold p-0 focus:ring-0 cursor-pointer"
+                                                                    >
+                                                                        <option value="show">Show Section</option>
+                                                                        <option value="hide">Hide Section</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        <button
+                                                            onClick={() => addLogicRule({
+                                                                type: 'section_visibility',
+                                                                timing: 'pre',
+                                                                source_id: currentSectionId,
+                                                                target_id: currentSectionId,
+                                                                action: 'show',
+                                                                conditions: [{ field: '', operator: 'eq', value: '' }]
+                                                            })}
+                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
+                                                        >
+                                                            + Add Visibility Rule
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Section Skip / Jump Rules */}
+                                                    <div className="space-y-2">
+                                                        <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Navigation</p>
+                                                        {logic.filter(r => r.type === 'section_jump' && r.source_id === currentSectionId).map(rule => (
+                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] space-y-4 relative group">
+                                                                <button
+                                                                    onClick={() => removeLogicRule(rule.id)}
+                                                                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
+
+                                                                {/* Timing badge */}
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">IF</span>
+                                                                    <div className="flex items-center bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg p-0.5 gap-0.5">
+                                                                        {(['pre', 'post'] as const).map(t => (
+                                                                            <button
+                                                                                key={t}
+                                                                                onClick={() => updateLogicRule(rule.id, { timing: t })}
+                                                                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
+                                                                                    ? 'bg-[hsl(var(--primary))] text-white'
+                                                                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                                    }`}
+                                                                            >
+                                                                                {t}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-3">
+                                                                    {rule.conditions.map((cond, cIdx) => (
+                                                                        <div key={cIdx} className="space-y-2">
+                                                                            <select
+                                                                                value={cond.field}
+                                                                                onChange={(e) => {
+                                                                                    const newConds = [...rule.conditions];
+                                                                                    newConds[cIdx].field = e.target.value;
+                                                                                    updateLogicRule(rule.id, { conditions: newConds });
+                                                                                }}
+                                                                                className="input-sm w-full py-1.5"
+                                                                            >
+                                                                                <option value="">Select Field...</option>
+                                                                                {sections.find(p => p.id === currentSectionId)?.fields.map(f => (
+                                                                                    <option key={f.id} value={f.id}>{f.label}</option>
+                                                                                ))}
+                                                                            </select>
+
+                                                                            <div className="flex space-x-2">
+                                                                                <select
+                                                                                    value={cond.operator}
+                                                                                    onChange={(e) => {
+                                                                                        const newConds = [...rule.conditions];
+                                                                                        newConds[cIdx].operator = e.target.value as any;
+                                                                                        updateLogicRule(rule.id, { conditions: newConds });
+                                                                                    }}
+                                                                                    className="input-sm w-1/2 py-1.5"
+                                                                                >
+                                                                                    <option value="eq">Equals</option>
+                                                                                    <option value="neq">Not Equal</option>
+                                                                                    <option value="contains">Contains</option>
+                                                                                    <option value="gt">Greater Than</option>
+                                                                                    <option value="lt">Less Than</option>
+                                                                                </select>
+                                                                                <input
+                                                                                    value={cond.value}
+                                                                                    onChange={(e) => {
+                                                                                        const newConds = [...rule.conditions];
+                                                                                        newConds[cIdx].value = e.target.value;
+                                                                                        updateLogicRule(rule.id, { conditions: newConds });
+                                                                                    }}
+                                                                                    placeholder="Value"
+                                                                                    className="input-sm w-1/2 py-1.5"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+                                                                    <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">GOTO</span>
+                                                                    <select
+                                                                        value={rule.target_id}
+                                                                        onChange={(e) => updateLogicRule(rule.id, { target_id: e.target.value })}
+                                                                        className="bg-transparent border-none text-[hsl(var(--primary))] font-bold p-0 focus:ring-0 cursor-pointer"
+                                                                    >
+                                                                        <option value="">Next Section (Default)</option>
+                                                                        {sections.filter(p => p.id !== currentSectionId).map(p => (
+                                                                            <option key={p.id} value={p.id}>{p.title}</option>
+                                                                        ))}
+                                                                        <option value="end">End Survey</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+
+                                                        <button
+                                                            onClick={() => addLogicRule({
+                                                                type: 'section_jump',
+                                                                timing: 'post',
+                                                                source_id: currentSectionId,
+                                                                action: 'jump_to',
+                                                                target_id: '',
+                                                                conditions: [{ field: '', operator: 'eq', value: '' }]
+                                                            })}
+                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
+                                                        >
+                                                            + Add Skip Rule
+                                                        </button>
+                                                    </div>
+
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {activeSidebarTab === 'widget' && (
+                                        <div className="flex-1 flex flex-col">
+                                            {selectedField ? (
+                                                <>
+                                                    {/* Sub-tab Pill Selector */}
+                                                    <div className="px-4 pt-4 pb-2 flex gap-2">
+                                                        <button
+                                                            onClick={() => setPropertyTab('content')}
+                                                            className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
+                                                                propertyTab === 'content'
+                                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
+                                                                    : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
+                                                            }`}
+                                                        >
+                                                            Settings
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setPropertyTab('logic')}
+                                                            className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
+                                                                propertyTab === 'logic'
+                                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
+                                                                    : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
+                                                            }`}
+                                                        >
+                                                            Logic Rules
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="flex-1 p-6 pt-2 overflow-y-auto hide-scrollbar">
+                                                        {propertyTab === 'content' ? (
+                                                            <div className="space-y-5 animate-in fade-in duration-200">
+                                                                                                                <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
                                                     <div>
                                                         <label className="label">Label</label>
                                                         <input
@@ -4259,13 +4029,11 @@ const FormBuilder: React.FC = () => {
                                                         </div>
                                                     )}
                                                 </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-2 duration-200">
-                                            {selectedField ? (
-                                                <>
-                                                    <div className="flex items-center justify-between">
+
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-6 animate-in fade-in duration-200">
+                                                                                                                    <div className="flex items-center justify-between">
                                                         <h3 className="text-sm font-bold flex items-center">
                                                             <Zap className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
                                                             Field Logic
@@ -4371,264 +4139,40 @@ const FormBuilder: React.FC = () => {
                                                             + Add Visibility Rule
                                                         </button>
                                                     </div>
+
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </>
                                             ) : (
-                                                <>
-                                                    <div className="flex items-center justify-between">
-                                                        <h3 className="text-sm font-bold flex items-center">
-                                                            <GitBranch className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
-                                                            Section Logic
-                                                        </h3>
+                                                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+                                                    <div className="h-12 w-12 rounded-2xl bg-[hsl(var(--surface-elevated))]/60 border border-[hsl(var(--border))]/40 flex items-center justify-center text-[hsl(var(--text-tertiary))] mb-4 shadow-sm">
+                                                        <Type className="w-5 h-5" />
                                                     </div>
-                                                    <p className="text-[hsl(var(--text-secondary))] text-xs">Control this section's visibility and navigation.</p>
-
-                                                    {/* Section Visibility Rules */}
-                                                    <div className="space-y-2">
-                                                        <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Visibility</p>
-                                                        {logic.filter(r => r.type === 'section_visibility' && r.source_id === currentSectionId).map(rule => (
-                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group">
-                                                                <button
-                                                                    onClick={() => removeLogicRule(rule.id)}
-                                                                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-
-                                                                {/* Timing badge */}
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
-                                                                    <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
-                                                                        {(['pre', 'post'] as const).map(t => (
-                                                                            <button
-                                                                                key={t}
-                                                                                onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
-                                                                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
-                                                                                    }`}
-                                                                            >
-                                                                                {t}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-3">
-                                                                    {rule.conditions.map((cond, cIdx) => (
-                                                                        <div key={cIdx} className="space-y-2">
-                                                                            <select
-                                                                                value={cond.field}
-                                                                                onChange={(e) => {
-                                                                                    const newConds = [...rule.conditions];
-                                                                                    newConds[cIdx].field = e.target.value;
-                                                                                    updateLogicRule(rule.id, { conditions: newConds });
-                                                                                }}
-                                                                                className="input-sm w-full py-1.5"
-                                                                            >
-                                                                                <option value="">Select Field...</option>
-                                                                                {sections.flatMap(p => p.fields).map(f => (
-                                                                                    <option key={f.id} value={f.id}>{f.label}</option>
-                                                                                ))}
-                                                                            </select>
-                                                                            <div className="flex space-x-2">
-                                                                                <select
-                                                                                    value={cond.operator}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].operator = e.target.value as any;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                >
-                                                                                    <option value="eq">Equals</option>
-                                                                                    <option value="neq">Not Equal</option>
-                                                                                    <option value="contains">Contains</option>
-                                                                                    <option value="gt">Greater Than</option>
-                                                                                    <option value="lt">Less Than</option>
-                                                                                </select>
-                                                                                <input
-                                                                                    value={cond.value}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].value = e.target.value;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    placeholder="Value"
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-
-                                                                <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
-                                                                    <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">THEN</span>
-                                                                    <select
-                                                                        value={rule.action}
-                                                                        onChange={(e) => updateLogicRule(rule.id, { action: e.target.value as any })}
-                                                                        className="bg-transparent border-none text-[hsl(var(--primary))] font-bold p-0 focus:ring-0 cursor-pointer"
-                                                                    >
-                                                                        <option value="show">Show Section</option>
-                                                                        <option value="hide">Hide Section</option>
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                        <button
-                                                            onClick={() => addLogicRule({
-                                                                type: 'section_visibility',
-                                                                timing: 'pre',
-                                                                source_id: currentSectionId,
-                                                                target_id: currentSectionId,
-                                                                action: 'show',
-                                                                conditions: [{ field: '', operator: 'eq', value: '' }]
-                                                            })}
-                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
-                                                        >
-                                                            + Add Visibility Rule
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Section Skip / Jump Rules */}
-                                                    <div className="space-y-2">
-                                                        <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Navigation</p>
-                                                        {logic.filter(r => r.type === 'section_jump' && r.source_id === currentSectionId).map(rule => (
-                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] space-y-4 relative group">
-                                                                <button
-                                                                    onClick={() => removeLogicRule(rule.id)}
-                                                                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-
-                                                                {/* Timing badge */}
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">IF</span>
-                                                                    <div className="flex items-center bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg p-0.5 gap-0.5">
-                                                                        {(['pre', 'post'] as const).map(t => (
-                                                                            <button
-                                                                                key={t}
-                                                                                onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                    ? 'bg-[hsl(var(--primary))] text-white'
-                                                                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
-                                                                                    }`}
-                                                                            >
-                                                                                {t}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-3">
-                                                                    {rule.conditions.map((cond, cIdx) => (
-                                                                        <div key={cIdx} className="space-y-2">
-                                                                            <select
-                                                                                value={cond.field}
-                                                                                onChange={(e) => {
-                                                                                    const newConds = [...rule.conditions];
-                                                                                    newConds[cIdx].field = e.target.value;
-                                                                                    updateLogicRule(rule.id, { conditions: newConds });
-                                                                                }}
-                                                                                className="input-sm w-full py-1.5"
-                                                                            >
-                                                                                <option value="">Select Field...</option>
-                                                                                {sections.find(p => p.id === currentSectionId)?.fields.map(f => (
-                                                                                    <option key={f.id} value={f.id}>{f.label}</option>
-                                                                                ))}
-                                                                            </select>
-
-                                                                            <div className="flex space-x-2">
-                                                                                <select
-                                                                                    value={cond.operator}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].operator = e.target.value as any;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                >
-                                                                                    <option value="eq">Equals</option>
-                                                                                    <option value="neq">Not Equal</option>
-                                                                                    <option value="contains">Contains</option>
-                                                                                    <option value="gt">Greater Than</option>
-                                                                                    <option value="lt">Less Than</option>
-                                                                                </select>
-                                                                                <input
-                                                                                    value={cond.value}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].value = e.target.value;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    placeholder="Value"
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-
-                                                                <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
-                                                                    <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">GOTO</span>
-                                                                    <select
-                                                                        value={rule.target_id}
-                                                                        onChange={(e) => updateLogicRule(rule.id, { target_id: e.target.value })}
-                                                                        className="bg-transparent border-none text-[hsl(var(--primary))] font-bold p-0 focus:ring-0 cursor-pointer"
-                                                                    >
-                                                                        <option value="">Next Section (Default)</option>
-                                                                        {sections.filter(p => p.id !== currentSectionId).map(p => (
-                                                                            <option key={p.id} value={p.id}>{p.title}</option>
-                                                                        ))}
-                                                                        <option value="end">End Survey</option>
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-
-                                                        <button
-                                                            onClick={() => addLogicRule({
-                                                                type: 'section_jump',
-                                                                timing: 'post',
-                                                                source_id: currentSectionId,
-                                                                action: 'jump_to',
-                                                                target_id: '',
-                                                                conditions: [{ field: '', operator: 'eq', value: '' }]
-                                                            })}
-                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
-                                                        >
-                                                            + Add Skip Rule
-                                                        </button>
-                                                    </div>
-                                                </>
+                                                    <h4 className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-primary))]">No Widget Selected</h4>
+                                                    <p className="mt-2 text-xs text-[hsl(var(--text-secondary))] max-w-[200px] leading-relaxed">
+                                                        Click on any widget card in the canvas to view and configure its properties.
+                                                    </p>
+                                                </div>
                                             )}
                                         </div>
                                     )}
-                                </div>
-                            </div>
-                        </aside>
-                    )}
 
-                    </div>
+                                    {activeSidebarTab === 'console' && (
+                                        <div className="flex-1 flex flex-col overflow-hidden">
+                                            <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-4 py-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Builder Panel</p>
+                                                        <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Form Console</h3>
+                                                    </div>
+                                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                        {view === 'flow' ? 'flow' : 'inspector'}
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                    </div>
-
-                    <aside className="flex h-full shrink-0 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55">
-                        {isBuilderConsoleOpen && (
-                            <div className="w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden">
-                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-4 py-3">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Builder Panel</p>
-                                            <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Form Console</h3>
-                                        </div>
-                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                            {view === 'flow' ? 'flow' : 'inspector'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
+                                                                            <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
                                     <div className="grid grid-cols-2 gap-2">
                                         <div ref={multiActionMenuRef} className="relative">
                                             <div className="w-full flex rounded-md overflow-hidden border border-[hsl(var(--primary))] shadow-lg shadow-black/10">
@@ -4797,33 +4341,47 @@ const FormBuilder: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
+
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
-                        <div className="w-14 flex flex-col items-center gap-3 py-3 px-2">
-                            <button
-                                onClick={() => {
-                                    const next = !isBuilderConsoleOpen;
-                                    setIsBuilderConsoleOpen(next);
-                                    if (!next) {
-                                        setShowMultiActionMenu(false);
-                                        setShowBackupTools(false);
-                                        setShowSimulatorMenu(false);
-                                    }
-                                }}
-                                className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${isBuilderConsoleOpen
-                                    ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                    : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
-                                    }`}
-                                title="Toggle Form Console"
-                            >
-                                <Terminal className="w-4 h-4" />
-                            </button>
-                            <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">
-                                Console
+                        {/* Far-Right Vertical Rail */}
+                        <div className="w-14 flex flex-col items-center gap-3 py-3 px-2 border-l border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/30">
+                            {(['section', 'widget', 'console'] as const).map((tab) => {
+                                const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
+                                const tooltip = tab === 'section' ? 'Section Settings' : tab === 'widget' ? 'Widget Settings' : 'Form Console';
+                                const isActive = isRightSidebarOpen && activeSidebarTab === tab;
+                                return (
+                                    <button
+                                        key={tab}
+                                        onClick={() => {
+                                            if (isRightSidebarOpen && activeSidebarTab === tab) {
+                                                setIsRightSidebarOpen(false);
+                                            } else {
+                                                setIsRightSidebarOpen(true);
+                                                setActiveSidebarTab(tab);
+                                            }
+                                        }}
+                                        className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${
+                                            isActive
+                                                ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                                : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
+                                        }`}
+                                        title={tooltip}
+                                    >
+                                        <Icon className="w-4 h-4" />
+                                    </button>
+                                );
+                            })}
+                            <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mt-2">
+                                Settings & Console
                             </div>
                         </div>
                     </aside>
+
 
                 </div>
 

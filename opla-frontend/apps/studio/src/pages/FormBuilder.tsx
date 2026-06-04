@@ -414,6 +414,13 @@ const FormBuilder: React.FC = () => {
     const [isPublishing, setIsPublishing] = useState(false);
     const [swipedFieldId, setSwipedFieldId] = useState<string | null>(null);
     const [swipeOffset, setSwipeOffset] = useState(0);
+    const [confirmDeleteFieldId, setConfirmDeleteFieldId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!swipedFieldId) {
+            setConfirmDeleteFieldId(null);
+        }
+    }, [swipedFieldId]);
     const [activeVersions, setActiveVersions] = useState<Array<{
         id: string;
         kind: 'draft' | 'live';
@@ -2247,13 +2254,21 @@ const FormBuilder: React.FC = () => {
                                                                                 <button
                                                                                     onClick={(event) => {
                                                                                         event.stopPropagation();
-                                                                                        closeVariableSwipe();
-                                                                                        removeField(field.id);
+                                                                                        if (confirmDeleteFieldId === field.id) {
+                                                                                            closeVariableSwipe();
+                                                                                            removeField(field.id);
+                                                                                        } else {
+                                                                                            setConfirmDeleteFieldId(field.id);
+                                                                                        }
                                                                                     }}
-                                                                                    className="absolute inset-y-0 right-0 z-0 flex w-[88px] items-center justify-center bg-[hsl(var(--error))] px-2 text-[11px] font-semibold text-white"
-                                                                                    title="Delete variable"
+                                                                                    className={`absolute inset-y-0 right-0 z-0 flex w-[88px] items-center justify-center px-2 text-[11px] font-semibold text-white transition-all duration-200 ${
+                                                                                        confirmDeleteFieldId === field.id
+                                                                                            ? 'bg-red-700 hover:bg-red-800'
+                                                                                            : 'bg-[hsl(var(--error))] hover:bg-[hsl(var(--error))]/90'
+                                                                                    }`}
+                                                                                    title={confirmDeleteFieldId === field.id ? "Confirm delete variable" : "Delete variable"}
                                                                                 >
-                                                                                    Delete
+                                                                                    {confirmDeleteFieldId === field.id ? 'Confirm?' : 'Delete'}
                                                                                 </button>
 
                                                                                 <div

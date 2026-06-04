@@ -473,6 +473,30 @@ const FormBuilder: React.FC = () => {
         setIsSectionListOpen(false);
     };
 
+    const centerSectionInFlowCanvas = (sectionId: string) => {
+        if (!flowCanvasRef.current) return;
+        const sectionIndex = sections.findIndex(s => s.id === sectionId);
+        if (sectionIndex === -1) return;
+
+        const section = sections[sectionIndex];
+        const layout = ensureSectionLayout(section.layout, sectionIndex);
+
+        const viewportWidth = flowCanvasRef.current.clientWidth;
+        const viewportHeight = flowCanvasRef.current.clientHeight;
+        const nodeWidth = layout.width || FLOW_NODE_WIDTH;
+        const nodeHeight = 240; // Estimated height for section card
+
+        const targetScrollLeft = layout.x - (viewportWidth / 2) + (nodeWidth / 2);
+        const targetScrollTop = layout.y - (viewportHeight / 2) + (nodeHeight / 2);
+
+        flowCanvasRef.current.scrollTo({
+            left: Math.max(0, targetScrollLeft),
+            top: Math.max(0, targetScrollTop),
+            behavior: 'smooth'
+        });
+    };
+
+
     const currentSectionIndex = sections.findIndex(p => p.id === currentSectionId) !== -1 ? sections.findIndex(p => p.id === currentSectionId) : 0;
     const fields = sections[currentSectionIndex]?.fields || [];
     const selectedField = sections.flatMap(p => p.fields).find(f => f.id === selectedFieldId) || null;
@@ -1919,27 +1943,31 @@ const FormBuilder: React.FC = () => {
 
                 <div className={`flex flex-1 overflow-hidden ${view === 'section' ? 'p-4 pt-3' : ''}`}>
                     {/* Left Vertical Rail */}
-                    {view === 'section' && (
-                        <aside className="flex h-full shrink-0 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/55">
-                            <div className="w-14 flex flex-col items-center gap-3 py-3 px-2">
-                                <button
-                                    id="section-list-trigger-rail"
-                                    onClick={() => setIsSectionListOpen(!isSectionListOpen)}
-                                    className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${
-                                        isSectionListOpen
-                                            ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
-                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
-                                    }`}
-                                    title="Toggle Section List"
-                                >
-                                    <Layers className="w-4 h-4" />
-                                </button>
-                                <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mt-2">
-                                    Sections
-                                </div>
+                    <aside
+                        onClick={() => setIsSectionListOpen(!isSectionListOpen)}
+                        className="flex h-full shrink-0 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/55 cursor-pointer hover:bg-[hsl(var(--surface-elevated))]/80 transition-all"
+                    >
+                        <div className="w-14 flex flex-col items-center gap-3 py-3 px-2">
+                            <button
+                                id="section-list-trigger-rail"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsSectionListOpen(!isSectionListOpen);
+                                }}
+                                className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${
+                                    isSectionListOpen
+                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
+                                }`}
+                                title="Toggle Section List"
+                            >
+                                <Layers className="w-4 h-4" />
+                            </button>
+                            <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mt-2">
+                                Sections
                             </div>
-                        </aside>
-                    )}
+                        </div>
+                    </aside>
 
                     <div className={`flex flex-1 overflow-hidden ${view === 'section'
                         ? 'flex-col rounded-[28px] border border-[hsl(var(--border))] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.92))] shadow-[0_24px_60px_rgba(15,23,42,0.08)]'
@@ -1948,8 +1976,8 @@ const FormBuilder: React.FC = () => {
 
 
                     <div className="flex min-h-0 flex-1 overflow-hidden relative">
-                    {/* Left Panel: Section Navigator — only in Section View */}
-                    {view === 'section' && isSectionListOpen && (
+                    {/* Left Panel: Section Navigator */}
+                    {isSectionListOpen && (
                         <aside ref={sectionListRef} className="absolute left-4 top-3 bottom-4 z-40 w-80 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex h-auto overflow-hidden rounded-2xl shadow-2xl animate-in slide-in-from-left-4 fade-in duration-300">
                             <div className="flex w-14 flex-col items-center gap-2 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/80 px-2 py-3">
                                 <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))] shadow-[inset_2px_0_0_hsl(var(--primary))]">
@@ -1988,6 +2016,9 @@ const FormBuilder: React.FC = () => {
                                                     setCurrentSectionId(section.id);
                                                     setSelectedFieldId(null);
                                                     setIsSectionListOpen(false);
+                                                    if (view === 'flow') {
+                                                        centerSectionInFlowCanvas(section.id);
+                                                    }
                                                 }}
                                                 className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
                                                     ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/6 text-[hsl(var(--primary))] shadow-sm'
@@ -2196,7 +2227,7 @@ const FormBuilder: React.FC = () => {
                                                                                     ? 'border-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/4 shadow-sm'
                                                                                     : dragOverFieldId === field.id
                                                                                         ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/3'
-                                                                                        : 'border-transparent bg-[hsl(var(--surface-elevated))]/60 hover:bg-[hsl(var(--surface-elevated))]/95'
+                                                                                        : 'border-[hsl(var(--border))]/55 bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80 hover:border-[hsl(var(--border))]/85'
                                                                                     }`}
                                                                             >
                                                                                 <button
@@ -4374,7 +4405,10 @@ const FormBuilder: React.FC = () => {
                         )}
 
                         {/* Far-Right Vertical Rail */}
-                        <div className="w-14 flex flex-col items-center gap-3 py-3 px-2 border-l border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/30">
+                        <div
+                            onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+                            className="w-14 flex flex-col items-center gap-3 py-3 px-2 border-l border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/30 cursor-pointer hover:bg-[hsl(var(--surface-elevated))]/55 transition-all"
+                        >
                             {(['section', 'widget', 'console'] as const).map((tab) => {
                                 const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
                                 const tooltip = tab === 'section' ? 'Section Settings' : tab === 'widget' ? 'Widget Settings' : 'Form Console';
@@ -4382,7 +4416,8 @@ const FormBuilder: React.FC = () => {
                                 return (
                                     <button
                                         key={tab}
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                            e.stopPropagation();
                                             if (isRightSidebarOpen && activeSidebarTab === tab) {
                                                 setIsRightSidebarOpen(false);
                                             } else {

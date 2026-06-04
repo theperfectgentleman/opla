@@ -446,7 +446,9 @@ const FormBuilder: React.FC = () => {
             }
             if (sectionListRef.current && !sectionListRef.current.contains(event.target as Node)) {
                 const trigger = document.getElementById('section-list-trigger');
-                if (!trigger || !trigger.contains(event.target as Node)) {
+                const triggerRail = document.getElementById('section-list-trigger-rail');
+                if ((!trigger || !trigger.contains(event.target as Node)) &&
+                    (!triggerRail || !triggerRail.contains(event.target as Node))) {
                     setIsSectionListOpen(false);
                 }
             }
@@ -1916,6 +1918,29 @@ const FormBuilder: React.FC = () => {
                 </header>
 
                 <div className={`flex flex-1 overflow-hidden ${view === 'section' ? 'p-4 pt-3' : ''}`}>
+                    {/* Left Vertical Rail */}
+                    {view === 'section' && (
+                        <aside className="flex h-full shrink-0 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/55">
+                            <div className="w-14 flex flex-col items-center gap-3 py-3 px-2">
+                                <button
+                                    id="section-list-trigger-rail"
+                                    onClick={() => setIsSectionListOpen(!isSectionListOpen)}
+                                    className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${
+                                        isSectionListOpen
+                                            ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
+                                    }`}
+                                    title="Toggle Section List"
+                                >
+                                    <Layers className="w-4 h-4" />
+                                </button>
+                                <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mt-2">
+                                    Sections
+                                </div>
+                            </div>
+                        </aside>
+                    )}
+
                     <div className={`flex flex-1 overflow-hidden ${view === 'section'
                         ? 'flex-col rounded-[28px] border border-[hsl(var(--border))] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.92))] shadow-[0_24px_60px_rgba(15,23,42,0.08)]'
                         : ''

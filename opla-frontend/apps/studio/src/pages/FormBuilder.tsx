@@ -7,7 +7,7 @@ import {
     Save, Play, Trash2, Settings, Smartphone, Layout,
     MapPin, Camera, Type, Hash, CheckSquare, List, Mail,
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
-    ChevronDown, ArrowLeft, Zap, GitBranch, Terminal,
+    ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
     Eye, RotateCcw, Star, Search, Plus
 } from 'lucide-react';
@@ -350,6 +350,461 @@ const ensureSectionLayout = (layout: Partial<SectionCanvasLayout> | undefined, i
     };
 };
 
+const propertyMetaDetails: Record<string, { name: string; description: string }> = {
+    label: {
+        name: "Label",
+        description: "The primary header or question text presented to respondents in the form canvas."
+    },
+    bindKey: {
+        name: "Bind Key",
+        description: "The unique programmatic developer identifier. Used to reference field responses in database logs and logic scripts."
+    },
+    required: {
+        name: "Required Field",
+        description: "Imposes form submission validation requiring fields to contain valid responses before forward navigation is allowed."
+    },
+    placeholder: {
+        name: "Placeholder",
+        description: "Sleek low-contrast text visible in the input bounds prior to respondents beginning their layout input workflow."
+    },
+    minLength: {
+        name: "Min Length",
+        description: "Minimum character limits imposed on text responses to control database memory bounds."
+    },
+    maxLength: {
+        name: "Max Length",
+        description: "Maximum character limits imposed on text responses to control database memory bounds."
+    },
+    min: {
+        name: "Min Limit / Boundary",
+        description: "The absolute minimum value bound allowed for numeric inputs, ratings, or date/time coordinates."
+    },
+    max: {
+        name: "Max Limit / Boundary",
+        description: "The absolute maximum value bound allowed for numeric inputs, ratings, or date/time coordinates."
+    },
+    min_label: {
+        name: "Min Value Label",
+        description: "Explanatory anchor text displayed directly below scale min values (e.g., 'Extremely unlikely')."
+    },
+    max_label: {
+        name: "Max Value Label",
+        description: "Explanatory anchor text displayed directly below scale max values (e.g., 'Extremely likely')."
+    },
+    mask: {
+        name: "Input Mask Format",
+        description: "Use formatting rules (e.g. 9 for numbers, A for uppercase) to guide respondent input values."
+    },
+    formula: {
+        name: "Computation Formula",
+        description: "Implements client-side computed expressions dynamically based on other numeric layout answers."
+    },
+    table_cell_type: {
+        name: "Table Cell Widget",
+        description: "Determine the input controller type utilized across matrix table grid cells."
+    },
+    table_allow_multiple: {
+        name: "Multiple Responses",
+        description: "Enable checkbox grid cells so respondents can check more than one column choice per statement."
+    },
+    lookup_source: {
+        name: "Lookup API Source",
+        description: "Connect catalog datasets or CSV options lists to dynamically populate suggestions."
+    },
+    object_schema_key: {
+        name: "Reference Schema ID",
+        description: "Programmatic identifier of the structured schema template model queried."
+    },
+    catalog_source_type: {
+        name: "Source Provider Type",
+        description: "Toggle catalog index reference lookup versus localized CSV options tables."
+    },
+    exclude_from_export: {
+        name: "Exclude Export",
+        description: "Omit this variable parameter from bulk download datasets for security."
+    },
+    is_sensitive: {
+        name: "PII Sensitive Data",
+        description: "Marks field as containing Personally Identifiable Information to restrict view permissions."
+    },
+    default_value: {
+        name: "Default Value",
+        description: "Pre-filled value populated automatically on form load, overridable by respondents."
+    }
+};
+
+
+const ChoicesSetupInput: React.FC<{
+    selectedField: any;
+    sections: any[];
+    updateField: (id: string, patch: any) => void;
+}> = ({ selectedField, sections, updateField }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+        <div className="w-full">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center justify-between w-full"
+            >
+                <span>{(selectedField.options || []).length} Choices</span>
+                <span className="text-[10px] text-[hsl(var(--text-tertiary))]">{isOpen ? 'Hide' : 'Configure...'}</span>
+            </button>
+            {isOpen && (
+                <div className="mt-2 space-y-2 border-t border-[hsl(var(--border))]/20 pt-2 w-full animate-in fade-in duration-100">
+                    {(selectedField.options || []).map((opt: any, idx: number) => (
+                        <div key={idx} className="flex flex-col gap-1 p-2 bg-[hsl(var(--surface-elevated))]/35 border border-[hsl(var(--border))]/20 rounded-lg text-[hsl(var(--text-primary))]">
+                            <div className="flex items-center gap-1">
+                                <input
+                                    value={opt.label}
+                                    onChange={(e) => {
+                                        const newOpts = [...(selectedField.options || [])];
+                                        newOpts[idx] = { ...opt, label: e.target.value };
+                                        updateField(selectedField.id, { options: newOpts });
+                                    }}
+                                    placeholder="Label"
+                                    className="flex-1 bg-[hsl(var(--surface))] px-1.5 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs outline-none focus:border-[hsl(var(--primary))]/60 text-[hsl(var(--text-primary))]"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const newOpts = (selectedField.options || []).filter((_: any, i: number) => i !== idx);
+                                        updateField(selectedField.id, { options: newOpts });
+                                    }}
+                                    className="p-1 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                                <span className="text-[hsl(var(--text-tertiary))] font-mono">Key:</span>
+                                <input
+                                    value={opt.value}
+                                    onChange={(e) => {
+                                        const newOpts = [...(selectedField.options || [])];
+                                        newOpts[idx] = { ...opt, value: toSmartValue(e.target.value) };
+                                        updateField(selectedField.id, { options: newOpts });
+                                    }}
+                                    placeholder="value_key"
+                                    className="w-24 bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded font-mono text-[10px] outline-none text-[hsl(var(--text-primary))]"
+                                />
+                                <span className="text-[hsl(var(--text-tertiary))] ml-1">Go to:</span>
+                                <select
+                                    value={opt.skip_to || ''}
+                                    onChange={(e) => {
+                                        const newOpts = [...(selectedField.options || [])];
+                                        newOpts[idx] = { ...opt, skip_to: e.target.value || undefined };
+                                        updateField(selectedField.id, { options: newOpts });
+                                    }}
+                                    className="flex-1 bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[10px] outline-none text-[hsl(var(--text-primary))]"
+                                >
+                                    <option value="">Next Field</option>
+                                    {sections.map((s: any, i: number) => (
+                                        <option key={s.id} value={s.id}>S{i+1}: {s.title}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const label = `Choice ${(selectedField.options?.length || 0) + 1}`;
+                            updateField(selectedField.id, {
+                                options: [...(selectedField.options || []), { label, value: toSmartValue(label) }]
+                            });
+                        }}
+                        className="w-full py-1 text-center border border-dashed border-[hsl(var(--border))]/60 hover:border-[hsl(var(--primary))]/40 rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20"
+                    >
+                        + Add Choice
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ObjectPropertiesInput: React.FC<{
+    selectedObjectProperties: any[];
+    addSelectedObjectProperty: () => void;
+    removeSelectedObjectProperty: (index: number) => void;
+    updateSelectedObjectProperty: (index: number, patch: any) => void;
+}> = ({ selectedObjectProperties, addSelectedObjectProperty, removeSelectedObjectProperty, updateSelectedObjectProperty }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+        <div className="w-full">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center justify-between w-full"
+            >
+                <span>{selectedObjectProperties.length} Properties</span>
+                <span className="text-[10px] text-[hsl(var(--text-tertiary))]">{isOpen ? 'Hide' : 'Configure...'}</span>
+            </button>
+            {isOpen && (
+                <div className="mt-3 space-y-3 border-t border-[hsl(var(--border))]/20 pt-2 w-full animate-in fade-in duration-100">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-[hsl(var(--text-secondary))]">Schema Properties</span>
+                        <button
+                            type="button"
+                            onClick={addSelectedObjectProperty}
+                            className="text-[9px] font-bold uppercase text-[hsl(var(--primary))] hover:underline"
+                        >
+                            + Add
+                        </button>
+                    </div>
+                    {selectedObjectProperties.length === 0 ? (
+                        <div className="text-center py-2 text-[10px] text-[hsl(var(--text-tertiary))] italic bg-[hsl(var(--surface-elevated))]/20 border border-dashed border-[hsl(var(--border))]/50 rounded-lg">
+                            No properties defined.
+                        </div>
+                    ) : selectedObjectProperties.map((property: any, propertyIndex: number) => (
+                        <div key={`${property.key}_${propertyIndex}`} className="p-2.5 bg-[hsl(var(--surface-elevated))]/45 border border-[hsl(var(--border))]/20 rounded-xl space-y-2 relative text-[hsl(var(--text-primary))]">
+                            <button
+                                type="button"
+                                onClick={() => removeSelectedObjectProperty(propertyIndex)}
+                                className="absolute top-1.5 right-1.5 p-1 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] hover:bg-[hsl(var(--error))]/10 rounded"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </button>
+                            <div className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                Prop #{propertyIndex + 1}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Key</label>
+                                    <input
+                                        value={property.key}
+                                        onChange={(e) => updateSelectedObjectProperty(propertyIndex, { key: toSmartValue(e.target.value || `property_${propertyIndex + 1}`) })}
+                                        className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs font-mono outline-none text-[hsl(var(--text-primary))]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Label</label>
+                                    <input
+                                        value={property.label || ''}
+                                        onChange={(e) => updateSelectedObjectProperty(propertyIndex, { label: e.target.value })}
+                                        className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs outline-none text-[hsl(var(--text-primary))]"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Type</label>
+                                    <select
+                                        value={property.type}
+                                        onChange={(e) => updateSelectedObjectProperty(propertyIndex, { type: e.target.value as ObjectPropertyType })}
+                                        className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[11px] outline-none text-[hsl(var(--text-primary))]"
+                                    >
+                                        <option value="string">Text</option>
+                                        <option value="integer">Integer</option>
+                                        <option value="decimal">Decimal</option>
+                                        <option value="number">Number</option>
+                                        <option value="boolean">Boolean</option>
+                                        <option value="select">Select</option>
+                                        <option value="computed">Computed</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Edit Mode</label>
+                                    <select
+                                        value={property.edit_mode || 'editable'}
+                                        onChange={(e) => updateSelectedObjectProperty(propertyIndex, { edit_mode: e.target.value as ObjectPropertyEditMode })}
+                                        className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[11px] outline-none text-[hsl(var(--text-primary))]"
+                                    >
+                                        <option value="editable">Editable</option>
+                                        <option value="defaulted">Defaulted</option>
+                                        <option value="fixed">Fixed</option>
+                                        <option value="hidden">Hidden</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {property.type === 'computed' ? (
+                                <div>
+                                    <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Formula</label>
+                                    <input
+                                        value={property.formula || ''}
+                                        onChange={(e) => updateSelectedObjectProperty(propertyIndex, { formula: e.target.value })}
+                                        className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs font-mono outline-none text-[hsl(var(--text-primary))]"
+                                        placeholder="e.g. qty * price"
+                                    />
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Default Value</label>
+                                    <input
+                                        value={property.default_value ?? ''}
+                                        onChange={(e) => updateSelectedObjectProperty(propertyIndex, { default_value: e.target.value })}
+                                        className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs outline-none text-[hsl(var(--text-primary))]"
+                                        placeholder="Optional"
+                                    />
+                                </div>
+                            )}
+                            <label className="flex items-center justify-between p-1 bg-[hsl(var(--surface))]/50 rounded cursor-pointer text-[11px]">
+                                <span className="font-semibold text-[hsl(var(--text-secondary))]">Required</span>
+                                <input
+                                    type="checkbox"
+                                    checked={!!property.required}
+                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { required: e.target.checked })}
+                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20"
+                                />
+                            </label>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const TableColumnsInput: React.FC<{
+    selectedField: any;
+    updateField: (id: string, patch: any) => void;
+}> = ({ selectedField, updateField }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+        <div className="w-full">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center justify-between w-full"
+            >
+                <span>{(selectedField.table_columns || []).length} Columns</span>
+                <span className="text-[10px] text-[hsl(var(--text-tertiary))]">{isOpen ? 'Hide' : 'Configure...'}</span>
+            </button>
+            {isOpen && (
+                <div className="mt-2 space-y-2 border-t border-[hsl(var(--border))]/20 pt-2 w-full animate-in fade-in duration-100 text-[hsl(var(--text-primary))]">
+                    {(selectedField.table_columns || []).map((col: any, ci: number) => (
+                        <div key={col.id} className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))] w-6">C{ci+1}:</span>
+                            <input
+                                value={col.label}
+                                onChange={(e) => {
+                                    const cols = [...(selectedField.table_columns || [])];
+                                    cols[ci] = { ...col, label: e.target.value };
+                                    updateField(selectedField.id, { table_columns: cols });
+                                }}
+                                className="flex-1 bg-[hsl(var(--surface))] px-1.5 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs outline-none text-[hsl(var(--text-primary))]"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const cols = (selectedField.table_columns || []).filter((_: any, i: number) => i !== ci);
+                                    updateField(selectedField.id, { table_columns: cols });
+                                }}
+                                className="p-1 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const cols = selectedField.table_columns || [];
+                            const n = cols.length + 1;
+                            updateField(selectedField.id, {
+                                table_columns: [...cols, { id: `col_${Date.now()}`, label: `Column ${n}` }]
+                            });
+                        }}
+                        className="w-full py-1 text-center border border-dashed border-[hsl(var(--border))]/60 hover:border-[hsl(var(--primary))]/40 rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20"
+                    >
+                        + Add Column
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const TableRowsInput: React.FC<{
+    selectedField: any;
+    updateField: (id: string, patch: any) => void;
+}> = ({ selectedField, updateField }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+        <div className="w-full">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center justify-between w-full"
+            >
+                <span>{(selectedField.table_rows || []).length} Rows</span>
+                <span className="text-[10px] text-[hsl(var(--text-tertiary))]">{isOpen ? 'Hide' : 'Configure...'}</span>
+            </button>
+            {isOpen && (
+                <div className="mt-2 space-y-2 border-t border-[hsl(var(--border))]/20 pt-2 w-full animate-in fade-in duration-100 text-[hsl(var(--text-primary))]">
+                    {(selectedField.table_rows || []).map((row: any, ri: number) => (
+                        <div key={row.id} className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))] w-6">R{ri+1}:</span>
+                            <input
+                                value={row.label}
+                                onChange={(e) => {
+                                    const rows = [...(selectedField.table_rows || [])];
+                                    rows[ri] = { ...row, label: e.target.value };
+                                    updateField(selectedField.id, { table_rows: rows });
+                                }}
+                                className="flex-1 bg-[hsl(var(--surface))] px-1.5 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs outline-none text-[hsl(var(--text-primary))]"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const rows = (selectedField.table_rows || []).filter((_: any, i: number) => i !== ri);
+                                    updateField(selectedField.id, { table_rows: rows });
+                                }}
+                                className="p-1 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const rows = selectedField.table_rows || [];
+                            const n = rows.length + 1;
+                            updateField(selectedField.id, {
+                                table_rows: [...rows, { id: `row_${Date.now()}`, label: `Statement ${n}` }]
+                            });
+                        }}
+                        className="w-full py-1 text-center border border-dashed border-[hsl(var(--border))]/60 hover:border-[hsl(var(--primary))]/40 rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20"
+                    >
+                        + Add Row
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const LookupCustomDataInput: React.FC<{
+    selectedField: any;
+    updateField: (id: string, patch: any) => void;
+}> = ({ selectedField, updateField }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const linesCount = selectedField.lookup_custom_data ? selectedField.lookup_custom_data.split('\n').filter(Boolean).length : 0;
+    return (
+        <div className="w-full space-y-1.5 py-1">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center justify-between w-full"
+            >
+                <span>{linesCount} Rows in CSV</span>
+                <span className="text-[10px] text-[hsl(var(--text-tertiary))]">{isOpen ? 'Hide' : 'Edit CSV data...'}</span>
+            </button>
+            {isOpen && (
+                <textarea
+                    value={selectedField.lookup_custom_data || ''}
+                    onChange={(e) => updateField(selectedField.id, { lookup_custom_data: e.target.value })}
+                    className="w-full min-h-[100px] bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded p-1.5 font-mono text-[10px] outline-none text-[hsl(var(--text-primary))]"
+                    placeholder="code,name\n01,Accra\n02,Kumasi"
+                />
+            )}
+        </div>
+    );
+};
+
+
 const FormBuilder: React.FC = () => {
     const { formId } = useParams<{ formId: string }>();
     const navigate = useNavigate();
@@ -371,8 +826,13 @@ const FormBuilder: React.FC = () => {
     const [currentSectionId, setCurrentSectionId] = useState<string>('screen_1');
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [logic, setLogic] = useState<LogicRule[]>([]);
-    const [isSaving, setIsSaving] = useState(false);
-    const [propertyTab, setPropertyTab] = useState<'content' | 'logic'>('content');
+        const [isSaving, setIsSaving] = useState(false);
+    const [activeLeftTab, setActiveLeftTab] = useState<'sections' | 'widgets'>('sections');
+    const [hoveredProperty, setHoveredProperty] = useState<{ name: string; description: string } | null>(null);
+    const [collapsedPropCategories, setCollapsedPropCategories] = useState<Record<string, boolean>>({});
+    const [collapsedWidgetCategories, setCollapsedWidgetCategories] = useState<Record<string, boolean>>({});
+    const [isLeftPanelPinned, setIsLeftPanelPinned] = useState(false);
+    const [isRightSidebarPinned, setIsRightSidebarPinned] = useState(true);
     const [view, setView] = useState<'flow' | 'section'>('flow');
     const [slideDir, setSlideDir] = useState<'forward' | 'back'>('forward');
     const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
@@ -451,11 +911,13 @@ const FormBuilder: React.FC = () => {
             if (smartDropdownRef.current && !smartDropdownRef.current.contains(event.target as Node)) {
                 setIsSmartDropdownOpen(false);
             }
-            if (sectionListRef.current && !sectionListRef.current.contains(event.target as Node)) {
+            if (!isLeftPanelPinned && sectionListRef.current && !sectionListRef.current.contains(event.target as Node)) {
                 const trigger = document.getElementById('section-list-trigger');
                 const triggerRail = document.getElementById('section-list-trigger-rail');
+                const triggerRailWidget = document.getElementById('widget-list-trigger-rail');
                 if ((!trigger || !trigger.contains(event.target as Node)) &&
-                    (!triggerRail || !triggerRail.contains(event.target as Node))) {
+                    (!triggerRail || !triggerRail.contains(event.target as Node)) &&
+                    (!triggerRailWidget || !triggerRailWidget.contains(event.target as Node))) {
                     setIsSectionListOpen(false);
                 }
             }
@@ -781,81 +1243,7 @@ const FormBuilder: React.FC = () => {
         allow_manual_remove: field.allow_remove_items ?? true,
     });
 
-    const createCatalogPresetProperties = (items: ProjectCatalogItem[]): ObjectPropertyDefinition[] => [
-        {
-            key: 'item_ref',
-            type: 'select',
-            label: 'Item',
-            required: true,
-            edit_mode: 'editable',
-            reference: {
-                source_type: 'catalog',
-                source_id: 'project_catalog',
-                label_field: 'label',
-                value_field: 'id',
-                source_items: buildCatalogSourceItems(items),
-                field_mappings: {
-                    sku_code: 'sku_code',
-                    item_label: 'label',
-                    unit: 'unit',
-                    brand: 'brand',
-                    unit_price: 'default_price',
-                },
-            },
-        },
-        {
-            key: 'sku_code',
-            type: 'string',
-            label: 'Item Code',
-            edit_mode: 'fixed',
-        },
-        {
-            key: 'item_label',
-            type: 'string',
-            label: 'Item Label',
-            edit_mode: 'fixed',
-        },
-        {
-            key: 'quantity',
-            type: 'integer',
-            label: 'Quantity',
-            required: true,
-            default_value: 1,
-            edit_mode: 'editable',
-        },
-        {
-            key: 'unit',
-            type: 'string',
-            label: 'Unit',
-            edit_mode: 'fixed',
-        },
-        {
-            key: 'brand',
-            type: 'string',
-            label: 'Brand',
-            edit_mode: 'hidden',
-        },
-        {
-            key: 'unit_price',
-            type: 'decimal',
-            label: 'Unit Price',
-            required: true,
-            edit_mode: 'defaulted',
-        },
-        {
-            key: 'line_total',
-            type: 'computed',
-            label: 'Line Total',
-            formula: 'quantity * unit_price',
-            edit_mode: 'fixed',
-        },
-        {
-            key: 'comment',
-            type: 'string',
-            label: 'Comment',
-            edit_mode: 'editable',
-        },
-    ];
+
 
     const hydrateCatalogReferences = (definition: FormObjectDefinition | undefined, field: FormField): FormObjectDefinition | undefined => {
         if (!definition) {
@@ -952,21 +1340,7 @@ const FormBuilder: React.FC = () => {
         }));
     };
 
-    const applyCatalogRowTemplate = () => {
-        if (!selectedField) {
-            return;
-        }
 
-        const schemaKey = selectedField.object_schema_key || toSmartValue(selectedField.label || 'line_items');
-        updateField(selectedField.id, {
-            object_schema_key: schemaKey,
-            catalog_source_type: 'project_catalog',
-            object_definition: createObjectDefinition(
-                { ...selectedField, object_schema_key: schemaKey },
-                createCatalogPresetProperties(catalogItems),
-            ),
-        });
-    };
 
     useEffect(() => {
         const loadCatalogItems = async () => {
@@ -1964,28 +2338,50 @@ const FormBuilder: React.FC = () => {
                 <div className={`flex flex-1 overflow-hidden ${view === 'section' ? 'p-4 pt-3' : ''}`}>
                     {/* Left Vertical Rail */}
                     <aside
-                        onClick={() => setIsSectionListOpen(!isSectionListOpen)}
-                        className="flex h-full shrink-0 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/55 cursor-pointer hover:bg-[hsl(var(--surface-elevated))]/80 transition-all"
+                        className="flex h-full shrink-0 border-r border-[hsl(var(--border))]/45 bg-[hsl(var(--surface-elevated))]/55 transition-all select-none"
                     >
-                        <div className="w-14 flex flex-col items-center gap-3 py-3 px-2">
+                        <div className="w-14 flex flex-col items-center gap-4 py-4 px-2">
+                            {/* Sections Tab Button */}
                             <button
                                 id="section-list-trigger-rail"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsSectionListOpen(!isSectionListOpen);
+                                onClick={() => {
+                                    if (isSectionListOpen && activeLeftTab === 'sections') {
+                                        setIsSectionListOpen(false);
+                                    } else {
+                                        setIsSectionListOpen(true);
+                                        setActiveLeftTab('sections');
+                                    }
                                 }}
-                                className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${
-                                    isSectionListOpen
+                                className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
+                                    isSectionListOpen && activeLeftTab === 'sections'
                                         ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
                                         : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
                                 }`}
-                                title="Toggle Section List"
+                                title="Form Sections list"
                             >
                                 <Layers className="w-4 h-4" />
                             </button>
-                            <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mt-2">
-                                Sections
-                            </div>
+
+                            {/* Widgets Tab Button */}
+                            <button
+                                id="widget-list-trigger-rail"
+                                onClick={() => {
+                                    if (isSectionListOpen && activeLeftTab === 'widgets') {
+                                        setIsSectionListOpen(false);
+                                    } else {
+                                        setIsSectionListOpen(true);
+                                        setActiveLeftTab('widgets');
+                                    }
+                                }}
+                                className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
+                                    isSectionListOpen && activeLeftTab === 'widgets'
+                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
+                                }`}
+                                title="Widget Toolbox"
+                            >
+                                <Type className="w-4 h-4" />
+                            </button>
                         </div>
                     </aside>
 
@@ -1996,67 +2392,147 @@ const FormBuilder: React.FC = () => {
 
 
                     <div className="flex min-h-0 flex-1 overflow-hidden relative">
-                    {/* Left Panel: Section Navigator */}
+                    {/* Left Panel: Section & Widget Navigator */}
                     {isSectionListOpen && (
-                        <aside ref={sectionListRef} className="absolute left-4 top-3 bottom-4 z-40 w-80 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex h-auto overflow-hidden rounded-2xl shadow-2xl animate-in slide-in-from-left-4 fade-in duration-300">
-                            <div className="flex w-14 flex-col items-center gap-2 border-r border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/80 px-2 py-3">
-                                <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))] shadow-[inset_2px_0_0_hsl(var(--primary))]">
-                                    <Layers className="w-4 h-4" />
-                                </span>
-                            </div>
-
-                            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                                <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section List</p>
-                                            <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Survey Sections</h3>
+                        <aside
+                            ref={sectionListRef}
+                            className={`${
+                                isLeftPanelPinned
+                                    ? 'w-80 border-r border-[hsl(var(--border))]/45 bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden shrink-0'
+                                    : 'absolute left-4 top-3 bottom-4 z-40 w-80 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col h-auto overflow-hidden rounded-2xl shadow-2xl'
+                            } animate-in slide-in-from-left-4 fade-in duration-300`}
+                        >
+                            {activeLeftTab === 'sections' ? (
+                                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                    <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Section List</p>
+                                                <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Survey Sections</h3>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    onClick={() => setIsLeftPanelPinned(!isLeftPanelPinned)}
+                                                    className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors"
+                                                    title={isLeftPanelPinned ? "Unpin (Float)" : "Pin (Dock)"}
+                                                >
+                                                    <Pin className={`w-3.5 h-3.5 ${isLeftPanelPinned ? 'fill-current rotate-45' : ''}`} />
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        addSection();
+                                                        setSelectedFieldId(null);
+                                                        setIsSectionListOpen(false);
+                                                    }}
+                                                    className="rounded-md border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
+                                                >
+                                                    + Section
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={() => {
-                                                addSection();
-                                                setSelectedFieldId(null);
-                                                setIsSectionListOpen(false);
-                                            }}
-                                            className="rounded-md border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all"
-                                        >
-                                            + Section
-                                        </button>
+                                        <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Select a section to edit its widgets in the center canvas.</p>
                                     </div>
-                                    <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Select a section to edit its widgets in the center canvas.</p>
-                                </div>
 
-                                <div className="flex-1 overflow-y-auto hide-scrollbar p-3 space-y-2">
-                                    {sections.map((section, index) => {
-                                        const isActive = section.id === currentSectionId;
-                                        return (
-                                            <button
-                                                key={section.id}
-                                                onClick={() => {
-                                                    setCurrentSectionId(section.id);
-                                                    setSelectedFieldId(null);
-                                                    setIsSectionListOpen(false);
-                                                    if (view === 'flow') {
-                                                        centerSectionInFlowCanvas(section.id);
-                                                    }
-                                                }}
-                                                className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
-                                                    ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/6 text-[hsl(var(--primary))] shadow-sm'
-                                                    : 'border-transparent bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80'
-                                                    }`}
-                                            >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="min-w-0">
-                                                        <p className="truncate text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title || `Section ${index + 1}`}</p>
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{section.fields.length} widget{section.fields.length !== 1 ? 's' : ''}</p>
+                                    <div className="flex-1 overflow-y-auto hide-scrollbar p-3 space-y-2">
+                                        {sections.map((section, index) => {
+                                            const isActive = section.id === currentSectionId;
+                                            return (
+                                                <button
+                                                    key={section.id}
+                                                    onClick={() => {
+                                                        setCurrentSectionId(section.id);
+                                                        setSelectedFieldId(null);
+                                                        setIsSectionListOpen(false);
+                                                        if (view === 'flow') {
+                                                            centerSectionInFlowCanvas(section.id);
+                                                        }
+                                                    }}
+                                                    className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
+                                                        ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/6 text-[hsl(var(--primary))] shadow-sm'
+                                                        : 'border-transparent bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <p className="truncate text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title || `Section ${index + 1}`}</p>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{section.fields.length} widget{section.fields.length !== 1 ? 's' : ''}</p>
+                                                        </div>
+                                                        <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">S{index + 1}</span>
                                                     </div>
-                                                    <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">S{index + 1}</span>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                    <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Widget Toolbox</p>
+                                                <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Variables & Widgets</h3>
+                                            </div>
+                                            <button
+                                                onClick={() => setIsLeftPanelPinned(!isLeftPanelPinned)}
+                                                className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors"
+                                                title={isLeftPanelPinned ? "Unpin (Float)" : "Pin (Dock)"}
+                                            >
+                                                <Pin className={`w-3.5 h-3.5 ${isLeftPanelPinned ? 'fill-current rotate-45' : ''}`} />
+                                            </button>
+                                        </div>
+                                        <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Click a widget to insert it into the active section.</p>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto p-3 space-y-3 hide-scrollbar select-none">
+                                        {['Standard Inputs', 'Time & Date', 'Selection Widgets', 'Device Metrics', 'Media Input', 'Advanced Inputs'].map(category => {
+                                            const isCollapsed = !!collapsedWidgetCategories[category];
+                                            const categoryWidgets = widgetLibrary.filter(w => widgetCategoryMap[w.type] === category);
+                                            if (categoryWidgets.length === 0) return null;
+
+                                            return (
+                                                <div key={category} className="space-y-1">
+                                                    <button
+                                                        onClick={() => setCollapsedWidgetCategories(prev => ({ ...prev, [category]: !prev[category] }))}
+                                                        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-[hsl(var(--surface-elevated))]/50 rounded-lg text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-1.5">
+                                                            <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                            <span>{category}</span>
+                                                        </div>
+                                                        <span className="text-[9px] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
+                                                            {categoryWidgets.length}
+                                                        </span>
+                                                    </button>
+                                                    {!isCollapsed && (
+                                                        <div className="grid grid-cols-1 gap-1 pl-1 animate-in fade-in duration-100">
+                                                            {categoryWidgets.map(widget => (
+                                                                <button
+                                                                    key={widget.type}
+                                                                    onClick={() => addField(widget.type)}
+                                                                    title={widgetHints[widget.type]}
+                                                                    className="group flex items-center justify-between w-full rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-[hsl(var(--border))]/30 px-2.5 py-2 text-left transition-all"
+                                                                >
+                                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shrink-0 group-hover:bg-[hsl(var(--primary))]/18 transition-colors">
+                                                                            {widget.icon}
+                                                                        </div>
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <p className="truncate text-xs font-semibold text-[hsl(var(--text-primary))]">{widget.label}</p>
+                                                                            <p className="truncate text-[10px] text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--text-secondary))] mt-0.5" title={widgetHints[widget.type]}>
+                                                                                {widgetHints[widget.type]}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </aside>
                     )}
 
@@ -2715,65 +3191,55 @@ const FormBuilder: React.FC = () => {
 
                     </div>
 
-                    <aside className="flex h-full shrink-0 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55">
+                    <aside className="flex h-full shrink-0 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 relative">
                         {isRightSidebarOpen && (
-                            <div className="w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden animate-in slide-in-from-right-4 fade-in duration-300">
+                            <div
+                                className={`${
+                                    isRightSidebarPinned
+                                        ? 'w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden'
+                                        : 'absolute right-16 top-3 bottom-4 z-40 w-80 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-2xl shadow-2xl'
+                                } animate-in slide-in-from-right-4 fade-in duration-300`}
+                            >
                                 {/* Top Tab Bar */}
-                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-3 py-2 flex gap-1">
-                                    {(['section', 'widget', 'console'] as const).map((tab) => {
-                                        const label = tab === 'section' ? 'Section' : tab === 'widget' ? 'Widget' : 'Console';
-                                        const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
-                                        const isActive = activeSidebarTab === tab;
-                                        return (
-                                            <button
-                                                key={tab}
-                                                onClick={() => {
-                                                    setActiveSidebarTab(tab);
-                                                }}
-                                                className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                                                    isActive
-                                                        ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
-                                                        : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
-                                                }`}
-                                            >
-                                                <Icon className="w-3.5 h-3.5" />
-                                                <span>{label}</span>
-                                            </button>
-                                        );
-                                    })}
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-3 py-2 flex items-center justify-between gap-1 select-none">
+                                    <div className="flex gap-1 flex-1">
+                                        {(['section', 'widget', 'console'] as const).map((tab) => {
+                                            const label = tab === 'section' ? 'Section' : tab === 'widget' ? 'Widget' : 'Console';
+                                            const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
+                                            const isActive = activeSidebarTab === tab;
+                                            return (
+                                                <button
+                                                    key={tab}
+                                                    onClick={() => {
+                                                        setActiveSidebarTab(tab);
+                                                    }}
+                                                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                                        isActive
+                                                            ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
+                                                            : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
+                                                    }`}
+                                                >
+                                                    <Icon className="w-3.5 h-3.5" />
+                                                    <span>{label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <button
+                                        onClick={() => setIsRightSidebarPinned(!isRightSidebarPinned)}
+                                        className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors ml-1 shrink-0"
+                                        title={isRightSidebarPinned ? "Unpin (Float)" : "Pin (Dock)"}
+                                    >
+                                        <Pin className={`w-3.5 h-3.5 ${isRightSidebarPinned ? 'fill-current rotate-45' : ''}`} />
+                                    </button>
                                 </div>
 
                                 {/* Tab Contents */}
                                 <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col">
-                                    {activeSidebarTab === 'section' && (
-                                        <div className="flex-1 flex flex-col">
-                                            {/* Sub-tab Pill Selector */}
-                                            <div className="px-4 pt-4 pb-2 flex gap-2">
-                                                <button
-                                                    onClick={() => setPropertyTab('content')}
-                                                    className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
-                                                        propertyTab === 'content'
-                                                            ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
-                                                            : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                    }`}
-                                                >
-                                                    Settings
-                                                </button>
-                                                <button
-                                                    onClick={() => setPropertyTab('logic')}
-                                                    className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
-                                                        propertyTab === 'logic'
-                                                            ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
-                                                            : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                    }`}
-                                                >
-                                                    Logic Rules
-                                                </button>
-                                            </div>
-
-                                            <div className="flex-1 p-6 pt-2 overflow-y-auto hide-scrollbar">
-                                                {propertyTab === 'content' ? (
-                                                    <div className="space-y-5 animate-in fade-in duration-200">
+                                                                        {activeSidebarTab === 'section' && (
+                                         <div className="flex-1 flex flex-col">
+                                             <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar">
+                                                 <div className="space-y-5 animate-in fade-in duration-200">
                                                                                                             {/* Section Title */}
                                                     <div>
                                                         <h3 className="text-sm font-bold text-[hsl(var(--text-primary))] mb-4 flex items-center">
@@ -2923,11 +3389,12 @@ const FormBuilder: React.FC = () => {
                                                         )}
                                                     </div>
 
-                                                    <p className="text-[hsl(var(--text-tertiary))] text-xs italic">Select a field in the canvas to see its individual properties.</p>
+                                                                                                         <p className="text-[hsl(var(--text-tertiary))] text-xs italic">Select a field in the canvas to see its individual properties.</p>
 
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-6 animate-in fade-in duration-200">
+                                                     </div>
+                                                     {/* Border Divider */}
+                                                     <div className="border-t border-[hsl(var(--border))]/30 my-6 pt-6" />
+                                                     <div className="space-y-6 animate-in fade-in duration-200">
                                                                                                             <div className="flex items-center justify-between">
                                                         <h3 className="text-sm font-bold flex items-center">
                                                             <GitBranch className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
@@ -3153,1078 +3620,946 @@ const FormBuilder: React.FC = () => {
                                                         >
                                                             + Add Skip Rule
                                                         </button>
-                                                    </div>
+                                                                                                         </div>
 
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+                                                     </div>
+                                             </div>
+                                         </div>
+                                     )}
 
                                     {activeSidebarTab === 'widget' && (
                                         <div className="flex-1 flex flex-col">
                                             {selectedField ? (
                                                 <>
-                                                    {/* Sub-tab Pill Selector */}
-                                                    <div className="px-4 pt-4 pb-2 flex gap-2">
-                                                        <button
-                                                            onClick={() => setPropertyTab('content')}
-                                                            className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
-                                                                propertyTab === 'content'
-                                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
-                                                                    : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                            }`}
-                                                        >
-                                                            Settings
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setPropertyTab('logic')}
-                                                            className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md border transition-all ${
-                                                                propertyTab === 'logic'
-                                                                    ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))]'
-                                                                    : 'border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                            }`}
-                                                        >
-                                                            Logic Rules
-                                                        </button>
-                                                    </div>
-
-                                                    <div className="flex-1 p-6 pt-2 overflow-y-auto hide-scrollbar">
-                                                        {propertyTab === 'content' ? (
-                                                            <div className="space-y-5 animate-in fade-in duration-200">
-                                                                                                                <div className="space-y-5 animate-in fade-in slide-in-from-right-2 duration-200">
-                                                    <div>
-                                                        <label className="label">Label</label>
-                                                        <input
-                                                            value={selectedField.label}
-                                                            onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
-                                                            className="input"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="label">Bind Key</label>
-                                                        <div className="flex space-x-2">
-                                                            <div className="relative flex-1">
-                                                                <Terminal className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-[hsl(var(--text-tertiary))]" />
-                                                                <input
-                                                                    value={selectedField.id}
-                                                                    onChange={(e) => updateFieldId(selectedField.id, e.target.value)}
-                                                                    className="input pl-8 font-mono text-xs"
-                                                                />
+                                                    {/* Identity Summary Card */}
+                                                    <div className="flex items-center gap-3 px-4 py-3 bg-[hsl(var(--surface-elevated))]/40 border-b border-[hsl(var(--border))]/40 select-none">
+                                                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-[hsl(var(--primary))]/20 shrink-0">
+                                                            {widgetLibrary.find(w => w.type === selectedField.type)?.icon || <Type className="w-4 h-4" />}
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                                    {selectedField.type.replace(/_/g, ' ')}
+                                                                </span>
+                                                                <span className="text-[9px] font-mono text-[hsl(var(--text-tertiary))] truncate max-w-[100px]" title={selectedField.id}>
+                                                                    {selectedField.id}
+                                                                </span>
                                                             </div>
+                                                            <h4 className="text-xs font-semibold text-[hsl(var(--text-primary))] truncate mt-0.5">
+                                                                {selectedField.label || 'No label'}
+                                                            </h4>
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
-                                                        <label className="text-sm font-semibold !mb-0">Required Field</label>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedField.required}
-                                                            onChange={(e) => updateField(selectedField.id, { required: e.target.checked })}
-                                                            className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                        />
-                                                    </div>
-
-                                                    {/* ── Matrix Table Editor ───────────────────── */}
-                                                    {selectedField.type === 'matrix_table' && (
-                                                        <div className="space-y-5 animate-in fade-in duration-200">
-                                                            {/* Divider */}
-                                                            <div className="flex items-center gap-2">
-                                                                <Table2 className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
-                                                                <span className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--primary))]">Matrix Structure</span>
-                                                                <div className="flex-1 h-px bg-[hsl(var(--border))]" />
-                                                            </div>
-
-                                                            {/* Cell Type */}
-                                                            <div>
-                                                                <label className="label">Cell Type</label>
-                                                                <div className="grid grid-cols-3 gap-1.5">
-                                                                    {(['radio', 'checkbox', 'text', 'number', 'dropdown'] as TableCellType[]).map(ct => (
-                                                                        <button
-                                                                            key={ct}
-                                                                            onClick={() => updateField(selectedField.id, { table_cell_type: ct })}
-                                                                            className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition-all capitalize ${(selectedField.table_cell_type || 'radio') === ct
-                                                                                ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))] shadow-sm'
-                                                                                : 'border-transparent bg-[hsl(var(--surface-elevated))]/80 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                                                }`}
-                                                                        >
-                                                                            {ct}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Allow Multiple — only for checkbox */}
-                                                            {selectedField.table_cell_type === 'checkbox' && (
-                                                                <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
-                                                                    <div>
-                                                                        <p className="text-sm font-semibold">Allow Multiple per Row</p>
-                                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Check more than one cell per row</p>
-                                                                    </div>
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!selectedField.table_allow_multiple}
-                                                                        onChange={e => updateField(selectedField.id, { table_allow_multiple: e.target.checked })}
-                                                                        className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                                    />
-                                                                </div>
-                                                            )}
-
-                                                            {/* Columns */}
-                                                            <div>
-                                                                <div className="flex items-center justify-between mb-2">
-                                                                    <label className="label !mb-0 text-xs">Columns (Scale Points)</label>
-                                                                    <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))]/80 rounded-lg p-0.5">
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                const cols = selectedField.table_columns || [];
-                                                                                if (cols.length <= 1) return;
-                                                                                updateField(selectedField.id, { table_columns: cols.slice(0, -1) });
-                                                                            }}
-                                                                            className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
-                                                                        >−</button>
-                                                                        <span className="text-xs font-bold w-5 text-center tabular-nums">{(selectedField.table_columns || []).length}</span>
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                const cols = selectedField.table_columns || [];
-                                                                                const n = cols.length + 1;
-                                                                                updateField(selectedField.id, { table_columns: [...cols, { id: `col_${Date.now()}`, label: `Column ${n}` }] });
-                                                                            }}
-                                                                            className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
-                                                                        >+</button>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="space-y-1.5">
-                                                                    {(selectedField.table_columns || []).map((col, ci) => (
-                                                                        <div key={col.id} className="flex items-center gap-1.5">
-                                                                            <span className="text-[10px] text-[hsl(var(--text-tertiary))] w-4 text-right shrink-0 tabular-nums">{ci + 1}</span>
-                                                                            <input
-                                                                                value={col.label}
-                                                                                onChange={e => {
-                                                                                    const cols = [...(selectedField.table_columns || [])];
-                                                                                    cols[ci] = { ...cols[ci], label: e.target.value };
-                                                                                    updateField(selectedField.id, { table_columns: cols });
-                                                                                }}
-                                                                                className="input text-sm py-1.5 flex-1"
-                                                                                placeholder={`Column ${ci + 1}`}
-                                                                            />
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    const cols = (selectedField.table_columns || []).filter((_, i) => i !== ci);
-                                                                                    updateField(selectedField.id, { table_columns: cols });
-                                                                                }}
-                                                                                className="p-1.5 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg transition-all shrink-0"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        </div>
-                                                                    ))}
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const cols = selectedField.table_columns || [];
-                                                                            const n = cols.length + 1;
-                                                                            updateField(selectedField.id, { table_columns: [...cols, { id: `col_${Date.now()}`, label: `Column ${n}` }] });
-                                                                        }}
-                                                                        className="w-full py-1.5 border border-dashed border-[hsl(var(--border))]/75 bg-[hsl(var(--surface-elevated))]/40 rounded-xl text-[10px] font-semibold text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/45 hover:text-[hsl(var(--primary))] transition-all"
-                                                                    >
-                                                                        + Add Column
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Rows / Statements */}
-                                                            <div>
-                                                                <div className="flex items-center justify-between mb-2">
-                                                                    <label className="label !mb-0 text-xs">Rows (Statements)</label>
-                                                                    <div className="flex items-center gap-0.5 bg-[hsl(var(--surface-elevated))]/80 rounded-lg p-0.5">
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                const rows = selectedField.table_rows || [];
-                                                                                if (rows.length <= 1) return;
-                                                                                updateField(selectedField.id, { table_rows: rows.slice(0, -1) });
-                                                                            }}
-                                                                            className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
-                                                                        >−</button>
-                                                                        <span className="text-xs font-bold w-5 text-center tabular-nums">{(selectedField.table_rows || []).length}</span>
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                const rows = selectedField.table_rows || [];
-                                                                                const n = rows.length + 1;
-                                                                                updateField(selectedField.id, { table_rows: [...rows, { id: `row_${Date.now()}`, label: `Statement ${n}` }] });
-                                                                            }}
-                                                                            className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] font-bold text-sm transition-all"
-                                                                        >+</button>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="space-y-1.5">
-                                                                    {(selectedField.table_rows || []).map((row, ri) => (
-                                                                        <div key={row.id} className="flex items-center gap-1.5">
-                                                                            <span className="text-[10px] text-[hsl(var(--text-tertiary))] w-4 text-right shrink-0 tabular-nums">{ri + 1}</span>
-                                                                            <input
-                                                                                value={row.label}
-                                                                                onChange={e => {
-                                                                                    const rows = [...(selectedField.table_rows || [])];
-                                                                                    rows[ri] = { ...rows[ri], label: e.target.value };
-                                                                                    updateField(selectedField.id, { table_rows: rows });
-                                                                                }}
-                                                                                className="input text-sm py-1.5 flex-1"
-                                                                                placeholder={`Statement ${ri + 1}`}
-                                                                            />
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    const rows = (selectedField.table_rows || []).filter((_, i) => i !== ri);
-                                                                                    updateField(selectedField.id, { table_rows: rows });
-                                                                                }}
-                                                                                className="p-1.5 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg transition-all shrink-0"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        </div>
-                                                                    ))}
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const rows = selectedField.table_rows || [];
-                                                                            const n = rows.length + 1;
-                                                                            updateField(selectedField.id, { table_rows: [...rows, { id: `row_${Date.now()}`, label: `Statement ${n}` }] });
-                                                                        }}
-                                                                        className="w-full py-1.5 border border-dashed border-[hsl(var(--border))]/75 bg-[hsl(var(--surface-elevated))]/40 rounded-xl text-[10px] font-semibold text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/45 hover:text-[hsl(var(--primary))] transition-all"
-                                                                    >
-                                                                        + Add Row
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {['object_collection', 'object_instance'].includes(selectedField.type) && (
-                                                        <div className="space-y-4">
-                                                            <div>
-                                                                <label className="label">Object Schema ID</label>
-                                                                <input
-                                                                    value={selectedField.object_schema_key || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { object_schema_key: e.target.value })}
-                                                                    className="input"
-                                                                    placeholder="e.g. participant_profile"
-                                                                />
-                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">
-                                                                    The ID of the object schema to render here.
-                                                                </p>
-                                                            </div>
-
-                                                            <div>
-                                                                <label className="label">Catalog Source</label>
-                                                                <select
-                                                                    value={selectedField.catalog_source_type || ''}
-                                                                    onChange={(e) => {
-                                                                        const nextValue = e.target.value === 'project_catalog' ? 'project_catalog' : undefined;
-                                                                        updateField(selectedField.id, { catalog_source_type: nextValue });
-                                                                    }}
-                                                                    className="input py-2"
-                                                                >
-                                                                    <option value="">None</option>
-                                                                    <option value="project_catalog">Project Catalog</option>
-                                                                </select>
-                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">
-                                                                    Use the project catalog as a reusable reference source for row selection and default values.
-                                                                </p>
-                                                            </div>
-
-                                                            {selectedField.catalog_source_type === 'project_catalog' && (
-                                                                <div className="rounded-xl bg-[hsl(var(--surface-elevated))]/70 p-4 space-y-3">
-                                                                    <div className="flex items-start justify-between gap-3">
-                                                                        <div>
-                                                                            <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Catalog Snapshot</p>
-                                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
-                                                                                {catalogItems.length} active item{catalogItems.length === 1 ? '' : 's'} available for this form.
-                                                                            </p>
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={applyCatalogRowTemplate}
-                                                                            className="rounded-md bg-[hsl(var(--primary))] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white"
-                                                                        >
-                                                                            Apply Catalog Row Template
-                                                                        </button>
-                                                                    </div>
-                                                                    <p className="text-[10px] leading-5 text-[hsl(var(--text-tertiary))]">
-                                                                        The template creates a reusable line-item row with item reference, quantity, unit price, and computed total fields backed by the current project catalog. You can then adapt the row properties below.
-                                                                    </p>
-                                                                </div>
-                                                            )}
-
-                                                            {selectedField.type === 'object_collection' && (
-                                                                <>
-                                                                    <div>
-                                                                        <label className="label">Layout Style</label>
-                                                                        <select
-                                                                            value={selectedField.collection_layout || 'cards'}
-                                                                            onChange={(e) => updateField(selectedField.id, { collection_layout: e.target.value as 'cards' | 'table' })}
-                                                                            className="input py-2"
-                                                                        >
-                                                                            <option value="cards">Cards</option>
-                                                                            <option value="table">Table</option>
-                                                                        </select>
-                                                                    </div>
-                                                                    <div className="space-y-2">
-                                                                        <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
-                                                                            <div>
-                                                                                <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Allow Adding</p>
-                                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Users can add new items</p>
-                                                                            </div>
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={selectedField.allow_add_items ?? true}
-                                                                                onChange={(e) => updateField(selectedField.id, { allow_add_items: e.target.checked })}
-                                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                                            />
-                                                                        </div>
-                                                                        <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
-                                                                            <div>
-                                                                                <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Allow Removing</p>
-                                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Users can remove items</p>
-                                                                            </div>
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={selectedField.allow_remove_items ?? true}
-                                                                                onChange={(e) => updateField(selectedField.id, { allow_remove_items: e.target.checked })}
-                                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </>
-                                                            )}
-
-                                                            <div className="space-y-3">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div>
-                                                                        <label className="label !mb-0">Row Properties</label>
-                                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-1">
-                                                                            Define the row fields, editability rules, and computed formulas for this object schema.
-                                                                        </p>
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={addSelectedObjectProperty}
-                                                                        className="rounded-md border border-transparent px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:bg-[hsl(var(--surface-elevated))]/80 hover:text-[hsl(var(--primary))]"
-                                                                    >
-                                                                        Add Property
-                                                                    </button>
-                                                                </div>
-
-                                                                {selectedObjectProperties.length === 0 ? (
-                                                                    <div className="rounded-xl border border-dashed border-[hsl(var(--border))]/55 bg-[hsl(var(--surface-elevated))]/40 p-4 text-center text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                                        No row properties defined yet.
-                                                                    </div>
-                                                                ) : selectedObjectProperties.map((property, propertyIndex) => (
-                                                                    <div key={`${property.key}_${propertyIndex}`} className="rounded-xl bg-[hsl(var(--surface-elevated))]/70 p-4 space-y-3">
-                                                                        <div className="flex items-center justify-between gap-2">
-                                                                            <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                                                Property {propertyIndex + 1}
-                                                                            </p>
-                                                                            <button
-                                                                                onClick={() => removeSelectedObjectProperty(propertyIndex)}
-                                                                                className="p-1.5 text-[hsl(var(--text-tertiary))] transition-all hover:text-[hsl(var(--error))] hover:bg-[hsl(var(--error))]/10 rounded-lg"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        </div>
-
-                                                                        <div className="grid grid-cols-2 gap-3">
-                                                                            <div>
-                                                                                <label className="label">Key</label>
+                                                                                                         <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar select-none">
+                                                                {/* Properties Grid Grouped by Category */}
+                                                                {(() => {
+                                                                    const allPropRows = [
+                                                                        // --- Appearance ---
+                                                                        {
+                                                                            category: 'Appearance',
+                                                                            key: 'label',
+                                                                            label: 'Label',
+                                                                            metaKey: 'label',
+                                                                            visible: true,
+                                                                            render: () => (
                                                                                 <input
-                                                                                    value={property.key}
-                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { key: toSmartValue(e.target.value || `property_${propertyIndex + 1}`) })}
-                                                                                    className="input"
+                                                                                    value={selectedField.label}
+                                                                                    onChange={(e) => updateField(selectedField.id, { label: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.label)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
                                                                                 />
-                                                                            </div>
-                                                                            <div>
-                                                                                <label className="label">Label</label>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Appearance',
+                                                                            key: 'placeholder',
+                                                                            label: 'Placeholder',
+                                                                            metaKey: 'placeholder',
+                                                                            visible: ['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type),
+                                                                            render: () => (
                                                                                 <input
-                                                                                    value={property.label || ''}
-                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { label: e.target.value })}
-                                                                                    className="input"
+                                                                                    value={selectedField.placeholder || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="Enter placeholder..."
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.placeholder)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
                                                                                 />
-                                                                            </div>
-                                                                        </div>
-
-                                                                        <div className="grid grid-cols-2 gap-3">
-                                                                            <div>
-                                                                                <label className="label">Type</label>
-                                                                                <select
-                                                                                    value={property.type}
-                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { type: e.target.value as ObjectPropertyType })}
-                                                                                    className="input py-2"
-                                                                                >
-                                                                                    <option value="string">Text</option>
-                                                                                    <option value="integer">Integer</option>
-                                                                                    <option value="decimal">Decimal</option>
-                                                                                    <option value="number">Number</option>
-                                                                                    <option value="boolean">Boolean</option>
-                                                                                    <option value="select">Select</option>
-                                                                                    <option value="computed">Computed</option>
-                                                                                </select>
-                                                                            </div>
-                                                                            <div>
-                                                                                <label className="label">Edit Mode</label>
-                                                                                <select
-                                                                                    value={property.edit_mode || 'editable'}
-                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { edit_mode: e.target.value as ObjectPropertyEditMode })}
-                                                                                    className="input py-2"
-                                                                                >
-                                                                                    <option value="editable">Editable</option>
-                                                                                    <option value="defaulted">Defaulted</option>
-                                                                                    <option value="fixed">Fixed</option>
-                                                                                    <option value="hidden">Hidden</option>
-                                                                                </select>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {property.type === 'computed' ? (
-                                                                            <div>
-                                                                                <label className="label">Formula</label>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Appearance',
+                                                                            key: 'min_label',
+                                                                            label: 'Min Label',
+                                                                            metaKey: 'min_label',
+                                                                            visible: selectedField.type === 'rating_scale',
+                                                                            render: () => (
                                                                                 <input
-                                                                                    value={property.formula || ''}
-                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { formula: e.target.value })}
-                                                                                    className="input font-mono text-xs"
-                                                                                    placeholder="e.g. quantity * unit_price"
+                                                                                    value={selectedField.min_label || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { min_label: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="e.g. Very Difficult"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.min_label)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
                                                                                 />
-                                                                            </div>
-                                                                        ) : (
-                                                                            <div>
-                                                                                <label className="label">Default Value</label>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Appearance',
+                                                                            key: 'max_label',
+                                                                            label: 'Max Label',
+                                                                            metaKey: 'max_label',
+                                                                            visible: selectedField.type === 'rating_scale',
+                                                                            render: () => (
                                                                                 <input
-                                                                                    value={property.default_value ?? ''}
-                                                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, { default_value: e.target.value })}
-                                                                                    className="input"
-                                                                                    placeholder="Optional"
+                                                                                    value={selectedField.max_label || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { max_label: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="e.g. Very Easy"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.max_label)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
                                                                                 />
-                                                                            </div>
-                                                                        )}
+                                                                            )
+                                                                        },
 
-                                                                        <label className="flex items-center justify-between rounded-xl bg-[hsl(var(--surface))] p-4 cursor-pointer shadow-sm">
-                                                                            <div>
-                                                                                <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">Required</p>
-                                                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">This row property must be present before submit.</p>
-                                                                            </div>
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={!!property.required}
-                                                                                onChange={(e) => updateSelectedObjectProperty(propertyIndex, { required: e.target.checked })}
-                                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                                            />
-                                                                        </label>
-
-                                                                        {property.reference?.source_type === 'catalog' && (
-                                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
-                                                                                This property uses the project item catalog and will map selected item values into sibling row fields when rendered on mobile.
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {['input_text', 'input_number', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
-                                                        <div>
-                                                            <label className="label">Placeholder</label>
-                                                            <input
-                                                                value={selectedField.placeholder || ''}
-                                                                onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })}
-                                                                className="input"
-                                                            />
-                                                        </div>
-                                                    )}
-
-                                                    {selectedField.type === 'toggle' && (
-                                                        <div>
-                                                            <label className="label">Binary Labels</label>
-                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-2">Choose what the two states mean to respondents.</p>
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                {[
-                                                                    { yes: 'Yes', no: 'No' },
-                                                                    { yes: 'True', no: 'False' },
-                                                                    { yes: 'On', no: 'Off' },
-                                                                    { yes: 'Agree', no: 'Disagree' },
-                                                                    { yes: 'Enabled', no: 'Disabled' },
-                                                                    { yes: 'Allow', no: 'Deny' },
-                                                                ].map(({ yes, no }) => {
-                                                                    const currentYes = selectedField.options?.find(o => o.value === 'true')?.label;
-                                                                    const isActive = currentYes === yes;
-                                                                    return (
-                                                                        <button
-                                                                            key={yes}
-                                                                            onClick={() => updateField(selectedField.id, {
-                                                                                options: [
-                                                                                    { label: yes, value: 'true' },
-                                                                                    { label: no, value: 'false' },
-                                                                                ],
-                                                                            })}
-                                                                            className={`py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
-                                                                                isActive
-                                                                                    ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
-                                                                                    : 'border-transparent bg-[hsl(var(--surface-elevated))]/80 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                                            }`}
-                                                                        >
-                                                                            {yes} / {no}
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {['dropdown', 'radio_group', 'checkbox_group'].includes(selectedField.type) && (
-                                                        <div>
-                                                            <label className="label">Choices</label>
-                                                            <div className="space-y-2">
-                                                                {(selectedField.options || []).map((opt, idx) => (
-                                                                    <div key={idx} className="p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-2">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-[hsl(var(--text-tertiary))] cursor-grab select-none text-xs">⠿</span>
-                                                                            <input
-                                                                                value={opt.label}
-                                                                                placeholder="Label"
-                                                                                onChange={(e) => {
-                                                                                    const label = e.target.value;
-                                                                                    const newOpts = [...(selectedField.options || [])];
-                                                                                    newOpts[idx] = { ...newOpts[idx], label, value: newOpts[idx].value || toSmartValue(label) };
-                                                                                    updateField(selectedField.id, { options: newOpts });
-                                                                                }}
-                                                                                className="input text-sm py-1.5 flex-1"
-                                                                            />
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    const newOpts = (selectedField.options || []).filter((_, i) => i !== idx);
-                                                                                    updateField(selectedField.id, { options: newOpts });
-                                                                                }}
-                                                                                className="p-1.5 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg transition-all shrink-0"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        </div>
-                                                                        <div className="flex gap-2">
-                                                                            <div className="relative flex-1">
-                                                                                <Terminal className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[hsl(var(--text-tertiary))]" />
-                                                                                <input
-                                                                                    value={opt.value}
-                                                                                    placeholder="value_key"
-                                                                                    onChange={(e) => {
-                                                                                        const newOpts = [...(selectedField.options || [])];
-                                                                                        newOpts[idx] = { ...newOpts[idx], value: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') };
-                                                                                        updateField(selectedField.id, { options: newOpts });
-                                                                                    }}
-                                                                                    className="input text-xs py-1 pl-7 font-mono"
-                                                                                />
-                                                                            </div>
-                                                                            <select
-                                                                                value={opt.skip_to || ''}
-                                                                                onChange={(e) => {
-                                                                                    const newOpts = [...(selectedField.options || [])];
-                                                                                    newOpts[idx] = { ...newOpts[idx], skip_to: e.target.value || undefined };
-                                                                                    updateField(selectedField.id, { options: newOpts });
-                                                                                }}
-                                                                                className="input text-xs py-1 flex-1"
-                                                                            >
-                                                                                <option value="">Skip to...</option>
-                                                                                {sections.map(s => (
-                                                                                    <option key={s.id} value={s.id}>{s.title}</option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const n = (selectedField.options?.length || 0) + 1;
-                                                                        const label = `Option ${n}`;
-                                                                        updateField(selectedField.id, { options: [...(selectedField.options || []), { label, value: toSmartValue(label) }] });
-                                                                    }}
-                                                                    className="w-full py-2 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-semibold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
-                                                                >
-                                                                    + Add Option
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {selectedField.type === 'lookup_list' && (
-                                                        <div className="space-y-4">
-                                                            <div className="flex gap-1 bg-[hsl(var(--surface-elevated))]/60 p-1 rounded-xl w-full text-xs">
-                                                                <button
-                                                                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${selectedField.lookup_source_type === 'preset' ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent hover:bg-transparent'}`}
-                                                                    onClick={() => updateField(selectedField.id, { lookup_source_type: 'preset' })}
-                                                                >
-                                                                    Preset Data
-                                                                </button>
-                                                                <button
-                                                                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${selectedField.lookup_source_type === 'custom' ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20' : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent hover:bg-transparent'}`}
-                                                                    onClick={() => updateField(selectedField.id, { lookup_source_type: 'custom' })}
-                                                                >
-                                                                    Custom List (CSV)
-                                                                </button>
-                                                            </div>
-
-                                                            {selectedField.lookup_source_type === 'preset' && (
-                                                                <div>
-                                                                    <label className="label">Dataset</label>
-                                                                    <select
-                                                                        value={selectedField.lookup_preset_id || ''}
-                                                                        onChange={(e) => updateField(selectedField.id, { lookup_preset_id: e.target.value })}
-                                                                        className="input py-2 flex-1 w-full"
-                                                                    >
-                                                                        <option value="">Select a dataset...</option>
-                                                                        <option value="global_countries">All Countries</option>
-                                                                        <option value="african_countries">African Countries</option>
-                                                                        <option value="us_states">US States</option>
-                                                                    </select>
-                                                                </div>
-                                                            )}
-
-                                                            {selectedField.lookup_source_type === 'custom' && (
-                                                                <div className="space-y-3">
-                                                                    <div>
-                                                                        <label className="label">CSV / Text Data</label>
-                                                                        <textarea
-                                                                            value={selectedField.lookup_custom_data || ''}
-                                                                            onChange={(e) => updateField(selectedField.id, { lookup_custom_data: e.target.value })}
-                                                                            className="input min-h-[120px] font-mono text-xs whitespace-pre"
-                                                                            placeholder="Paste comma-separated values, or one item per line..."
-                                                                        />
-                                                                    </div>
-                                                                    <div className="grid grid-cols-3 gap-2">
-                                                                        <div>
-                                                                            <label className="label text-[10px] mb-1">Separator</label>
-                                                                            <input
-                                                                                value={selectedField.lookup_separator || ''}
-                                                                                onChange={(e) => updateField(selectedField.id, { lookup_separator: e.target.value })}
-                                                                                className="input text-xs"
-                                                                                placeholder="e.g. ,"
-                                                                            />
-                                                                        </div>
-                                                                        <div>
-                                                                            <label className="label text-[10px] mb-1">Label Col</label>
-                                                                            <input
-                                                                                type="number"
-                                                                                value={selectedField.lookup_label_column ?? 0}
-                                                                                onChange={(e) => updateField(selectedField.id, { lookup_label_column: parseInt(e.target.value) || 0 })}
-                                                                                className="input text-xs"
-                                                                            />
-                                                                        </div>
-                                                                        <div>
-                                                                            <label className="label text-[10px] mb-1">Value Col</label>
-                                                                            <input
-                                                                                type="number"
-                                                                                value={selectedField.lookup_value_column ?? 0}
-                                                                                onChange={(e) => updateField(selectedField.id, { lookup_value_column: parseInt(e.target.value) || 0 })}
-                                                                                className="input text-xs"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            let parsedCount = 0;
-                                                                            if (selectedField.lookup_custom_data) {
-                                                                                parsedCount = selectedField.lookup_custom_data.split('\n').filter(Boolean).length;
+                                                                        // --- Data ---
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'bindKey',
+                                                                            label: 'Bind Key',
+                                                                            metaKey: 'bindKey',
+                                                                            visible: true,
+                                                                            render: () => (
+                                                                                <div className="relative w-full h-full flex items-center">
+                                                                                    <Terminal className="absolute left-1.5 w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                                                                    <input
+                                                                                        value={selectedField.id}
+                                                                                        onChange={(e) => updateFieldId(selectedField.id, e.target.value)}
+                                                                                        className="w-full h-full bg-transparent pl-7 pr-1.5 py-0 border-0 outline-none font-mono text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                        onFocus={() => setHoveredProperty(propertyMetaDetails.bindKey)}
+                                                                                        onBlur={() => setHoveredProperty(null)}
+                                                                                    />
+                                                                                </div>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'choices',
+                                                                            label: 'Choices Setup',
+                                                                            metaKey: 'choices',
+                                                                            visible: ['dropdown', 'radio_group', 'checkbox_group'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                    <ChoicesSetupInput
+                                                                                        selectedField={selectedField}
+                                                                                        sections={sections}
+                                                                                        updateField={updateField}
+                                                                                    />
+                                                                                )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'binaryLabels',
+                                                                            label: 'Binary Options',
+                                                                            metaKey: 'binaryLabels',
+                                                                            visible: selectedField.type === 'toggle',
+                                                                            render: () => {
+                                                                                const currentYes = selectedField.options?.find(o => o.value === 'true')?.label || 'Yes';
+                                                                                const currentNo = selectedField.options?.find(o => o.value === 'false')?.label || 'No';
+                                                                                return (
+                                                                                    <div className="flex gap-2 w-full select-text">
+                                                                                        <div className="flex items-center gap-1 flex-1">
+                                                                                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold">YES:</span>
+                                                                                            <input
+                                                                                                value={currentYes}
+                                                                                                onChange={(e) => {
+                                                                                                    const nextOpts = [
+                                                                                                        { label: e.target.value || 'Yes', value: 'true' },
+                                                                                                        { label: currentNo, value: 'false' }
+                                                                                                    ];
+                                                                                                    updateField(selectedField.id, { options: nextOpts });
+                                                                                                }}
+                                                                                                className="w-full bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded px-1 py-0.5 text-xs outline-none focus:border-[hsl(var(--primary))]/60 text-[hsl(var(--text-primary))]"
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-1 flex-1">
+                                                                                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold">NO:</span>
+                                                                                            <input
+                                                                                                value={currentNo}
+                                                                                                onChange={(e) => {
+                                                                                                    const nextOpts = [
+                                                                                                        { label: currentYes, value: 'true' },
+                                                                                                        { label: e.target.value || 'No', value: 'false' }
+                                                                                                    ];
+                                                                                                    updateField(selectedField.id, { options: nextOpts });
+                                                                                                }}
+                                                                                                className="w-full bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded px-1 py-0.5 text-xs outline-none focus:border-[hsl(var(--primary))]/60 text-[hsl(var(--text-primary))]"
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
                                                                             }
-                                                                            showToast('Data Validated', `Successfully parsed ${parsedCount} rows from your CSV data.`, 'success');
-                                                                        }}
-                                                                        className="w-full py-2.5 bg-[hsl(var(--surface-elevated))]/60 hover:bg-[hsl(var(--primary))]/10 border border-transparent rounded-xl text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all flex items-center justify-center space-x-2 shadow-sm"
-                                                                    >
-                                                                        <CheckSquare className="w-4 h-4" />
-                                                                        <span>Validate Data Structure</span>
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'object_schema_key',
+                                                                            label: 'Schema ID',
+                                                                            metaKey: 'object_schema_key',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.object_schema_key || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { object_schema_key: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded font-mono text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="schema_key"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.object_schema_key)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_source_type',
+                                                                            label: 'Catalog Source',
+                                                                            metaKey: 'catalog_source_type',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.catalog_source_type || ''}
+                                                                                    onChange={(e) => {
+                                                                                        const nextValue = e.target.value === 'project_catalog' ? 'project_catalog' : undefined;
+                                                                                        updateField(selectedField.id, { catalog_source_type: nextValue });
+                                                                                    }}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.catalog_source_type)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                >
+                                                                                    <option value="">None / Custom Row</option>
+                                                                                    <option value="project_catalog">Project Catalog</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'collection_layout',
+                                                                            label: 'Layout Style',
+                                                                            metaKey: 'collection_layout',
+                                                                            visible: selectedField.type === 'object_collection',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.collection_layout || 'cards'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { collection_layout: e.target.value as 'cards' | 'table' })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="cards">Cards List</option>
+                                                                                    <option value="table">Table Rows</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'default_value',
+                                                                            label: 'Default Value',
+                                                                            metaKey: 'default_value',
+                                                                            visible: !['matrix_table', 'object_collection', 'object_instance'].includes(selectedField.type),
+                                                                            render: () => {
+                                                                                if (['dropdown', 'radio_group'].includes(selectedField.type)) {
+                                                                                    return (
+                                                                                        <select
+                                                                                            value={selectedField.default_value || ''}
+                                                                                            onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
+                                                                                            className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                            onFocus={() => setHoveredProperty(propertyMetaDetails.default_value)}
+                                                                                            onBlur={() => setHoveredProperty(null)}
+                                                                                        >
+                                                                                            <option value="">None</option>
+                                                                                            {(selectedField.options || []).map((o, idx) => (
+                                                                                                <option key={idx} value={o.value}>{o.label}</option>
+                                                                                            ))}
+                                                                                        </select>
+                                                                                    );
+                                                                                }
+                                                                                if (selectedField.type === 'toggle') {
+                                                                                    return (
+                                                                                        <div className="flex gap-1 w-full">
+                                                                                            <button
+                                                                                                onClick={() => updateField(selectedField.id, { default_value: selectedField.default_value === 'true' ? undefined : 'true' })}
+                                                                                                className={`flex-1 py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${
+                                                                                                    selectedField.default_value === 'true'
+                                                                                                        ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                                                                        : 'border-[hsl(var(--border))] bg-transparent text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {selectedField.options?.find(o => o.value === 'true')?.label ?? 'Yes'}
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() => updateField(selectedField.id, { default_value: selectedField.default_value === 'false' ? undefined : 'false' })}
+                                                                                                className={`flex-1 py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${
+                                                                                                    selectedField.default_value === 'false'
+                                                                                                        ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                                                                        : 'border-[hsl(var(--border))] bg-transparent text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {selectedField.options?.find(o => o.value === 'false')?.label ?? 'No'}
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    );
+                                                                                }
+                                                                                if (selectedField.type === 'textarea') {
+                                                                                    return (
+                                                                                        <input
+                                                                                            value={selectedField.default_value || ''}
+                                                                                            onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
+                                                                                            className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                            placeholder="Default text..."
+                                                                                            onFocus={() => setHoveredProperty(propertyMetaDetails.default_value)}
+                                                                                            onBlur={() => setHoveredProperty(null)}
+                                                                                        />
+                                                                                    );
+                                                                                }
+                                                                                return (
+                                                                                    <input
+                                                                                        type={['input_number', 'lookup_list'].includes(selectedField.type) ? 'number' : selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'text'}
+                                                                                        value={selectedField.default_value || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
+                                                                                        className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                        placeholder={selectedField.type === 'input_text' ? "e.g. Ghana..." : selectedField.type === 'lookup_list' ? "Index e.g. 0..." : ""}
+                                                                                        onFocus={() => setHoveredProperty(propertyMetaDetails.default_value)}
+                                                                                        onBlur={() => setHoveredProperty(null)}
+                                                                                    />
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'object_properties',
+                                                                            label: 'Row Properties',
+                                                                            metaKey: 'object_properties',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                    <ObjectPropertiesInput
+                                                                                        selectedObjectProperties={selectedObjectProperties}
+                                                                                        addSelectedObjectProperty={addSelectedObjectProperty}
+                                                                                        removeSelectedObjectProperty={removeSelectedObjectProperty}
+                                                                                        updateSelectedObjectProperty={updateSelectedObjectProperty}
+                                                                                    />
+                                                                                )
+                                                                        },
 
-                                                    {selectedField.type === 'input_text' && (
-                                                        <div>
-                                                            <label className="label flex items-center justify-between">
-                                                                <span>Input Mask Format</span>
-                                                            </label>
-                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-1.5 leading-tight">Use <strong className="text-[hsl(var(--text-primary))]">9</strong> for numbers, <strong className="text-[hsl(var(--text-primary))]">A</strong> for uppercase, <strong className="text-[hsl(var(--text-primary))]">a</strong> for lowercase, and <strong className="text-[hsl(var(--text-primary))]">*</strong> for any character. Symbols render as-is.</p>
-                                                            <div className="flex gap-2 mb-2 flex-wrap">
-                                                                {[
-                                                                    { label: 'None', val: '' },
-                                                                    { label: 'Phone', val: '+233 99 999 9999' },
-                                                                    { label: 'Card', val: '9999-9999-9999-9999' },
-                                                                    { label: 'Date', val: '99/99/9999' },
-                                                                    { label: 'Ghana Card', val: 'GHA-999999999-9' }
-                                                                ].map(preset => (
-                                                                    <button
-                                                                        key={preset.label}
-                                                                        onClick={() => updateField(selectedField.id, { mask: preset.val })}
-                                                                        className={`px-2.5 py-1 text-[10px] rounded-lg font-semibold transition-all ${
-                                                                            selectedField.mask === preset.val || (!selectedField.mask && preset.val === '')
-                                                                                ? 'bg-[hsl(var(--primary))]/10 border border-[hsl(var(--primary))]/30 text-[hsl(var(--primary))]'
-                                                                                : 'bg-[hsl(var(--surface-elevated))]/60 border border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]/90 hover:text-[hsl(var(--text-primary))]'
-                                                                        }`}
-                                                                    >
-                                                                        {preset.label}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                            <input
-                                                                value={selectedField.mask || ''}
-                                                                onChange={(e) => updateField(selectedField.id, { mask: e.target.value || undefined })}
-                                                                className="input font-mono text-sm"
-                                                                placeholder="e.g. (999) 999-9999"
-                                                            />
-                                                        </div>
-                                                    )}
+                                                                        // --- Validation ---
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'required',
+                                                                            label: 'Required',
+                                                                            metaKey: 'required',
+                                                                            visible: true,
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedField.required}
+                                                                                    onChange={(e) => updateField(selectedField.id, { required: e.target.checked })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.required)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'minLength',
+                                                                            label: 'Min Length',
+                                                                            metaKey: 'minLength',
+                                                                            visible: ['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={selectedField.minLength || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { minLength: parseInt(e.target.value) || undefined })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="No limit"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.minLength)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'maxLength',
+                                                                            label: 'Max Length',
+                                                                            metaKey: 'maxLength',
+                                                                            visible: ['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={selectedField.maxLength || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { maxLength: parseInt(e.target.value) || undefined })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="No limit"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.maxLength)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'min',
+                                                                            label: 'Min Boundary',
+                                                                            metaKey: 'min',
+                                                                            visible: ['input_number', 'rating_scale', 'date_picker', 'time_picker'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type={selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'number'}
+                                                                                    value={selectedField.min || ''}
+                                                                                    onChange={(e) => {
+                                                                                        const val = ['date_picker', 'time_picker'].includes(selectedField.type) ? e.target.value : parseInt(e.target.value);
+                                                                                        updateField(selectedField.id, { min: val || undefined });
+                                                                                    }}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="Minimum"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.min)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'max',
+                                                                            label: 'Max Boundary',
+                                                                            metaKey: 'max',
+                                                                            visible: ['input_number', 'rating_scale', 'date_picker', 'time_picker'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type={selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'number'}
+                                                                                    value={selectedField.max || ''}
+                                                                                    onChange={(e) => {
+                                                                                        const val = ['date_picker', 'time_picker'].includes(selectedField.type) ? e.target.value : parseInt(e.target.value);
+                                                                                        updateField(selectedField.id, { max: val || undefined });
+                                                                                    }}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="Maximum"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.max)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'is_sensitive',
+                                                                            label: 'Sensitive PII',
+                                                                            metaKey: 'is_sensitive',
+                                                                            visible: selectedField.type !== 'matrix_table',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={!!selectedField.is_sensitive}
+                                                                                    onChange={(e) => updateField(selectedField.id, { is_sensitive: e.target.checked })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.is_sensitive)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'exclude_from_export',
+                                                                            label: 'Exclude Export',
+                                                                            metaKey: 'exclude_from_export',
+                                                                            visible: selectedField.type !== 'matrix_table',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={!!selectedField.exclude_from_export}
+                                                                                    onChange={(e) => updateField(selectedField.id, { exclude_from_export: e.target.checked })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.exclude_from_export)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'allow_add_items',
+                                                                            label: 'Allow Add Rows',
+                                                                            metaKey: 'object_properties',
+                                                                            visible: selectedField.type === 'object_collection',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedField.allow_add_items ?? true}
+                                                                                    onChange={(e) => updateField(selectedField.id, { allow_add_items: e.target.checked })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Validation',
+                                                                            key: 'allow_remove_items',
+                                                                            label: 'Allow Del Rows',
+                                                                            metaKey: 'object_properties',
+                                                                            visible: selectedField.type === 'object_collection',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedField.allow_remove_items ?? true}
+                                                                                    onChange={(e) => updateField(selectedField.id, { allow_remove_items: e.target.checked })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                />
+                                                                            )
+                                                                        },
 
-                                                    {['input_text', 'email_input', 'phone_input', 'textarea'].includes(selectedField.type) && (
-                                                        <div className="grid grid-cols-2 gap-3">
-                                                            <div>
-                                                                <label className="label">Min Length</label>
-                                                                <input
-                                                                    type="number"
-                                                                    value={selectedField.minLength || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { minLength: parseInt(e.target.value) || undefined })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="label">Max Length</label>
-                                                                <input
-                                                                    type="number"
-                                                                    value={selectedField.maxLength || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { maxLength: parseInt(e.target.value) || undefined })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                                        // --- Behavior ---
+                                                                        {
+                                                                            category: 'Behavior',
+                                                                            key: 'mask',
+                                                                            label: 'Input Mask',
+                                                                            metaKey: 'mask',
+                                                                            visible: selectedField.type === 'input_text',
+                                                                            render: () => {
+                                                                                const presets = [
+                                                                                    { label: 'None', val: '' },
+                                                                                    { label: 'US Phone', val: '(999) 999-9999' },
+                                                                                    { label: 'Date', val: '99/99/9999' },
+                                                                                    { label: 'SSN', val: '999-99-9999' },
+                                                                                ];
+                                                                                return (
+                                                                                    <div className="w-full space-y-1 py-1">
+                                                                                        <select
+                                                                                            value={selectedField.mask || ''}
+                                                                                            onChange={(e) => updateField(selectedField.id, { mask: e.target.value || undefined })}
+                                                                                            className="w-full bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded px-1 py-0.5 text-xs outline-none text-[hsl(var(--text-primary))]"
+                                                                                            onFocus={() => setHoveredProperty(propertyMetaDetails.mask)}
+                                                                                            onBlur={() => setHoveredProperty(null)}
+                                                                                        >
+                                                                                            {presets.map(p => (
+                                                                                                <option key={p.label} value={p.val}>{p.label} {p.val ? `(${p.val})` : ''}</option>
+                                                                                            ))}
+                                                                                            {selectedField.mask && !presets.map(p => p.val).includes(selectedField.mask) && (
+                                                                                                <option value={selectedField.mask}>Custom ({selectedField.mask})</option>
+                                                                                            )}
+                                                                                        </select>
+                                                                                        <input
+                                                                                            value={selectedField.mask || ''}
+                                                                                            onChange={(e) => updateField(selectedField.id, { mask: e.target.value || undefined })}
+                                                                                            placeholder="Custom mask..."
+                                                                                            className="w-full bg-[hsl(var(--surface-elevated))]/20 border border-[hsl(var(--border))]/40 rounded px-1.5 py-0.5 text-[10px] outline-none font-mono text-[hsl(var(--text-primary))]"
+                                                                                        />
+                                                                                    </div>
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            category: 'Behavior',
+                                                                            key: 'formula',
+                                                                            label: 'Formula',
+                                                                            metaKey: 'formula',
+                                                                            visible: selectedField.type === 'input_number',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.formula || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { formula: e.target.value || undefined })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded font-mono text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="e.g. qty * price"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.formula)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
 
-                                                    {selectedField.type === 'rating_scale' && (
-                                                        <div className="space-y-4 animate-in fade-in duration-200">
-                                                            <div className="flex items-center gap-2">
-                                                                <Star className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
-                                                                <span className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--primary))]">Scale Configuration</span>
-                                                                <div className="flex-1 h-px bg-[hsl(var(--border))]" />
-                                                            </div>
-                                                            <div className="grid grid-cols-2 gap-3">
-                                                                <div>
-                                                                    <label className="label">Min Value</label>
-                                                                    <input
-                                                                        type="number"
-                                                                        value={selectedField.min || 1}
-                                                                        onChange={(e) => updateField(selectedField.id, { min: parseInt(e.target.value) || 1 })}
-                                                                        className="input"
-                                                                    />
-                                                                </div>
-                                                                <div>
-                                                                    <label className="label">Max Value</label>
-                                                                    <input
-                                                                        type="number"
-                                                                        value={selectedField.max || 5}
-                                                                        onChange={(e) => updateField(selectedField.id, { max: parseInt(e.target.value) || 5 })}
-                                                                        className="input"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <label className="label">Min Label</label>
-                                                                <input
-                                                                    value={selectedField.min_label || ''}
-                                                                    placeholder="e.g. Not at all"
-                                                                    onChange={(e) => updateField(selectedField.id, { min_label: e.target.value })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="label">Max Label</label>
-                                                                <input
-                                                                    value={selectedField.max_label || ''}
-                                                                    placeholder="e.g. Extremely likely"
-                                                                    onChange={(e) => updateField(selectedField.id, { max_label: e.target.value })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                                        // --- Matrix Setup ---
+                                                                        {
+                                                                            category: 'Matrix Setup',
+                                                                            key: 'table_cell_type',
+                                                                            label: 'Cell Type',
+                                                                            metaKey: 'table_cell_type',
+                                                                            visible: selectedField.type === 'matrix_table',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.table_cell_type || 'radio'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { table_cell_type: e.target.value as TableCellType })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.table_cell_type)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                >
+                                                                                    <option value="radio">Radio Buttons</option>
+                                                                                    <option value="checkbox">Checkboxes</option>
+                                                                                    <option value="text">Text Inputs</option>
+                                                                                    <option value="number">Number Inputs</option>
+                                                                                    <option value="dropdown">Dropdown Options</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Matrix Setup',
+                                                                            key: 'table_allow_multiple',
+                                                                            label: 'Allow Multi',
+                                                                            metaKey: 'table_allow_multiple',
+                                                                            visible: selectedField.type === 'matrix_table' && selectedField.table_cell_type === 'checkbox',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={!!selectedField.table_allow_multiple}
+                                                                                    onChange={e => updateField(selectedField.id, { table_allow_multiple: e.target.checked })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.table_allow_multiple)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Matrix Setup',
+                                                                            key: 'table_columns',
+                                                                            label: 'Columns List',
+                                                                            metaKey: 'table_columns',
+                                                                            visible: selectedField.type === 'matrix_table',
+                                                                            render: () => (
+                                                                                    <TableColumnsInput
+                                                                                        selectedField={selectedField}
+                                                                                        updateField={updateField}
+                                                                                    />
+                                                                                )
+                                                                        },
+                                                                        {
+                                                                            category: 'Matrix Setup',
+                                                                            key: 'table_rows',
+                                                                            label: 'Rows List',
+                                                                            metaKey: 'table_rows',
+                                                                            visible: selectedField.type === 'matrix_table',
+                                                                            render: () => (
+                                                                                    <TableRowsInput
+                                                                                        selectedField={selectedField}
+                                                                                        updateField={updateField}
+                                                                                    />
+                                                                                )
+                                                                        },
 
+                                                                        // --- API Integration ---
+                                                                        {
+                                                                            category: 'API Integration',
+                                                                            key: 'lookup_source_type',
+                                                                            label: 'Lookup Source',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: selectedField.type === 'lookup_list',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.lookup_source_type || 'preset'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { lookup_source_type: e.target.value as 'preset' | 'custom' })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="preset">Preset Dataset</option>
+                                                                                    <option value="custom">Custom CSV / Raw Text</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'API Integration',
+                                                                            key: 'lookup_preset_id',
+                                                                            label: 'Dataset Preset',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: selectedField.type === 'lookup_list' && selectedField.lookup_source_type === 'preset',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.lookup_preset_id || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { lookup_preset_id: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="">Select a dataset preset...</option>
+                                                                                    <option value="ghana_districts">Ghana Districts & Regions</option>
+                                                                                    <option value="kenya_counties">Kenya Counties & Subcounties</option>
+                                                                                    <option value="un_countries">ISO Standard Countries</option>
+                                                                                    <option value="world_currencies">Global Currencies</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'API Integration',
+                                                                            key: 'lookup_custom_data',
+                                                                            label: 'CSV Custom Data',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: selectedField.type === 'lookup_list' && selectedField.lookup_source_type === 'custom',
+                                                                            render: () => (
+                                                                                    <LookupCustomDataInput
+                                                                                        selectedField={selectedField}
+                                                                                        updateField={updateField}
+                                                                                    />
+                                                                                )
+                                                                        },
+                                                                        {
+                                                                            category: 'API Integration',
+                                                                            key: 'lookup_separator',
+                                                                            label: 'CSV Separator',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: selectedField.type === 'lookup_list' && selectedField.lookup_source_type === 'custom',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.lookup_separator || ','}
+                                                                                    onChange={(e) => updateField(selectedField.id, { lookup_separator: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded font-mono text-[hsl(var(--text-primary))]"
+                                                                                    placeholder=","
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'API Integration',
+                                                                            key: 'lookup_label_column',
+                                                                            label: 'CSV Label Col',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: selectedField.type === 'lookup_list' && selectedField.lookup_source_type === 'custom',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={selectedField.lookup_label_column ?? 0}
+                                                                                    onChange={(e) => updateField(selectedField.id, { lookup_label_column: parseInt(e.target.value) || 0 })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="0"
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'API Integration',
+                                                                            key: 'lookup_value_column',
+                                                                            label: 'CSV Value Col',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: selectedField.type === 'lookup_list' && selectedField.lookup_source_type === 'custom',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={selectedField.lookup_value_column ?? 0}
+                                                                                    onChange={(e) => updateField(selectedField.id, { lookup_value_column: parseInt(e.target.value) || 0 })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="0"
+                                                                                />
+                                                                            )
+                                                                        },
 
+                                                                        // --- System Settings ---
+                                                                        {
+                                                                            category: 'System Settings',
+                                                                            key: 'platforms',
+                                                                            label: 'Platforms',
+                                                                            metaKey: 'platforms',
+                                                                            visible: true,
+                                                                            render: () => (
+                                                                                <div className="flex gap-1">
+                                                                                    {(['mobile', 'web', 'ussd'] as Platform[]).map(platform => {
+                                                                                        const isActive = selectedField.platforms?.includes(platform) ?? false;
+                                                                                        return (
+                                                                                            <button
+                                                                                                key={platform}
+                                                                                                onClick={() => {
+                                                                                                    const next = new Set(selectedField.platforms || []);
+                                                                                                    if (isActive) next.delete(platform);
+                                                                                                    else next.add(platform);
+                                                                                                    updateField(selectedField.id, { platforms: Array.from(next) });
+                                                                                                }}
+                                                                                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border transition-all ${
+                                                                                                    isActive
+                                                                                                        ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                                                                                        : 'border-[hsl(var(--border))] bg-transparent text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {platform}
+                                                                                            </button>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            )
+                                                                        }
+                                                                    ];
 
+                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic Rules', 'Validation', 'Behavior', 'Matrix Setup', 'API Integration', 'System Settings'];
 
-                                                    {selectedField.type === 'input_number' && (
-                                                        <div className="grid grid-cols-2 gap-3">
-                                                            <div>
-                                                                <label className="label">Min Value</label>
-                                                                <input
-                                                                    type="number"
-                                                                    value={selectedField.min || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { min: parseInt(e.target.value) || undefined })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="label">Max Value</label>
-                                                                <input
-                                                                    type="number"
-                                                                    value={selectedField.max || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { max: parseInt(e.target.value) || undefined })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                                     return (
+                                                                         <div className="flex-1 overflow-y-auto hide-scrollbar border border-[hsl(var(--border))]/25 rounded-xl bg-[hsl(var(--background))]">
+                                                                             {categories.map(categoryName => {
+                                                                                 const isCollapsed = !!collapsedPropCategories[categoryName];
 
-                                                    {['date_picker', 'time_picker'].includes(selectedField.type) && (
-                                                        <div className="grid grid-cols-2 gap-3">
-                                                            <div>
-                                                                <label className="label">Min {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
-                                                                <input
-                                                                    type={selectedField.type === 'date_picker' ? 'date' : 'time'}
-                                                                    value={selectedField.min || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { min: e.target.value || undefined })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="label">Max {selectedField.type === 'date_picker' ? 'Date' : 'Time'}</label>
-                                                                <input
-                                                                    type={selectedField.type === 'date_picker' ? 'date' : 'time'}
-                                                                    value={selectedField.max || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { max: e.target.value || undefined })}
-                                                                    className="input"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                                                 if (categoryName === 'Logic Rules') {
+                                                                                     const rulesCount = logic.filter(r => r.type === 'field_visibility' && r.target_id === selectedField.id).length;
+                                                                                     return (
+                                                                                         <div key={categoryName} className="border-b border-[hsl(var(--border))]/30 last:border-b-0">
+                                                                                             <button
+                                                                                                 type="button"
+                                                                                                 onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
+                                                                                                 className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                                             >
+                                                                                                 <div className="flex items-center gap-1.5">
+                                                                                                     <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                                                     <span>{categoryName}</span>
+                                                                                                 </div>
+                                                                                                 <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
+                                                                                                     {rulesCount}
+                                                                                                 </span>
+                                                                                             </button>
 
-                                                    <div>
-                                                        <label className="label">Platforms</label>
-                                                        <div className="grid grid-cols-1 gap-2">
-                                                            {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => (
-                                                                <label key={platform} className="flex items-center space-x-3 p-2.5 bg-[hsl(var(--surface-elevated))]/60 rounded-xl border border-transparent cursor-pointer hover:bg-[hsl(var(--surface-elevated))] transition-all">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={selectedField.platforms?.includes(platform) || false}
-                                                                        onChange={(e) => {
-                                                                            const next = new Set(selectedField.platforms || []);
-                                                                            if (e.target.checked) next.add(platform);
-                                                                            else next.delete(platform);
-                                                                            updateField(selectedField.id, { platforms: Array.from(next) });
-                                                                        }}
-                                                                        className="h-4 w-4 text-[hsl(var(--primary))] rounded border-[hsl(var(--border))]"
-                                                                    />
-                                                                    <span className="text-sm font-medium capitalize">{platform}</span>
-                                                                </label>
-                                                            ))}
-                                                        </div>
-                                                    </div>
+                                                                                             {!isCollapsed && (
+                                                                                                 <div className="p-4 bg-[hsl(var(--surface))] space-y-4 border-t border-[hsl(var(--border))]/20">
+                                                                                                     <div className="space-y-4">
+                                                                                                         {logic.filter(r => r.type === 'field_visibility' && r.target_id === selectedField.id).map(rule => (
+                                                                                                             <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group border border-[hsl(var(--border))]/30">
+                                                                                                                 <button
+                                                                                                                     type="button"
+                                                                                                                     onClick={() => removeLogicRule(rule.id)}
+                                                                                                                     className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
+                                                                                                                 >
+                                                                                                                     <Trash2 className="w-3.5 h-3.5" />
+                                                                                                                 </button>
 
-                                                    {selectedField.type === 'input_number' && (
-                                                        <div>
-                                                            <label className="label">Computed Formula</label>
-                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-1.5">
-                                                                Optional. Example: <span className="font-mono">sum(line_items.line_total)</span>. When set, this field becomes read-only in the runtime.
-                                                            </p>
-                                                            <input
-                                                                value={selectedField.formula || ''}
-                                                                onChange={(e) => updateField(selectedField.id, { formula: e.target.value || undefined })}
-                                                                className="input font-mono text-xs"
-                                                                placeholder="e.g. sum(line_items.line_total)"
-                                                            />
-                                                        </div>
-                                                    )}
+                                                                                                                 {/* Timing badge */}
+                                                                                                                 <div className="flex items-center justify-between">
+                                                                                                                     <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
+                                                                                                                     <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
+                                                                                                                         {(['pre', 'post'] as const).map(t => (
+                                                                                                                             <button
+                                                                                                                                 type="button"
+                                                                                                                                 key={t}
+                                                                                                                                 onClick={() => updateLogicRule(rule.id, { timing: t })}
+                                                                                                                                 className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
+                                                                                                                                     ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
+                                                                                                                                     : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                                                                                     }`}
+                                                                                                                             >
+                                                                                                                                 {t}
+                                                                                                                             </button>
+                                                                                                                         ))}
+                                                                                                                     </div>
+                                                                                                                 </div>
 
-                                                    {/* Default Value — not applicable for matrix tables */}
-                                                    {selectedField.type !== 'matrix_table' && (
-                                                        <div>
-                                                            <label className="label">Default Value</label>
-                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] mb-1.5">Pre-filled automatically; overridable during administration.</p>
-                                                            {['dropdown', 'radio_group'].includes(selectedField.type) ? (
-                                                                <select
-                                                                    value={selectedField.default_value || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
-                                                                    className="input text-sm py-2"
-                                                                >
-                                                                    <option value="">No Default</option>
-                                                                    {(selectedField.options || []).map((o, i) => (
-                                                                        <option key={i} value={o.value}>{o.label}</option>
-                                                                    ))}
-                                                                </select>
-                                                            ) : selectedField.type === 'toggle' ? (
-                                                                <div className="flex gap-2 mt-2">
-                                                                    {[
-                                                                        { label: selectedField.options?.find(o => o.value === 'true')?.label ?? 'Yes', value: 'true' },
-                                                                        { label: selectedField.options?.find(o => o.value === 'false')?.label ?? 'No', value: 'false' },
-                                                                        { label: 'None', value: '' },
-                                                                    ].map(({ label, value }) => {
-                                                                        const active = (selectedField.default_value ?? '') === value;
-                                                                        return (
-                                                                            <button
-                                                                                key={value}
-                                                                                onClick={() => updateField(selectedField.id, { default_value: value || undefined })}
-                                                                                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${
-                                                                                    active
-                                                                                        ? 'border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
-                                                                                        : 'border border-transparent bg-[hsl(var(--surface-elevated))]/60 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                                                }`}
-                                                                            >
-                                                                                {label}
-                                                                            </button>
-                                                                        );
-                                                                    })}
-                                                                </div>
-                                                            ) : selectedField.type === 'textarea' ? (
-                                                                <textarea
-                                                                    value={selectedField.default_value || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
-                                                                    className="input min-h-[80px]"
-                                                                    placeholder="Enter default text..."
-                                                                />
-                                                            ) : (
-                                                                <input
-                                                                    type={['input_number', 'lookup_list'].includes(selectedField.type) ? 'number' : selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'text'}
-                                                                    value={selectedField.default_value || ''}
-                                                                    onChange={(e) => updateField(selectedField.id, { default_value: e.target.value || undefined })}
-                                                                    className="input"
-                                                                    placeholder={selectedField.type === 'input_text' ? "e.g. Yes, 0, Ghana..." : selectedField.type === 'lookup_list' ? "Index (0 = first item)..." : ""}
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                                                                                 <div className="space-y-3">
+                                                                                                                     {rule.conditions.map((cond, cIdx) => (
+                                                                                                                         <div key={cIdx} className="space-y-2">
+                                                                                                                             <select
+                                                                                                                                 value={cond.field}
+                                                                                                                                 onChange={(e) => {
+                                                                                                                                     const newConds = [...rule.conditions];
+                                                                                                                                     newConds[cIdx].field = e.target.value;
+                                                                                                                                     updateLogicRule(rule.id, { conditions: newConds });
+                                                                                                                                 }}
+                                                                                                                                 className="input-sm w-full py-1.5"
+                                                                                                                             >
+                                                                                                                                 <option value="">Select Field...</option>
+                                                                                                                                 {sections.flatMap(p => p.fields).filter(f => f.id !== selectedField.id).map(f => (
+                                                                                                                                     <option key={f.id} value={f.id}>{f.label}</option>
+                                                                                                                                 ))}
+                                                                                                                             </select>
 
-                                                    {/* Flags — not applicable for matrix tables */}
-                                                    {selectedField.type !== 'matrix_table' && (
-                                                        <div className="space-y-2">
-                                                            <label className="label">Field Flags</label>
-                                                            {[
-                                                                { key: 'is_sensitive', label: 'Sensitive', desc: 'Contains PII or health data' },
-                                                                { key: 'exclude_from_export', label: 'Exclude from Export', desc: 'Hide from data views & CSV exports' },
-                                                            ].map(({ key, label, desc }) => (
-                                                                <label key={key} className="flex items-center justify-between p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl border border-transparent cursor-pointer hover:bg-[hsl(var(--surface-elevated))] transition-all">
-                                                                    <div>
-                                                                        <p className="text-sm font-semibold">{label}</p>
-                                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))]">{desc}</p>
-                                                                    </div>
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!(selectedField as any)[key]}
-                                                                        onChange={(e) => updateField(selectedField.id, { [key]: e.target.checked } as any)}
-                                                                        className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                                    />
-                                                                </label>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                                                                                             <div className="flex space-x-2">
+                                                                                                                                 <select
+                                                                                                                                     value={cond.operator}
+                                                                                                                                     onChange={(e) => {
+                                                                                                                                         const newConds = [...rule.conditions];
+                                                                                                                                         newConds[cIdx].operator = e.target.value as any;
+                                                                                                                                         updateLogicRule(rule.id, { conditions: newConds });
+                                                                                                                                     }}
+                                                                                                                                     className="input-sm w-1/2 py-1.5"
+                                                                                                                                 >
+                                                                                                                                     <option value="eq">Equals</option>
+                                                                                                                                     <option value="neq">Not Equal</option>
+                                                                                                                                     <option value="contains">Contains</option>
+                                                                                                                                     <option value="gt">Greater Than</option>
+                                                                                                                                     <option value="lt">Less Than</option>
+                                                                                                                                 </select>
+                                                                                                                                 <input
+                                                                                                                                     value={cond.value}
+                                                                                                                                     onChange={(e) => {
+                                                                                                                                         const newConds = [...rule.conditions];
+                                                                                                                                         newConds[cIdx].value = e.target.value;
+                                                                                                                                         updateLogicRule(rule.id, { conditions: newConds });
+                                                                                                                                     }}
+                                                                                                                                     placeholder="Value"
+                                                                                                                                     className="input-sm w-1/2 py-1.5"
+                                                                                                                                 />
+                                                                                                                             </div>
+                                                                                                                         </div>
+                                                                                                                     ))}
+                                                                                                                 </div>
 
+                                                                                                                 <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+                                                                                                                     <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">THEN</span>
+                                                                                                                     <span>SHOW FIELD</span>
+                                                                                                                 </div>
+                                                                                                             </div>
+                                                                                                         ))}
+
+                                                                                                         <button
+                                                                                                             type="button"
+                                                                                                             onClick={() => addLogicRule({
+                                                                                                                 type: 'field_visibility',
+                                                                                                                 timing: 'pre',
+                                                                                                                 target_id: selectedField.id,
+                                                                                                                 action: 'show',
+                                                                                                                 conditions: [{ field: '', operator: 'eq', value: '' }]
+                                                                                                             })}
+                                                                                                             className="w-full py-3 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
+                                                                                                         >
+                                                                                                             + Add Visibility Rule
+                                                                                                         </button>
+                                                                                                     </div>
+                                                                                                 </div>
+                                                                                             )}
+                                                                                         </div>
+                                                                                     );
+                                                                                 }
+
+                                                                                 const categoryRows = allPropRows.filter(r => r.category === categoryName && r.visible);
+                                                                                if (categoryRows.length === 0) return null;
+
+                                                                                return (
+                                                                                    <div key={categoryName} className="border-b border-[hsl(var(--border))]/30 last:border-b-0">
+                                                                                        <button
+                                                                                            onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
+                                                                                            className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                                        >
+                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                                                <span>{categoryName}</span>
+                                                                                            </div>
+                                                                                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
+                                                                                                {categoryRows.length}
+                                                                                            </span>
+                                                                                        </button>
+
+                                                                                        {!isCollapsed && (
+                                                                                            <div className="divide-y divide-[hsl(var(--border))]/20 bg-[hsl(var(--surface))]">
+                                                                                                {categoryRows.map(row => (
+                                                                                                    <div
+                                                                                                        key={row.key}
+                                                                                                        onMouseEnter={() => row.metaKey && propertyMetaDetails[row.metaKey] && setHoveredProperty(propertyMetaDetails[row.metaKey])}
+                                                                                                        onMouseLeave={() => setHoveredProperty(null)}
+                                                                                                        className="flex items-center min-h-[32px] hover:bg-[hsl(var(--surface-elevated))]/20 transition-colors"
+                                                                                                    >
+                                                                                                        <div className="w-[40%] px-3 truncate select-none border-r border-[hsl(var(--border))]/20 text-[hsl(var(--text-secondary))] font-medium text-[11px] flex items-center py-1 self-stretch">
+                                                                                                            {row.label}
+                                                                                                        </div>
+                                                                                                        <div className="w-[60%] pl-2 pr-1.5 py-1 text-[11px] flex items-center min-w-0">
+                                                                                                            {row.render()}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                                                                                 })()}
+                                                     </div>
+                                                {/* Description Helper Panel */}
+                                                    <div className="h-[100px] border-t border-[hsl(var(--border))]/45 bg-[hsl(var(--surface-elevated))]/40 p-3 select-none flex flex-col justify-between shrink-0">
+                                                        {hoveredProperty ? (
+                                                            <div className="animate-in fade-in duration-150">
+                                                                <p className="text-xs font-bold text-[hsl(var(--text-primary))] flex items-center">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))] mr-1.5" />
+                                                                    {hoveredProperty.name}
+                                                                </p>
+                                                                <p className="text-[10px] text-[hsl(var(--text-secondary))] mt-1 leading-normal line-clamp-3">
+                                                                    {hoveredProperty.description}
+                                                                </p>
                                                             </div>
                                                         ) : (
-                                                            <div className="space-y-6 animate-in fade-in duration-200">
-                                                                                                                    <div className="flex items-center justify-between">
-                                                        <h3 className="text-sm font-bold flex items-center">
-                                                            <Zap className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
-                                                            Field Logic
-                                                        </h3>
-                                                    </div>
-                                                    <p className="text-[hsl(var(--text-secondary))] text-xs">Define rules for when this field should be visible.</p>
-
-                                                    <div className="space-y-4">
-                                                        {logic.filter(r => r.type === 'field_visibility' && r.target_id === selectedField.id).map(rule => (
-                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group">
-                                                                <button
-                                                                    onClick={() => removeLogicRule(rule.id)}
-                                                                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-
-                                                                {/* Timing badge */}
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
-                                                                    <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
-                                                                        {(['pre', 'post'] as const).map(t => (
-                                                                            <button
-                                                                                key={t}
-                                                                                onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
-                                                                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
-                                                                                    }`}
-                                                                            >
-                                                                                {t}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-3">
-                                                                    {rule.conditions.map((cond, cIdx) => (
-                                                                        <div key={cIdx} className="space-y-2">
-                                                                            <select
-                                                                                value={cond.field}
-                                                                                onChange={(e) => {
-                                                                                    const newConds = [...rule.conditions];
-                                                                                    newConds[cIdx].field = e.target.value;
-                                                                                    updateLogicRule(rule.id, { conditions: newConds });
-                                                                                }}
-                                                                                className="input-sm w-full py-1.5"
-                                                                            >
-                                                                                <option value="">Select Field...</option>
-                                                                                {sections.flatMap(p => p.fields).filter(f => f.id !== selectedField.id).map(f => (
-                                                                                    <option key={f.id} value={f.id}>{f.label}</option>
-                                                                                ))}
-                                                                            </select>
-
-                                                                            <div className="flex space-x-2">
-                                                                                <select
-                                                                                    value={cond.operator}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].operator = e.target.value as any;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                >
-                                                                                    <option value="eq">Equals</option>
-                                                                                    <option value="neq">Not Equal</option>
-                                                                                    <option value="contains">Contains</option>
-                                                                                    <option value="gt">Greater Than</option>
-                                                                                    <option value="lt">Less Than</option>
-                                                                                </select>
-                                                                                <input
-                                                                                    value={cond.value}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].value = e.target.value;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    placeholder="Value"
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-
-                                                                <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
-                                                                    <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">THEN</span>
-                                                                    <span>SHOW FIELD</span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-
-                                                        <button
-                                                            onClick={() => addLogicRule({
-                                                                type: 'field_visibility',
-                                                                timing: 'pre',
-                                                                target_id: selectedField.id,
-                                                                action: 'show',
-                                                                conditions: [{ field: '', operator: 'eq', value: '' }]
-                                                            })}
-                                                            className="w-full py-3 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
-                                                        >
-                                                            + Add Visibility Rule
-                                                        </button>
-                                                    </div>
-
+                                                            <div className="flex h-full items-center justify-center text-[10px] text-[hsl(var(--text-tertiary))] italic">
+                                                                Hover over a property name to view description.
                                                             </div>
                                                         )}
                                                     </div>

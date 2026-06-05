@@ -35,12 +35,17 @@
       "expo-secure-store",
       [
         "expo-camera",
-        { "cameraPermission": "Allow Opla to access your camera" }
+        {
+          "cameraPermission": "Allow Opla to access your camera"
+        }
       ],
       [
         "expo-location",
-        { "locationWhenInUsePermission": "Allow Opla to access your location" }
-      ]
+        {
+          "locationWhenInUsePermission": "Allow Opla to access your location"
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

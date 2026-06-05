@@ -14,6 +14,14 @@ import { LookupListField } from './fields/LookupListField';
 import { RatingScaleField } from './fields/RatingScaleField';
 import { ToggleField } from './fields/ToggleField';
 import { ObjectCollectionField } from './fields/ObjectCollectionField';
+import { DatePickerField } from './fields/DatePickerField';
+import { TimePickerField } from './fields/TimePickerField';
+import { GPSCaptureField } from './fields/GPSCaptureField';
+import { PhotoCaptureField } from './fields/PhotoCaptureField';
+import { FileUploadField } from './fields/FileUploadField';
+import { SignaturePadField } from './fields/SignaturePadField';
+import { BarcodeScannerField } from './fields/BarcodeScannerField';
+import { AudioRecorderField } from './fields/AudioRecorderField';
 import { deskFormAPI, publicFormAPI } from '../../services/api';
 import { syncAllLookupDatasets } from '../utils/lookupCache';
 
@@ -190,6 +198,22 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
             return <ObjectCollectionField field={field} value={value} onChange={onChange} error={error} objectDefinition={resolveObjectDefinition(field, blueprint)} mode="collection" />;
         case 'object_instance':
             return <ObjectCollectionField field={field} value={value} onChange={onChange} error={error} objectDefinition={resolveObjectDefinition(field, blueprint)} mode="instance" />;
+        case 'date_picker':
+            return <DatePickerField field={field} value={value} onChange={onChange} error={error} />;
+        case 'time_picker':
+            return <TimePickerField field={field} value={value} onChange={onChange} error={error} />;
+        case 'gps_capture':
+            return <GPSCaptureField field={field} value={value} onChange={onChange} error={error} />;
+        case 'photo_capture':
+            return <PhotoCaptureField field={field} value={value} onChange={onChange} error={error} />;
+        case 'file_upload':
+            return <FileUploadField field={field} value={value} onChange={onChange} error={error} />;
+        case 'signature_pad':
+            return <SignaturePadField field={field} value={value} onChange={onChange} error={error} />;
+        case 'barcode_scanner':
+            return <BarcodeScannerField field={field} value={value} onChange={onChange} error={error} />;
+        case 'audio_recorder':
+            return <AudioRecorderField field={field} value={value} onChange={onChange} error={error} />;
         default:
             // Fallback
             return (

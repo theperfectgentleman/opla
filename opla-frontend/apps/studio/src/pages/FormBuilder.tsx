@@ -2610,7 +2610,7 @@ const FormBuilder: React.FC = () => {
                                                 })}
                                             </svg>
 
-                                            <div className="relative h-[1600px] w-[1600px]">
+<div className="relative h-[1600px] w-[1600px]">
                                                 {sections.map((section, idx) => {
                                                     const layout = ensureSectionLayout(section.layout, idx);
                                                     const collapseMode = layout.collapse_mode || 'full';
@@ -2620,17 +2620,18 @@ const FormBuilder: React.FC = () => {
                                                     return (
                                                         <div
                                                             key={section.id}
-                                                            className={`absolute rounded-2xl border transition-all ${isActive
+                                                            className={`absolute rounded-2xl border transition-all select-none ${isActive
                                                                 ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--surface))] shadow-[0_14px_40px_rgba(15,23,42,0.08)]'
                                                                 : 'border-[hsl(var(--border))]/40 bg-[hsl(var(--surface))]/95 shadow-[0_8px_30px_rgba(15,23,42,0.04)] hover:border-[hsl(var(--primary))]/25'
                                                                 }`}
-                                                            style={{ left: layout.x, top: layout.y, width: layout.width || FLOW_NODE_WIDTH }}
+                                                            style={{ left: layout.x, top: layout.y, width: layout.width || FLOW_NODE_WIDTH, zIndex: isActive ? 20 : 1 }}
                                                         >
                                                             <div
                                                                 onPointerDown={(event) => {
                                                                     if ((event.target as HTMLElement).closest('button')) {
                                                                         return;
                                                                     }
+                                                                    event.preventDefault();
                                                                     const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
                                                                     setCurrentSectionId(section.id);
                                                                     setSelectedFieldId(null);

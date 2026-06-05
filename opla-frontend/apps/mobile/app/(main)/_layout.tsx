@@ -1,11 +1,14 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { View, TouchableOpacity, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Layers, Zap, Target, User } from 'lucide-react-native';
 import { useAppTheme } from '../../contexts/AppThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 function CustomTabBar({ state, navigation }: any) {
-  const { mode } = useAppTheme();
+  const { mode, setMode } = useAppTheme();
+  const { status } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const currentRouteName = state.routes[state.index].name;
@@ -52,6 +55,19 @@ function CustomTabBar({ state, navigation }: any) {
 
       <TouchableOpacity
         activeOpacity={0.9}
+        onPress={() => {
+          if (mode === 'pulse') {
+            if (status !== 'authenticated') {
+              router.push('/(auth)/login');
+            } else {
+              setMode('pro');
+              navigation.navigate('(desk)');
+            }
+          } else {
+            setMode('pulse');
+            navigation.navigate('(yard)');
+          }
+        }}
         style={[{
           width: 56, height: 56, borderRadius: 28,
           alignItems: 'center', justifyContent: 'center',

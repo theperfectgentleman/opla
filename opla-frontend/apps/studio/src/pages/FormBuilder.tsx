@@ -10,7 +10,7 @@ import {
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
     Eye, RotateCcw, Star, Search, Globe, AlertCircle, CheckCircle2,
-    ListTodo, Sliders, ChevronsUpDown
+    ListTodo, Sliders, ChevronsUpDown, LayoutGrid
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -2625,7 +2625,7 @@ const FormBuilder: React.FC = () => {
                                 <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                                     <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mr-1">Canvas</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mr-1">Flow</span>
 
                                             <button
                                                 onClick={handleToggleAllCollapseModes}
@@ -2661,10 +2661,10 @@ const FormBuilder: React.FC = () => {
                                         <button
                                             onClick={() => enterSection(sections.some(s => s.id === currentSectionId) ? currentSectionId : sections[0]?.id)}
                                             disabled={sections.length === 0}
-                                            title="Inspector Mode"
+                                            title="Compose Mode"
                                             className="rounded-xl border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] p-2.5 text-[hsl(var(--text-primary))] transition-all hover:text-[hsl(var(--primary))] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-[hsl(var(--text-primary))] disabled:hover:bg-[hsl(var(--surface-elevated))]/80 shadow-sm"
                                         >
-                                            <Layout className="w-[18px] h-[18px]" />
+                                            <LayoutGrid className="w-[18px] h-[18px]" />
                                         </button>
                                     </div>
 
@@ -2982,11 +2982,7 @@ const FormBuilder: React.FC = () => {
                                     <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
                                         <div className="flex items-center gap-4">
                                             <div>
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Inspector</p>
-                                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{sections.length} sections</span>
-                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
-                                                </div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Compose</p>
                                             </div>
                                         </div>
                                         <button

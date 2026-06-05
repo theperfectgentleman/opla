@@ -861,6 +861,7 @@ const FormBuilder: React.FC = () => {
     const [isSectionListOpen, setIsSectionListOpen] = useState(false);
     const sectionListRef = React.useRef<HTMLDivElement | null>(null);
     const [globalCollapseMode, setGlobalCollapseMode] = useState<SectionCollapseMode>('full');
+    const [zoom, setZoom] = useState<number>(1);
 
     const handleToggleAllCollapseModes = () => {
         const nextMode = globalCollapseMode === 'full'
@@ -1023,8 +1024,8 @@ const FormBuilder: React.FC = () => {
             if (!canvasRect) {
                 return;
             }
-            const nextX = Math.max(24, event.clientX - canvasRect.left - sectionDragOffset.x + flowCanvasRef.current!.scrollLeft);
-            const nextY = Math.max(24, event.clientY - canvasRect.top - sectionDragOffset.y + flowCanvasRef.current!.scrollTop);
+            const nextX = Math.max(24, (event.clientX - canvasRect.left + flowCanvasRef.current!.scrollLeft) / zoom - sectionDragOffset.x);
+            const nextY = Math.max(24, (event.clientY - canvasRect.top + flowCanvasRef.current!.scrollTop) / zoom - sectionDragOffset.y);
             setSections((prev) => prev.map((section, index) => (
                 section.id === draggingSectionId
                     ? { ...section, layout: { ...ensureSectionLayout(section.layout, index), x: nextX, y: nextY } }
@@ -1042,7 +1043,7 @@ const FormBuilder: React.FC = () => {
             window.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', handlePointerUp);
         };
-    }, [draggingSectionId, sectionDragOffset]);
+    }, [draggingSectionId, sectionDragOffset, zoom]);
 
     const updateSectionLayout = (sectionId: string, patch: Partial<SectionCanvasLayout>) => {
         setSections((prev) => prev.map((section, index) => (
@@ -2540,7 +2541,7 @@ const FormBuilder: React.FC = () => {
                             >
                                 <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                                     <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mr-1">Canvas</span>
                                             <button
                                                 onClick={handleToggleAllCollapseModes}
@@ -2558,6 +2559,20 @@ const FormBuilder: React.FC = () => {
                                                 <Sliders className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
                                                 <span>Arrange</span>
                                             </button>
+                                            <div className="flex items-center gap-2 border-l border-[hsl(var(--border))]/60 pl-3 ml-2 shrink-0">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">Zoom</span>
+                                                <input
+                                                    type="range"
+                                                    min="0.5"
+                                                    max="1.5"
+                                                    step="0.1"
+                                                    value={zoom}
+                                                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                                                    className="w-24 h-1.5 bg-[hsl(var(--border))]/80 rounded-lg appearance-none cursor-pointer accent-[hsl(var(--primary))]"
+                                                    title="Zoom canvas"
+                                                />
+                                                <span className="text-[10px] font-mono font-bold text-[hsl(var(--text-secondary))] w-8 text-right">{Math.round(zoom * 100)}%</span>
+                                            </div>
                                         </div>
                                         <button
                                             onClick={() => enterSection(sections.some(s => s.id === currentSectionId) ? currentSectionId : sections[0]?.id)}
@@ -2570,7 +2585,16 @@ const FormBuilder: React.FC = () => {
                                     </div>
 
                                         <div ref={flowCanvasRef} className="relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
-                                            <svg className="pointer-events-none absolute left-0 top-0 h-[1600px] w-[2400px]" viewBox="0 0 2400 1600" fill="none">
+                                            <div
+                                                style={{
+                                                    transform: `scale(${zoom})`,
+                                                    transformOrigin: 'top left',
+                                                    width: `${2400 * zoom}px`,
+                                                    height: `${1600 * zoom}px`,
+                                                }}
+                                                className="relative"
+                                            >
+                                                <svg className="pointer-events-none absolute left-0 top-0 h-[1600px] w-[2400px]" viewBox="0 0 2400 1600" fill="none">
                                                 {getFlowConnections().map((link) => {
                                                     const sourceIndex = sections.findIndex((section) => section.id === link.sourceId);
                                                     const targetIndex = sections.findIndex((section) => section.id === link.targetId);
@@ -2633,7 +2657,7 @@ const FormBuilder: React.FC = () => {
                                                                     setCurrentSectionId(section.id);
                                                                     setSelectedFieldId(null);
                                                                     setDraggingSectionId(section.id);
-                                                                    setSectionDragOffset({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+                                                                    setSectionDragOffset({ x: (event.clientX - rect.left) / zoom, y: (event.clientY - rect.top) / zoom });
                                                                 }}
                                                                 className="flex cursor-grab items-start justify-between rounded-t-2xl border-b border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/80 px-4 py-3 active:cursor-grabbing"
                                                             >
@@ -2838,6 +2862,7 @@ const FormBuilder: React.FC = () => {
                                                         </div>
                                                     );
                                                 })}
+                                            </div>
                                             </div>
                                         </div>
 

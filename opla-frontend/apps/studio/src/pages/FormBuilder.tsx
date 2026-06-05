@@ -9,7 +9,8 @@ import {
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
-    Eye, RotateCcw, Star, Search, Plus, Globe, AlertCircle, CheckCircle2
+    Eye, RotateCcw, Star, Search, Globe, AlertCircle, CheckCircle2,
+    ListTodo, Sliders
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -177,7 +178,7 @@ interface FormSection {
     layout?: SectionCanvasLayout;
 }
 
-type SectionCollapseMode = 'full' | 'summary' | 'title';
+type SectionCollapseMode = 'full' | 'summary' | 'quarter' | 'title';
 
 interface SectionCanvasLayout {
     x: number;
@@ -268,10 +269,10 @@ const widgetCategoryMap: Record<FieldType, string> = {
     textarea: 'Standard Inputs',
     date_picker: 'Time & Date',
     time_picker: 'Time & Date',
-    dropdown: 'Selection Widgets',
-    radio_group: 'Selection Widgets',
-    checkbox_group: 'Selection Widgets',
-    toggle: 'Selection Widgets',
+    dropdown: 'Selection Fields',
+    radio_group: 'Selection Fields',
+    checkbox_group: 'Selection Fields',
+    toggle: 'Selection Fields',
     gps_capture: 'Device Metrics',
     barcode_scanner: 'Device Metrics',
     photo_capture: 'Media Input',
@@ -318,7 +319,8 @@ const VARIABLE_DELETE_REVEAL_WIDTH = 88;
 
 const getNextCollapseMode = (mode: SectionCollapseMode): SectionCollapseMode => {
     if (mode === 'full') return 'summary';
-    if (mode === 'summary') return 'title';
+    if (mode === 'summary') return 'quarter';
+    if (mode === 'quarter') return 'title';
     return 'full';
 };
 
@@ -333,9 +335,9 @@ const getDefaultSectionLayout = (index: number): SectionCanvasLayout => ({
 const ensureSectionLayout = (layout: Partial<SectionCanvasLayout> | undefined, index: number): SectionCanvasLayout => {
     const fallback = getDefaultSectionLayout(index);
     const rawCollapseMode = (layout as (Partial<SectionCanvasLayout> & { collapseMode?: SectionCollapseMode }) | undefined)?.collapseMode;
-    const collapseMode = rawCollapseMode === 'full' || rawCollapseMode === 'summary' || rawCollapseMode === 'title'
+    const collapseMode = rawCollapseMode === 'full' || rawCollapseMode === 'summary' || rawCollapseMode === 'quarter' || rawCollapseMode === 'title'
         ? rawCollapseMode
-        : layout?.collapse_mode === 'full' || layout?.collapse_mode === 'summary' || layout?.collapse_mode === 'title'
+        : layout?.collapse_mode === 'full' || layout?.collapse_mode === 'summary' || layout?.collapse_mode === 'quarter' || layout?.collapse_mode === 'title'
             ? layout.collapse_mode
             : layout?.collapsed
                 ? 'summary'
@@ -831,6 +833,8 @@ const FormBuilder: React.FC = () => {
     const [hoveredProperty, setHoveredProperty] = useState<{ name: string; description: string } | null>(null);
     const [collapsedPropCategories, setCollapsedPropCategories] = useState<Record<string, boolean>>({});
     const [collapsedWidgetCategories, setCollapsedWidgetCategories] = useState<Record<string, boolean>>({});
+    const [sectionSearchQuery, setSectionSearchQuery] = useState('');
+    const [widgetSearchQuery, setWidgetSearchQuery] = useState('');
     const [isLeftPanelPinned, setIsLeftPanelPinned] = useState(false);
     const [isRightSidebarPinned, setIsRightSidebarPinned] = useState(true);
     const [view, setView] = useState<'flow' | 'section'>('flow');
@@ -856,6 +860,26 @@ const FormBuilder: React.FC = () => {
     const [activeSidebarTab, setActiveSidebarTab] = useState<'section' | 'widget' | 'console'>('section');
     const [isSectionListOpen, setIsSectionListOpen] = useState(false);
     const sectionListRef = React.useRef<HTMLDivElement | null>(null);
+    const [globalCollapseMode, setGlobalCollapseMode] = useState<SectionCollapseMode>('full');
+
+    const handleToggleAllCollapseModes = () => {
+        const nextMode = globalCollapseMode === 'full'
+            ? 'summary'
+            : globalCollapseMode === 'summary'
+                ? 'quarter'
+                : globalCollapseMode === 'quarter'
+                    ? 'title'
+                    : 'full';
+        setGlobalCollapseMode(nextMode);
+        setSections((prev) => prev.map((section, idx) => ({
+            ...section,
+            layout: {
+                ...ensureSectionLayout(section.layout, idx),
+                collapse_mode: nextMode,
+                collapsed: nextMode !== 'full',
+            }
+        })));
+    };
 
     useEffect(() => {
         if (selectedFieldId) {
@@ -865,10 +889,7 @@ const FormBuilder: React.FC = () => {
             setActiveSidebarTab('section');
         }
     }, [selectedFieldId]);
-    const [inspectorWidgetType, setInspectorWidgetType] = useState<FieldType>('input_text');
-    const [isSmartDropdownOpen, setIsSmartDropdownOpen] = useState(false);
-    const [smartSearchQuery, setSmartSearchQuery] = useState('');
-    const smartDropdownRef = React.useRef<HTMLDivElement | null>(null);
+
     const [initialHash, setInitialHash] = useState<string>('');
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -907,9 +928,6 @@ const FormBuilder: React.FC = () => {
             if (multiActionMenuRef.current && !multiActionMenuRef.current.contains(event.target as Node)) {
                 setShowMultiActionMenu(false);
                 setShowBackupTools(false);
-            }
-            if (smartDropdownRef.current && !smartDropdownRef.current.contains(event.target as Node)) {
-                setIsSmartDropdownOpen(false);
             }
             if (!isLeftPanelPinned && sectionListRef.current && !sectionListRef.current.contains(event.target as Node)) {
                 const trigger = document.getElementById('section-list-trigger');
@@ -975,7 +993,7 @@ const FormBuilder: React.FC = () => {
     const currentSectionIndex = sections.findIndex(p => p.id === currentSectionId) !== -1 ? sections.findIndex(p => p.id === currentSectionId) : 0;
     const fields = sections[currentSectionIndex]?.fields || [];
     const selectedField = sections.flatMap(p => p.fields).find(f => f.id === selectedFieldId) || null;
-    const selectedSection = sections[currentSectionIndex] || sections[0] || null;
+
     const selectedObjectProperties = selectedField?.object_definition?.properties || [];
 
     useEffect(() => {
@@ -1097,6 +1115,9 @@ const FormBuilder: React.FC = () => {
         const collapseMode = layout.collapse_mode || 'full';
         if (collapseMode === 'title') {
             return [];
+        }
+        if (collapseMode === 'quarter') {
+            return section.fields.slice(0, Math.max(1, Math.ceil(section.fields.length / 4)));
         }
         if (collapseMode === 'summary') {
             return section.fields.slice(0, Math.max(1, Math.ceil(section.fields.length / 2)));
@@ -1520,55 +1541,7 @@ const FormBuilder: React.FC = () => {
         addFieldToSection(currentSectionId, type, defaults, insertAtTop);
     };
 
-    const longPressTimeoutRef = React.useRef<any>(null);
-    const isLongPressActiveRef = React.useRef<boolean>(false);
 
-    const handlePlusButtonMouseDown = (e: React.MouseEvent) => {
-        if (e.shiftKey) {
-            addField(inspectorWidgetType, undefined, true);
-            return;
-        }
-        isLongPressActiveRef.current = false;
-        longPressTimeoutRef.current = setTimeout(() => {
-            isLongPressActiveRef.current = true;
-            addField(inspectorWidgetType, undefined, true);
-            showToast('Added to top', `Widget inserted at the top of the list`, 'success');
-        }, 1000);
-    };
-
-    const handlePlusButtonMouseUp = (e: React.MouseEvent) => {
-        if (longPressTimeoutRef.current) {
-            clearTimeout(longPressTimeoutRef.current);
-        }
-        if (!isLongPressActiveRef.current && !e.shiftKey) {
-            addField(inspectorWidgetType);
-        }
-    };
-
-    const handlePlusButtonMouseLeave = () => {
-        if (longPressTimeoutRef.current) {
-            clearTimeout(longPressTimeoutRef.current);
-        }
-    };
-
-    const handlePlusButtonTouchStart = () => {
-        isLongPressActiveRef.current = false;
-        longPressTimeoutRef.current = setTimeout(() => {
-            isLongPressActiveRef.current = true;
-            addField(inspectorWidgetType, undefined, true);
-            showToast('Added to top', `Widget inserted at the top of the list`, 'success');
-        }, 1000);
-    };
-
-    const handlePlusButtonTouchEnd = (e: React.TouchEvent) => {
-        if (longPressTimeoutRef.current) {
-            clearTimeout(longPressTimeoutRef.current);
-        }
-        if (!isLongPressActiveRef.current) {
-            e.preventDefault();
-            addField(inspectorWidgetType);
-        }
-    };
 
     const copyField = (fieldId: string) => {
         setSections(prev => prev.map(section => {
@@ -2250,7 +2223,7 @@ const FormBuilder: React.FC = () => {
                     ? 'border-[hsl(var(--primary))]/18 bg-[linear-gradient(90deg,rgba(15,118,110,0.12),rgba(255,255,255,0.76)_28%,rgba(255,255,255,0.92))]'
                     : 'border-[hsl(var(--border))] bg-[linear-gradient(90deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))]'
                     }`}>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
                         <button
                             onClick={() => navigate('/dashboard')}
                             className="p-2 hover:bg-[hsl(var(--surface-elevated))] rounded-md transition-all text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
@@ -2258,57 +2231,25 @@ const FormBuilder: React.FC = () => {
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
-                        <div className="w-10 h-10 bg-[hsl(var(--primary))] rounded-md flex items-center justify-center shadow-lg shadow-black/10">
+                        <div className="w-10 h-10 bg-[hsl(var(--primary))] rounded-md flex items-center justify-center shadow-lg shadow-black/10 shrink-0">
                             <Layout className="w-6 h-6 text-white" />
                         </div>
-                        <div className="flex min-w-0 items-center gap-3">
-                            <input
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="min-w-0 bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
-                            />
-                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
-                                Studio Builder
-                            </div>
-                            <div className="relative inline-grid grid-cols-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface))]/92 p-0.5 shadow-sm">
-                                <div
-                                    className={`pointer-events-none absolute top-0.5 h-[calc(100%-0.25rem)] w-[calc(50%-0.125rem)] rounded-full bg-[linear-gradient(135deg,rgba(134,239,172,0.95),rgba(167,243,208,0.92))] shadow-[0_4px_10px_rgba(74,222,128,0.2)] transition-all duration-300 ${view === 'flow' ? 'left-0.5' : 'left-[calc(50%)]'
-                                        }`}
-                                />
-                                <button
-                                    onClick={() => {
-                                        exitSection();
-                                    }}
-                                    className={`relative z-10 inline-flex min-w-[110px] items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${view === 'flow'
-                                        ? 'text-slate-950'
-                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
-                                        }`}
-                                >
-                                    <GitBranch className="h-3.5 w-3.5" />
-                                    <span>Flow Mode</span>
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if (!selectedSection) {
-                                            return;
-                                        }
-                                        enterSection(selectedSection.id);
-                                    }}
-                                    disabled={!selectedSection}
-                                    className={`relative z-10 inline-flex min-w-[110px] items-center justify-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${view === 'section'
-                                        ? 'text-slate-950'
-                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
-                                        } ${!selectedSection ? 'cursor-not-allowed opacity-50' : ''}`}
-                                >
-                                    <Layout className="h-3.5 w-3.5" />
-                                    <span>Inspector Mode</span>
-                                </button>
+                        <input
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="min-w-0 max-w-[320px] bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+
+                        <div className="rounded-md bg-[hsl(var(--surface-elevated))]/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                            Studio Builder
                         </div>
                     </div>
-                </div>
-            </header>
+                </header>
 
-                <div className={`flex flex-1 overflow-hidden ${view === 'section' ? 'p-4 pt-3' : ''}`}>
+                <div className="flex flex-1 overflow-hidden">
                     {/* Left Vertical Rail */}
                     <aside
                         className="flex h-full shrink-0 border-r border-[hsl(var(--border))]/45 bg-[hsl(var(--surface-elevated))]/55 transition-all select-none"
@@ -2351,17 +2292,14 @@ const FormBuilder: React.FC = () => {
                                         ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
                                         : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
                                 }`}
-                                title="Widget Toolbox"
+                                title="Fields Toolbox"
                             >
-                                <Type className="w-4 h-4" />
+                                <ListTodo className="w-4 h-4" />
                             </button>
                         </div>
                     </aside>
 
-                    <div className={`flex flex-1 overflow-hidden ${view === 'section'
-                        ? 'flex-col rounded-[28px] border border-[hsl(var(--border))] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.92))] shadow-[0_24px_60px_rgba(15,23,42,0.08)]'
-                        : ''
-                        }`}>
+                    <div className="flex flex-1 overflow-hidden">
 
 
                     <div className="flex min-h-0 flex-1 overflow-hidden relative">
@@ -2403,38 +2341,63 @@ const FormBuilder: React.FC = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                        <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Select a section to edit its widgets in the center canvas.</p>
+                                        <div className="mt-3 relative flex items-center">
+                                            <Search className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))] absolute left-3 pointer-events-none" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search sections..."
+                                                value={sectionSearchQuery}
+                                                onChange={(e) => setSectionSearchQuery(e.target.value)}
+                                                className="w-full text-xs pl-9 pr-8 py-2 bg-[hsl(var(--surface))] rounded-lg border border-[hsl(var(--border))]/60 outline-none text-[hsl(var(--text-primary))] placeholder-[hsl(var(--text-tertiary))]/70 focus:border-[hsl(var(--primary))]/60 focus:ring-2 focus:ring-[hsl(var(--primary))]/10 transition-all shadow-inner"
+                                            />
+                                            {sectionSearchQuery && (
+                                                <button
+                                                    onClick={() => setSectionSearchQuery('')}
+                                                    className="absolute right-2.5 p-1 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] rounded transition-all text-xs"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto hide-scrollbar p-3 space-y-2">
-                                        {sections.map((section, index) => {
-                                            const isActive = section.id === currentSectionId;
-                                            return (
-                                                <button
-                                                    key={section.id}
-                                                    onClick={() => {
-                                                        setCurrentSectionId(section.id);
-                                                        setSelectedFieldId(null);
-                                                        setIsSectionListOpen(false);
-                                                        if (view === 'flow') {
-                                                            centerSectionInFlowCanvas(section.id);
-                                                        }
-                                                    }}
-                                                    className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
-                                                        ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/6 text-[hsl(var(--primary))] shadow-sm'
-                                                        : 'border-transparent bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <p className="truncate text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title || `Section ${index + 1}`}</p>
-                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{section.fields.length} widget{section.fields.length !== 1 ? 's' : ''}</p>
+                                        {sections
+                                            .filter(section => section.title.toLowerCase().includes(sectionSearchQuery.toLowerCase()))
+                                            .map((section) => {
+                                                const originalIndex = sections.findIndex(s => s.id === section.id);
+                                                const isActive = section.id === currentSectionId;
+                                                return (
+                                                    <button
+                                                        key={section.id}
+                                                        onClick={() => {
+                                                            setCurrentSectionId(section.id);
+                                                            setSelectedFieldId(null);
+                                                            setIsSectionListOpen(false);
+                                                            if (view === 'flow') {
+                                                                centerSectionInFlowCanvas(section.id);
+                                                            }
+                                                        }}
+                                                        className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${isActive
+                                                            ? 'border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/6 text-[hsl(var(--primary))] shadow-sm'
+                                                            : 'border-transparent bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <p className="truncate text-sm font-semibold text-[hsl(var(--text-primary))]">{section.title || `Section ${originalIndex + 1}`}</p>
+                                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{section.fields.length} field{section.fields.length !== 1 ? 's' : ''}</p>
+                                                            </div>
+                                                            <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">S{originalIndex + 1}</span>
                                                         </div>
-                                                        <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">S{index + 1}</span>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
+                                                    </button>
+                                                );
+                                            })}
+                                        {sections.filter(section => section.title.toLowerCase().includes(sectionSearchQuery.toLowerCase())).length === 0 && (
+                                            <div className="text-center py-6 text-xs text-[hsl(var(--text-tertiary))] italic">
+                                                No sections match "{sectionSearchQuery}"
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
@@ -2442,8 +2405,8 @@ const FormBuilder: React.FC = () => {
                                     <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <div>
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Widget Toolbox</p>
-                                                <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Variables & Widgets</h3>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Field Toolbox</p>
+                                                <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Form Fields</h3>
                                             </div>
                                             <button
                                                 onClick={() => setIsLeftPanelPinned(!isLeftPanelPinned)}
@@ -2453,56 +2416,91 @@ const FormBuilder: React.FC = () => {
                                                 <Pin className={`w-3.5 h-3.5 ${isLeftPanelPinned ? 'fill-current rotate-45' : ''}`} />
                                             </button>
                                         </div>
-                                        <p className="mt-2 text-xs text-[hsl(var(--text-secondary))]">Click a widget to insert it into the active section.</p>
+                                        <div className="mt-3 relative flex items-center">
+                                            <Search className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))] absolute left-3 pointer-events-none" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search fields..."
+                                                value={widgetSearchQuery}
+                                                onChange={(e) => setWidgetSearchQuery(e.target.value)}
+                                                className="w-full text-xs pl-9 pr-8 py-2 bg-[hsl(var(--surface))] rounded-lg border border-[hsl(var(--border))]/60 outline-none text-[hsl(var(--text-primary))] placeholder-[hsl(var(--text-tertiary))]/70 focus:border-[hsl(var(--primary))]/60 focus:ring-2 focus:ring-[hsl(var(--primary))]/10 transition-all shadow-inner"
+                                            />
+                                            {widgetSearchQuery && (
+                                                <button
+                                                    onClick={() => setWidgetSearchQuery('')}
+                                                    className="absolute right-2.5 p-1 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] rounded transition-all text-xs"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto p-3 space-y-3 hide-scrollbar select-none">
-                                        {['Standard Inputs', 'Time & Date', 'Selection Widgets', 'Device Metrics', 'Media Input', 'Advanced Inputs'].map(category => {
-                                            const isCollapsed = !!collapsedWidgetCategories[category];
-                                            const categoryWidgets = widgetLibrary.filter(w => widgetCategoryMap[w.type] === category);
-                                            if (categoryWidgets.length === 0) return null;
+                                        {(() => {
+                                            const filteredCategories = ['Standard Inputs', 'Time & Date', 'Selection Fields', 'Device Metrics', 'Media Input', 'Advanced Inputs'].map(category => {
+                                                const categoryWidgets = widgetLibrary.filter(w => widgetCategoryMap[w.type] === category);
+                                                const filteredWidgets = categoryWidgets.filter(widget => {
+                                                    const query = widgetSearchQuery.toLowerCase();
+                                                    const labelMatches = widget.label.toLowerCase().includes(query);
+                                                    const hintMatches = (widgetHints[widget.type] || '').toLowerCase().includes(query);
+                                                    return labelMatches || hintMatches;
+                                                });
+                                                return { category, widgets: filteredWidgets };
+                                            }).filter(cat => cat.widgets.length > 0);
 
-                                            return (
-                                                <div key={category} className="space-y-1">
-                                                    <button
-                                                        onClick={() => setCollapsedWidgetCategories(prev => ({ ...prev, [category]: !prev[category] }))}
-                                                        className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-[hsl(var(--surface-elevated))]/50 rounded-lg text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-colors"
-                                                    >
-                                                        <div className="flex items-center gap-1.5">
-                                                            <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
-                                                            <span>{category}</span>
-                                                        </div>
-                                                        <span className="text-[9px] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
-                                                            {categoryWidgets.length}
-                                                        </span>
-                                                    </button>
-                                                    {!isCollapsed && (
-                                                        <div className="grid grid-cols-1 gap-1 pl-1 animate-in fade-in duration-100">
-                                                            {categoryWidgets.map(widget => (
-                                                                <button
-                                                                    key={widget.type}
-                                                                    onClick={() => addField(widget.type)}
-                                                                    title={widgetHints[widget.type]}
-                                                                    className="group flex items-center justify-between w-full rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-[hsl(var(--border))]/30 px-2.5 py-2 text-left transition-all"
-                                                                >
-                                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shrink-0 group-hover:bg-[hsl(var(--primary))]/18 transition-colors">
-                                                                            {widget.icon}
+                                            if (filteredCategories.length === 0 && widgetSearchQuery) {
+                                                return (
+                                                    <div className="text-center py-8 text-xs text-[hsl(var(--text-tertiary))] italic">
+                                                        No fields match "{widgetSearchQuery}"
+                                                    </div>
+                                                );
+                                            }
+
+                                            return filteredCategories.map(({ category, widgets }) => {
+                                                const isCollapsed = widgetSearchQuery ? false : !!collapsedWidgetCategories[category];
+                                                return (
+                                                    <div key={category} className="space-y-1">
+                                                        <button
+                                                            onClick={() => setCollapsedWidgetCategories(prev => ({ ...prev, [category]: !prev[category] }))}
+                                                            className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-[hsl(var(--surface-elevated))]/50 rounded-lg text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-colors"
+                                                        >
+                                                            <div className="flex items-center gap-1.5">
+                                                                <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                <span>{category}</span>
+                                                            </div>
+                                                            <span className="text-[9px] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
+                                                                {widgets.length}
+                                                            </span>
+                                                        </button>
+                                                        {!isCollapsed && (
+                                                            <div className="grid grid-cols-1 gap-1 pl-1 animate-in fade-in duration-100">
+                                                                {widgets.map(widget => (
+                                                                    <button
+                                                                        key={widget.type}
+                                                                        onClick={() => addField(widget.type)}
+                                                                        title={widgetHints[widget.type]}
+                                                                        className="group flex items-center justify-between w-full rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-[hsl(var(--border))]/30 px-2.5 py-2 text-left transition-all"
+                                                                    >
+                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shrink-0 group-hover:bg-[hsl(var(--primary))]/18 transition-colors">
+                                                                                {widget.icon}
+                                                                            </div>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <p className="truncate text-xs font-semibold text-[hsl(var(--text-primary))]">{widget.label}</p>
+                                                                                <p className="truncate text-[10px] text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--text-secondary))] mt-0.5" title={widgetHints[widget.type]}>
+                                                                                    {widgetHints[widget.type]}
+                                                                                </p>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="min-w-0 flex-1">
-                                                                            <p className="truncate text-xs font-semibold text-[hsl(var(--text-primary))]">{widget.label}</p>
-                                                                            <p className="truncate text-[10px] text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--text-secondary))] mt-0.5" title={widgetHints[widget.type]}>
-                                                                                {widgetHints[widget.type]}
-                                                                            </p>
-                                                                        </div>
-                                                                    </div>
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
                                     </div>
                                 </div>
                             )}
@@ -2510,10 +2508,7 @@ const FormBuilder: React.FC = () => {
                     )}
 
                     {/* Main Canvas — switches between Flow Mode and Inspector Mode */}
-                    <main className={`flex flex-1 flex-col overflow-hidden ${view === 'flow'
-                        ? 'bg-transparent'
-                        : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.66),rgba(248,250,252,0.9))]'
-                        }`}>
+                    <main className="flex flex-1 flex-col overflow-hidden bg-transparent">
 
 
                         <div className="min-h-0 flex-1 overflow-y-auto hide-scrollbar">
@@ -2528,20 +2523,24 @@ const FormBuilder: React.FC = () => {
                             >
                                 <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                                     <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
-                                        <div className="flex items-center gap-4">
-                                            <div>
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Canvas</p>
-                                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{sections.length} sections</span>
-                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
-                                                </div>
-                                            </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Canvas</span>
+                                            <button
+                                                onClick={handleToggleAllCollapseModes}
+                                                className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all shadow-sm"
+                                                title="Toggle all sections view mode"
+                                            >
+                                                <Sliders className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                                <span>{globalCollapseMode === 'full' ? '100%' : globalCollapseMode === 'summary' ? '50%' : globalCollapseMode === 'quarter' ? '25%' : 'collapse'}</span>
+                                            </button>
                                         </div>
                                         <button
-                                            onClick={addSection}
-                                            className="rounded-xl border border-transparent bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-3.5 py-1.5 text-xs font-bold text-[hsl(var(--text-primary))] transition-all hover:text-[hsl(var(--primary))] shadow-sm"
+                                            onClick={() => enterSection(sections.some(s => s.id === currentSectionId) ? currentSectionId : sections[0]?.id)}
+                                            disabled={sections.length === 0}
+                                            title="Inspector Mode"
+                                            className="rounded-xl border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] p-2.5 text-[hsl(var(--text-primary))] transition-all hover:text-[hsl(var(--primary))] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-[hsl(var(--text-primary))] disabled:hover:bg-[hsl(var(--surface-elevated))]/80 shadow-sm"
                                         >
-                                            Add Section
+                                            <Layout className="w-[18px] h-[18px]" />
                                         </button>
                                     </div>
 
@@ -2787,11 +2786,11 @@ const FormBuilder: React.FC = () => {
                                                                 <div className="flex items-center gap-2">
                                                                     <button
                                                                         onClick={() => updateSectionLayout(section.id, { collapse_mode: getNextCollapseMode(collapseMode) })}
-                                                                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))]"
+                                                                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))]"
                                                                         title="Cycle card collapse mode"
                                                                     >
-                                                                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapseMode === 'title' ? '-rotate-90' : collapseMode === 'summary' ? 'rotate-0' : 'rotate-180'}`} />
-                                                                        <span>{collapseMode === 'full' ? 'All' : collapseMode === 'summary' ? '50%' : 'Title'}</span>
+                                                                        <Sliders className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                                                        <span>{collapseMode === 'full' ? '100%' : collapseMode === 'summary' ? '50%' : collapseMode === 'quarter' ? '25%' : 'collapse'}</span>
                                                                     </button>
                                                                     {sections.length > 1 && (
                                                                         <button
@@ -2826,211 +2825,35 @@ const FormBuilder: React.FC = () => {
                             <div
                                 key={`section-view-${currentSectionId}`}
                                 onClick={() => setSelectedFieldId(null)}
-                                className={`min-h-full p-4 lg:p-6 animate-in fade-in ${slideDir === 'forward' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
+                                className={`p-4 h-full flex flex-col overflow-hidden animate-in fade-in ${slideDir === 'forward' ? 'slide-in-from-right-4' : 'slide-in-from-left-4'
                                     } duration-300`}
                             >
-                                <div className="w-full max-w-5xl space-y-6">
-
-                                    {/* ── Section selector chip with integrated Widget Inserter ───────────────────────────── */}
-                                    {(() => {
-                                        const sec = sections.find(s => s.id === currentSectionId)!;
-                                        const isSelected = selectedFieldId === null;
-                                        return (
-                                            <div className="sticky -top-4 lg:-top-6 z-30 bg-[hsl(var(--background))] py-2.5 -my-2.5 border-b border-[hsl(var(--border))]/10">
-                                                <div
-                                                    onClick={() => setSelectedFieldId(null)}
-                                                    className={`w-full flex flex-col gap-4 px-5 py-4 rounded-xl border transition-all text-left group cursor-pointer ${isSelected
-                                                        ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/5 shadow-sm shadow-[hsl(var(--primary))]/5'
-                                                        : 'border-transparent bg-[hsl(var(--surface-elevated))]/45 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-transparent'
-                                                        }`}
-                                                >
-                                                    {/* Row 1: Section Name and field count */}
-                                                    <div className="flex items-center justify-between w-full">
-                                                        <div className="flex items-center gap-3 min-w-0">
-                                                            {/* Section icon */}
-                                                            <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-all ${isSelected
-                                                                ? 'bg-[hsl(var(--primary))] text-white'
-                                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] group-hover:bg-[hsl(var(--primary))]/10 group-hover:text-[hsl(var(--primary))]'
-                                                                }`}>
-                                                                <Layout className="w-4.5 h-4.5" />
-                                                            </div>
-
-                                                            {/* Section info */}
-                                                            <div className="min-w-0">
-                                                                <p className={`font-bold text-sm truncate ${isSelected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-primary))]'}`}>
-                                                                    {sec.title}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Field count and status */}
-                                                        <div className="text-xs text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/60 px-2.5 py-1 rounded-md border border-[hsl(var(--border))]/25 shadow-sm">
-                                                            {sec.fields.length} field{sec.fields.length !== 1 ? 's' : ''} · <span className="capitalize">{sec.properties.render_mode} mode</span>
-                                                            {sec.properties.shuffle_options && ' · shuffled'}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Row 2: Widget Component taking full width */}
-                                                    <div className="w-full flex items-center justify-between gap-4" onClick={(e) => e.stopPropagation()}>
-                                                        <div className="relative w-full" ref={smartDropdownRef}>
-                                                            <div className="flex items-stretch rounded-xl border border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))] shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[hsl(var(--primary))]/20 focus-within:border-[hsl(var(--primary))] transition-all duration-200 w-full">
-                                                                
-                                                                {/* Main Area: Toggle Search Dropdown */}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setIsSmartDropdownOpen(!isSmartDropdownOpen);
-                                                                        setSmartSearchQuery('');
-                                                                    }}
-                                                                    className="flex-1 bg-transparent hover:bg-[hsl(var(--surface-elevated))]/40 active:bg-[hsl(var(--surface-elevated))]/80 text-left px-4 py-2.5 flex items-center justify-between text-[hsl(var(--text-primary))] transition-all duration-150 outline-none select-none"
-                                                                    title="Click to search widgets & change active item"
-                                                                >
-                                                                    <div className="flex items-center gap-3">
-                                                                        <span className="text-[hsl(var(--primary))] shrink-0">
-                                                                            {getWidget(inspectorWidgetType)?.icon || <Type className="w-4 h-4" />}
-                                                                        </span>
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-[8px] text-[hsl(var(--text-tertiary))] uppercase font-bold tracking-wider leading-none">Add Widget</span>
-                                                                            <span className="text-xs font-bold text-[hsl(var(--text-primary))] mt-0.5">
-                                                                                {getWidget(inspectorWidgetType)?.label || inspectorWidgetType}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <ChevronDown className="w-4 h-4 text-[hsl(var(--text-tertiary))]/60 transition-transform" />
-                                                                </button>
-
-                                                                {/* Right Side: Insert Active Widget */}
-                                                                <button
-                                                                    onMouseDown={handlePlusButtonMouseDown}
-                                                                    onMouseUp={handlePlusButtonMouseUp}
-                                                                    onMouseLeave={handlePlusButtonMouseLeave}
-                                                                    onTouchStart={handlePlusButtonTouchStart}
-                                                                    onTouchEnd={handlePlusButtonTouchEnd}
-                                                                    className="px-4 flex items-center justify-center bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-white transition-all duration-150 outline-none select-none border-l border-[hsl(var(--border))]/85 active:scale-95 active:bg-[hsl(var(--primary))]/20"
-                                                                    title="Click to insert at bottom. Long-press or Shift+Click to insert at top."
-                                                                >
-                                                                    <Plus className="w-4 h-4 stroke-[2.5]" />
-                                                                </button>
-                                                            </div>
-
-                                                        {/* Dropdown Panel */}
-                                                        {isSmartDropdownOpen && (
-                                                            <div className="absolute right-0 mt-2 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-2xl rounded-2xl z-50 overflow-hidden flex flex-col w-[360px] max-h-[420px] transition-all duration-200 animate-in fade-in slide-in-from-top-2">
-                                                                
-                                                                {/* Search Input Block */}
-                                                                <div className="p-3 bg-[hsl(var(--surface-elevated))]/60 border-b border-[hsl(var(--border))]/45 sticky top-0 flex items-center gap-2">
-                                                                    <Search className="w-4 h-4 text-[hsl(var(--text-tertiary))]" />
-                                                                    <input
-                                                                        type="text"
-                                                                        value={smartSearchQuery}
-                                                                        onChange={(e) => setSmartSearchQuery(e.target.value)}
-                                                                        placeholder="Type to filter options..."
-                                                                        className="w-full bg-transparent text-xs text-[hsl(var(--text-primary))] placeholder-[hsl(var(--text-tertiary))] outline-none font-medium"
-                                                                        autoFocus
-                                                                    />
-                                                                    {smartSearchQuery && (
-                                                                        <button 
-                                                                            onClick={() => setSmartSearchQuery('')} 
-                                                                            className="text-[10px] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] font-semibold px-1"
-                                                                        >
-                                                                            Clear
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-
-                                                                {/* List of Categorized Widgets */}
-                                                                <div className="flex-1 overflow-y-auto hide-scrollbar p-1.5 divide-y divide-[hsl(var(--border))]/20">
-                                                                    {(() => {
-                                                                        const filteredWidgets = widgetLibrary.filter(widget => {
-                                                                            const query = smartSearchQuery.toLowerCase().trim();
-                                                                            if (!query) return true;
-                                                                            const hint = widgetHints[widget.type]?.toLowerCase() || '';
-                                                                            const label = widget.label.toLowerCase();
-                                                                            return label.includes(query) || hint.includes(query);
-                                                                        });
-
-                                                                        // Group by categories
-                                                                        const categories = [...new Set(widgetLibrary.map(w => widgetCategoryMap[w.type]))];
-
-                                                                        return categories.map(category => {
-                                                                            const items = filteredWidgets.filter(w => widgetCategoryMap[w.type] === category);
-                                                                            if (items.length === 0) return null;
-
-                                                                            return (
-                                                                                <div key={category} className="py-2 first:pt-1 last:pb-1">
-                                                                                    <div className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-[0.15em] px-3 py-1.5 select-none">
-                                                                                        {category}
-                                                                                    </div>
-                                                                                    <div className="space-y-0.5">
-                                                                                        {items.map(widget => {
-                                                                                            const isActive = widget.type === inspectorWidgetType;
-                                                                                            return (
-                                                                                                <button
-                                                                                                    key={widget.type}
-                                                                                                    onClick={() => {
-                                                                                                        setInspectorWidgetType(widget.type);
-                                                                                                        addField(widget.type);
-                                                                                                        setIsSmartDropdownOpen(false);
-                                                                                                    }}
-                                                                                                    className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between rounded-lg transition-all duration-150 group ${
-                                                                                                        isActive 
-                                                                                                            ? 'bg-[hsl(var(--primary))]/10 border border-[hsl(var(--primary))]/20 text-[hsl(var(--primary))]' 
-                                                                                                            : 'border border-transparent hover:bg-[hsl(var(--surface-elevated))]/65 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'
-                                                                                                    }`}
-                                                                                                >
-                                                                                                    <div className="flex items-center gap-3 min-w-0">
-                                                                                                        <span className={`text-sm shrink-0 transition-colors ${isActive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--primary))]'}`}>
-                                                                                                            {widget.icon}
-                                                                                                        </span>
-                                                                                                        <div className="flex flex-col min-w-0">
-                                                                                                            <span className="font-semibold truncate">{widget.label}</span>
-                                                                                                            <span className="text-[10px] text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--text-secondary))] truncate mt-0.5">
-                                                                                                                {widgetHints[widget.type]}
-                                                                                                            </span>
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                    {isActive && <span className="text-xs text-[hsl(var(--primary))] font-bold pl-2 select-none">✓</span>}
-                                                                                                </button>
-                                                                                            );
-                                                                                        })}
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        });
-                                                                    })()}
-                                                                </div>
-
-                                                                {/* Footer match count */}
-                                                                <div className="px-3 py-2 bg-[hsl(var(--surface-elevated))]/40 border-t border-[hsl(var(--border))]/40 flex items-center justify-between text-[10px] text-[hsl(var(--text-tertiary))] font-medium">
-                                                                    <span>
-                                                                        Matches:{' '}
-                                                                        <strong className="text-[hsl(var(--text-secondary))]">
-                                                                            {
-                                                                                widgetLibrary.filter(widget => {
-                                                                                    const query = smartSearchQuery.toLowerCase().trim();
-                                                                                    if (!query) return true;
-                                                                                    const hint = widgetHints[widget.type]?.toLowerCase() || '';
-                                                                                    const label = widget.label.toLowerCase();
-                                                                                    return label.includes(query) || hint.includes(query);
-                                                                                }).length
-                                                                            }
-                                                                        </strong>{' '}
-                                                                        / {widgetLibrary.length}
-                                                                    </span>
-                                                                    <span>Auto-inserts on select</span>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
+                                        <div className="flex items-center gap-4">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Inspector</p>
+                                                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{sections.length} sections</span>
+                                                    <span className="rounded-lg bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 border border-[hsl(var(--border))]/20 shadow-sm">{logic.length + getFlowConnections().filter((link) => link.tone === 'option').length} routes</span>
                                                 </div>
                                             </div>
                                         </div>
-                                    );
-                                })()}
+                                        <button
+                                            onClick={exitSection}
+                                            title="Flow Mode"
+                                            className="rounded-xl border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] p-2.5 text-[hsl(var(--text-primary))] transition-all hover:text-[hsl(var(--primary))] shadow-sm"
+                                        >
+                                            <GitBranch className="w-[18px] h-[18px]" />
+                                        </button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.03),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
+                                        <div className="w-full max-w-5xl mx-auto space-y-6">
 
                                     {fields.length === 0 ? (
                                         <div className="bg-[hsl(var(--surface-elevated))]/30 border border-dashed border-[hsl(var(--border))]/40 rounded-2xl p-20 text-center text-[hsl(var(--text-tertiary))]">
-                                            <p className="text-lg font-medium">No widgets yet</p>
-                                            <p className="text-sm mt-2">Use the widget inserter in the header above to add the first widget.</p>
+                                            <p className="text-lg font-medium">No fields yet</p>
+                                            <p className="text-sm mt-2">Use the Field Toolbox in the left panel to add fields to this section.</p>
                                         </div>
                                     ) : (
                                         fields.map((field) => (
@@ -3156,6 +2979,8 @@ const FormBuilder: React.FC = () => {
                                             </div>
                                         ))
                                     )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -3177,11 +3002,11 @@ const FormBuilder: React.FC = () => {
                                 } animate-in slide-in-from-right-4 fade-in duration-300`}
                             >
                                 {/* Top Tab Bar */}
-                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-3 py-2 flex items-center justify-between gap-1 select-none">
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-2 py-2 flex items-center justify-between gap-1 select-none">
                                     <div className="flex gap-1 flex-1">
                                         {(['section', 'widget', 'console'] as const).map((tab) => {
-                                            const label = tab === 'section' ? 'Section' : tab === 'widget' ? 'Widget' : 'Console';
-                                            const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
+                                            const label = tab === 'section' ? 'Section' : tab === 'widget' ? 'Field' : 'Console';
+                                            const Icon = tab === 'section' ? Settings : tab === 'widget' ? ListTodo : Terminal;
                                             const isActive = activeSidebarTab === tab;
                                             return (
                                                 <button
@@ -3189,7 +3014,7 @@ const FormBuilder: React.FC = () => {
                                                     onClick={() => {
                                                         setActiveSidebarTab(tab);
                                                     }}
-                                                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
                                                         isActive
                                                             ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/25'
                                                             : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] bg-transparent'
@@ -4752,8 +4577,8 @@ const FormBuilder: React.FC = () => {
                             {/* Top Tab Icons */}
                             <div className="flex flex-col items-center gap-3 w-full">
                                 {(['section', 'widget', 'console'] as const).map((tab) => {
-                                    const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
-                                    const tooltip = tab === 'section' ? 'Section Settings' : tab === 'widget' ? 'Widget Settings' : 'Form Console';
+                                    const Icon = tab === 'section' ? Settings : tab === 'widget' ? ListTodo : Terminal;
+                                    const tooltip = tab === 'section' ? 'Section Settings' : tab === 'widget' ? 'Field Settings' : 'Form Console';
                                     const isActive = isRightSidebarOpen && activeSidebarTab === tab;
                                     const isConsole = tab === 'console';
 

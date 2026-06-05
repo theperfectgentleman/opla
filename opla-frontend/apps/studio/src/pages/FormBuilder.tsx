@@ -10,7 +10,7 @@ import {
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
     Eye, RotateCcw, Star, Search, Globe, AlertCircle, CheckCircle2,
-    ListTodo, Sliders, ChevronsUpDown
+    ListTodo, Sliders, ChevronsUpDown, Hand, MousePointer
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -865,16 +865,23 @@ const FormBuilder: React.FC = () => {
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
     const panStartRef = React.useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+    const [canvasMode, setCanvasMode] = useState<'select' | 'pan'>('select');
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
+            const activeEl = document.activeElement;
+            const isTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('contenteditable') === 'true');
+            if (isTyping) {
+                return;
+            }
+
             if (event.code === 'Space') {
-                const activeEl = document.activeElement;
-                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('contenteditable') === 'true')) {
-                    return;
-                }
                 event.preventDefault();
                 setIsSpacePressed(true);
+            } else if (event.key.toLowerCase() === 'h') {
+                setCanvasMode('pan');
+            } else if (event.key.toLowerCase() === 'v') {
+                setCanvasMode('select');
             }
         };
 
@@ -937,7 +944,20 @@ const FormBuilder: React.FC = () => {
     };
 
     const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!isSpacePressed) return;
+        // Pan if we are in pan mode, holding space, or clicking with middle mouse button (button === 1)
+        const isMiddleClick = event.button === 1;
+        const shouldPan = canvasMode === 'pan' || isSpacePressed || isMiddleClick;
+        
+        // If we are not in panning state, check if we clicked on the background
+        if (!shouldPan) {
+            const isInteractive = (event.target as HTMLElement).closest('[data-drag-handle="true"]') || 
+                                  (event.target as HTMLElement).closest('button') || 
+                                  (event.target as HTMLElement).closest('.absolute.rounded-2xl.border'); // card container
+            if (isInteractive) {
+                return;
+            }
+        }
+        
         event.preventDefault();
         setIsPanning(true);
         panStartRef.current = {
@@ -2612,6 +2632,33 @@ const FormBuilder: React.FC = () => {
                                     <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mr-1">Canvas</span>
+                                            
+                                            {/* CANVAS MODE TOGGLE BUTTONS */}
+                                            <div className="flex items-center rounded-lg border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/40 p-0.5 shadow-sm mr-2">
+                                                <button
+                                                    onClick={() => setCanvasMode('select')}
+                                                    className={`p-1 rounded-md transition-all ${
+                                                        canvasMode === 'select'
+                                                            ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                            : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'
+                                                    }`}
+                                                    title="Select / Drag sections (V)"
+                                                >
+                                                    <MousePointer className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setCanvasMode('pan')}
+                                                    className={`p-1 rounded-md transition-all ${
+                                                        canvasMode === 'pan'
+                                                            ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                                            : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'
+                                                    }`}
+                                                    title="Pan canvas (H)"
+                                                >
+                                                    <Hand className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+
                                             <button
                                                 onClick={handleToggleAllCollapseModes}
                                                 className="w-[120px] inline-flex items-center justify-center gap-1.5 rounded-lg border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all shadow-sm"
@@ -2659,11 +2706,11 @@ const FormBuilder: React.FC = () => {
                                             onPointerMove={handleCanvasPointerMove}
                                             onPointerUp={handleCanvasPointerUp}
                                             className={`relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))] ${
-                                                isSpacePressed
-                                                    ? isPanning
-                                                        ? 'cursor-grabbing select-none'
-                                                        : 'cursor-grab select-none'
-                                                    : ''
+                                                isPanning
+                                                    ? 'cursor-grabbing select-none'
+                                                    : canvasMode === 'pan' || isSpacePressed
+                                                        ? 'cursor-grab'
+                                                        : 'cursor-default'
                                             }`}
                                         >
                                             <div
@@ -2730,7 +2777,8 @@ const FormBuilder: React.FC = () => {
                                                         >
                                                             <div
                                                                 onPointerDown={(event) => {
-                                                                    if (isSpacePressed) {
+                                                                    const isMiddleClick = event.button === 1;
+                                                                    if (isSpacePressed || canvasMode === 'pan' || isMiddleClick) {
                                                                         return;
                                                                     }
                                                                     if ((event.target as HTMLElement).closest('button')) {

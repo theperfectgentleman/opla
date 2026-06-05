@@ -17,9 +17,13 @@ import ReportDetail from './pages/ReportDetail';
 
 function App() {
   useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    if (stored === 'light' || stored === 'dark') {
-      document.documentElement.setAttribute('data-theme', stored);
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme === 'light' || storedTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', storedTheme);
+    }
+    const storedFont = localStorage.getItem('font-profile');
+    if (storedFont === 'modern' || storedFont === 'warm' || storedFont === 'editorial' || storedFont === 'developer') {
+      document.documentElement.setAttribute('data-font-profile', storedFont);
     }
   }, []);
 

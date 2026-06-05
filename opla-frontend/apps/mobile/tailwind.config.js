@@ -7,6 +7,13 @@ module.exports = {
     ],
     theme: {
         extend: {
+            fontFamily: {
+                sans: ["PlusJakartaSans-Regular", "sans-serif"],
+                medium: ["PlusJakartaSans-Medium", "sans-serif"],
+                semibold: ["PlusJakartaSans-SemiBold", "sans-serif"],
+                bold: ["PlusJakartaSans-Bold", "sans-serif"],
+                display: ["PlusJakartaSans-Bold", "sans-serif"],
+            },
             colors: {
                 primary: "#6366f1", // Indigo 500
                 secondary: "#ec4899", // Pink 500

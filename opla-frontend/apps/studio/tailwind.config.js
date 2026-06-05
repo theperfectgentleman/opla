@@ -8,6 +8,11 @@ module.exports = {
     ],
     theme: {
         extend: {
+            fontFamily: {
+                sans: ["var(--font-body)", "system-ui", "sans-serif"],
+                display: ["var(--font-heading)", "system-ui", "sans-serif"],
+                mono: ["'Geist Mono'", "monospace"],
+            },
             colors: {
                 // Vibrant Palette
                 primary: {

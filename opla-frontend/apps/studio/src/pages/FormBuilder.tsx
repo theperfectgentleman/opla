@@ -9,7 +9,7 @@ import {
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
-    Eye, RotateCcw, Star, Search, Plus
+    Eye, RotateCcw, Star, Search, Plus, Globe, AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -2303,37 +2303,10 @@ const FormBuilder: React.FC = () => {
                                     <Layout className="h-3.5 w-3.5" />
                                     <span>Inspector Mode</span>
                                 </button>
-                            </div>
-                            {view === 'section' && (
-                                <button
-                                    id="section-list-trigger"
-                                    onClick={() => setIsSectionListOpen(!isSectionListOpen)}
-                                    className="flex items-center gap-2 max-w-[220px] truncate rounded-full border border-[hsl(var(--primary))]/20 bg-[hsl(var(--primary))]/8 hover:bg-[hsl(var(--primary))]/12 px-3 py-1.5 text-[11px] font-semibold text-[hsl(var(--primary))] shadow-sm transition-all animate-in fade-in duration-200"
-                                    title="View sections list"
-                                >
-                                    <Layers className="w-3.5 h-3.5" />
-                                    <span>{sections.find(s => s.id === currentSectionId)?.title || 'Section'}</span>
-                                    <ChevronDown className={`w-3 h-3 transition-transform ${isSectionListOpen ? 'rotate-180' : ''}`} />
-                                </button>
-                            )}
                         </div>
                     </div>
-                    <div className="flex items-center space-x-3">
-                        <div className={`text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg border ${formMeta?.status === 'live'
-                            ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))] border-[hsl(var(--success))]/30'
-                            : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border-[hsl(var(--border))]'
-                            }`}>
-                            {formMeta?.status === 'live'
-                                ? `Live v${formMeta?.published_version ?? formMeta?.version ?? 0}`
-                                : 'Draft'}
-                        </div>
-                        {hasUnsavedChanges && (
-                            <div className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-lg bg-[hsl(var(--warning))]/15 text-[hsl(var(--warning))] border border-[hsl(var(--warning))]/30">
-                                Unsaved Changes
-                            </div>
-                        )}
-                    </div>
-                </header>
+                </div>
+            </header>
 
                 <div className={`flex flex-1 overflow-hidden ${view === 'section' ? 'p-4 pt-3' : ''}`}>
                     {/* Left Vertical Rail */}
@@ -2621,8 +2594,8 @@ const FormBuilder: React.FC = () => {
                                                         <div
                                                             key={section.id}
                                                             className={`absolute rounded-2xl border transition-all select-none ${isActive
-                                                                ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--surface))] shadow-[0_14px_40px_rgba(15,23,42,0.08)]'
-                                                                : 'border-[hsl(var(--border))]/40 bg-[hsl(var(--surface))]/95 shadow-[0_8px_30px_rgba(15,23,42,0.04)] hover:border-[hsl(var(--primary))]/25'
+                                                                ? 'border-[hsl(var(--primary-orange))]/80 bg-[hsl(var(--surface))] shadow-[0_14px_40px_rgba(244,117,43,0.12)]'
+                                                                : 'border-[hsl(var(--primary))]/55 bg-[hsl(var(--surface))]/95 shadow-[0_8px_30px_rgba(15,23,42,0.04)] hover:border-[hsl(var(--primary))]/80'
                                                                 }`}
                                                             style={{ left: layout.x, top: layout.y, width: layout.width || FLOW_NODE_WIDTH, zIndex: isActive ? 20 : 1 }}
                                                         >
@@ -2642,7 +2615,9 @@ const FormBuilder: React.FC = () => {
                                                             >
                                                                 <div className="min-w-0">
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))]">
+                                                                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-xl transition-all ${isActive
+                                                                            ? 'bg-[hsl(var(--primary-orange))]/12 text-[hsl(var(--primary-orange))]'
+                                                                            : 'bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))]'}`}>
                                                                             <Layers className="w-4 h-4" />
                                                                         </span>
                                                                         <div>
@@ -2653,7 +2628,7 @@ const FormBuilder: React.FC = () => {
                                                                 </div>
                                                                 <button
                                                                     onClick={() => enterSection(section.id)}
-                                                                    className="rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))] shadow-sm"
+                                                                    className={`rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] transition-all hover:bg-[hsl(var(--surface-elevated))] ${isActive ? 'hover:text-[hsl(var(--primary-orange))]' : 'hover:text-[hsl(var(--primary))]'} shadow-sm`}
                                                                 >
                                                                     Edit
                                                                 </button>
@@ -2681,7 +2656,7 @@ const FormBuilder: React.FC = () => {
 
                                                                 {collapseMode !== 'title' && (
                                                                     <div className="mb-3 flex flex-wrap gap-2">
-                                                                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${section.properties.render_mode === 'single' ? 'bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
+                                                                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${section.properties.render_mode === 'single' ? (isActive ? 'bg-[hsl(var(--primary-orange))]/12 text-[hsl(var(--primary-orange))]' : 'bg-[hsl(var(--primary))]/12 text-[hsl(var(--primary))]') : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
                                                                             {section.properties.render_mode}
                                                                         </span>
                                                                         <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--text-tertiary))]">{section.fields.length} fields</span>
@@ -4772,37 +4747,99 @@ const FormBuilder: React.FC = () => {
                         {/* Far-Right Vertical Rail */}
                         <div
                             onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
-                            className="w-14 flex flex-col items-center gap-3 py-3 px-2 border-l border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/30 cursor-pointer hover:bg-[hsl(var(--surface-elevated))]/55 transition-all"
+                            className="w-14 h-full flex flex-col items-center justify-between py-4 px-2 border-l border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/30 cursor-pointer hover:bg-[hsl(var(--surface-elevated))]/40 transition-all select-none"
                         >
-                            {(['section', 'widget', 'console'] as const).map((tab) => {
-                                const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
-                                const tooltip = tab === 'section' ? 'Section Settings' : tab === 'widget' ? 'Widget Settings' : 'Form Console';
-                                const isActive = isRightSidebarOpen && activeSidebarTab === tab;
-                                return (
-                                    <button
-                                        key={tab}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (isRightSidebarOpen && activeSidebarTab === tab) {
-                                                setIsRightSidebarOpen(false);
-                                            } else {
-                                                setIsRightSidebarOpen(true);
-                                                setActiveSidebarTab(tab);
-                                            }
-                                        }}
-                                        className={`h-10 w-10 inline-flex items-center justify-center rounded-lg border transition-all ${
-                                            isActive
-                                                ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
-                                                : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
-                                        }`}
-                                        title={tooltip}
-                                    >
-                                        <Icon className="w-4 h-4" />
-                                    </button>
-                                );
-                            })}
-                            <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mt-2">
-                                Settings & Console
+                            {/* Top Tab Icons */}
+                            <div className="flex flex-col items-center gap-3 w-full">
+                                {(['section', 'widget', 'console'] as const).map((tab) => {
+                                    const Icon = tab === 'section' ? Settings : tab === 'widget' ? Type : Terminal;
+                                    const tooltip = tab === 'section' ? 'Section Settings' : tab === 'widget' ? 'Widget Settings' : 'Form Console';
+                                    const isActive = isRightSidebarOpen && activeSidebarTab === tab;
+                                    const isConsole = tab === 'console';
+
+                                    let btnStyle = '';
+                                    if (isConsole) {
+                                        if (hasUnsavedChanges) {
+                                            btnStyle = isActive
+                                                ? 'border-[hsl(var(--warning))]/50 bg-[hsl(var(--warning))]/12 text-[hsl(var(--warning))] shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+                                                : 'border-[hsl(var(--warning))]/35 bg-[hsl(var(--warning))]/6 text-[hsl(var(--warning))] hover:bg-[hsl(var(--warning))]/12 hover:border-[hsl(var(--warning))]/60';
+                                        } else if (formMeta?.status === 'live') {
+                                            btnStyle = isActive
+                                                ? 'border-[hsl(var(--success))]/50 bg-[hsl(var(--success))]/12 text-[hsl(var(--success))] shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                                                : 'border-[hsl(var(--success))]/35 bg-[hsl(var(--success))]/6 text-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/12 hover:border-[hsl(var(--success))]/60';
+                                        } else {
+                                            btnStyle = isActive
+                                                ? 'border-[hsl(var(--info))]/50 bg-[hsl(var(--info))]/12 text-[hsl(var(--info))] shadow-[0_0_12px_rgba(59,130,246,0.15)]'
+                                                : 'border-[hsl(var(--info))]/35 bg-[hsl(var(--info))]/6 text-[hsl(var(--info))] hover:bg-[hsl(var(--info))]/12 hover:border-[hsl(var(--info))]/60';
+                                        }
+                                    } else {
+                                        btnStyle = isActive
+                                            ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]';
+                                    }
+
+                                    return (
+                                        <button
+                                            key={tab}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (isRightSidebarOpen && activeSidebarTab === tab) {
+                                                    setIsRightSidebarOpen(false);
+                                                } else {
+                                                    setIsRightSidebarOpen(true);
+                                                    setActiveSidebarTab(tab);
+                                                }
+                                            }}
+                                            className={`h-10 w-10 relative inline-flex items-center justify-center rounded-lg border transition-all ${btnStyle}`}
+                                            title={tooltip}
+                                        >
+                                            <Icon className="w-4 h-4" />
+                                            {isConsole && (
+                                                <span className={`absolute top-1 right-1 h-2 w-2 rounded-full ${
+                                                    hasUnsavedChanges
+                                                        ? 'bg-[hsl(var(--warning))] animate-pulse'
+                                                        : formMeta?.status === 'live'
+                                                            ? 'bg-[hsl(var(--success))]'
+                                                            : 'bg-[hsl(var(--info))]'
+                                                }`} />
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Middle State Indicators (Draft/Live & Saved/Unsaved) */}
+                            <div className="flex flex-col items-center gap-3.5 w-full py-4 border-t border-b border-[hsl(var(--border))]/20 my-4 select-none">
+                                {formMeta?.status === 'live' ? (
+                                    <div className="flex flex-col items-center gap-1.5 text-[hsl(var(--success))] bg-[hsl(var(--success))]/8 border border-[hsl(var(--success))]/20 rounded-xl py-2.5 px-2 w-10 shadow-sm transition-all" title="Published & Live">
+                                        <Globe className="w-3.5 h-3.5" />
+                                        <span className="text-[7.5px] font-black uppercase tracking-[0.15em] [writing-mode:vertical-rl] rotate-180 mt-1">Live</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-1.5 text-[hsl(var(--text-secondary))] bg-[hsl(var(--surface-elevated))]/60 border border-[hsl(var(--border))]/55 rounded-xl py-2.5 px-2 w-10 shadow-sm transition-all" title="Draft Mode">
+                                        <FileText className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                        <span className="text-[7.5px] font-black uppercase tracking-[0.15em] [writing-mode:vertical-rl] rotate-180 mt-1 text-[hsl(var(--text-secondary))]">Draft</span>
+                                    </div>
+                                )}
+
+                                {hasUnsavedChanges ? (
+                                    <div className="flex flex-col items-center gap-1.5 text-[hsl(var(--warning))] bg-[hsl(var(--warning))]/8 border border-[hsl(var(--warning))]/20 rounded-xl py-2.5 px-2 w-10 shadow-sm transition-all animate-pulse" title="Unsaved Changes">
+                                        <AlertCircle className="w-3.5 h-3.5" />
+                                        <span className="text-[7.5px] font-black uppercase tracking-[0.15em] [writing-mode:vertical-rl] rotate-180 mt-1">Unsaved</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-1.5 text-[hsl(var(--success))] bg-[hsl(var(--success))]/8 border border-[hsl(var(--success))]/20 rounded-xl py-2.5 px-2 w-10 shadow-sm transition-all" title="All changes saved to cloud">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span className="text-[7.5px] font-black uppercase tracking-[0.15em] [writing-mode:vertical-rl] rotate-180 mt-1">Saved</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Bottom Vertical Label */}
+                            <div className="flex flex-col items-center w-full">
+                                <div className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mb-2 select-none">
+                                    Settings & Config
+                                </div>
                             </div>
                         </div>
                     </aside>

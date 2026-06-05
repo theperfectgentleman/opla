@@ -10,6 +10,7 @@ import RolesManagement from '../components/RolesManagement';
 import {
     Plus, Settings, ChevronRight, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2
 } from 'lucide-react';
+import FontProfileSelector from '../components/FontProfileSelector';
 import { AnalyticsHubSkeleton } from '../components/analytics/ui';
 
 const AnalyticsHub = lazy(() => import('../components/analytics/AnalyticsHub'));
@@ -1091,14 +1092,19 @@ const Dashboard: React.FC = () => {
                 )}
 
                 {activeTab === 'settings' && (
-                    <div className="space-y-8">
+                    <div className="space-y-8 max-w-4xl">
                         <div>
                             <h2 className="text-3xl font-bold mb-2">Organization Settings</h2>
                             <p className="text-[hsl(var(--text-secondary))]">Manage organization-level preferences, branding, and governance options.</p>
                         </div>
-                        <div className="card border-dashed border-2">
-                            <h3 className="text-lg font-bold mb-2">Configuration</h3>
-                            <p className="text-[hsl(var(--text-secondary))]">Branding, default workflows, and policy controls will be surfaced in this section.</p>
+                        <div className="card">
+                            <div className="space-y-8">
+                                <FontProfileSelector />
+                                <div className="border-t border-[hsl(var(--border))] pt-6">
+                                    <h4 className="text-sm font-bold mb-1 text-[hsl(var(--text-primary))]">Governance Policies</h4>
+                                    <p className="text-xs text-[hsl(var(--text-secondary))]">Default workflows, team invite permissions, and organization-wide data retention schedules will be managed here.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

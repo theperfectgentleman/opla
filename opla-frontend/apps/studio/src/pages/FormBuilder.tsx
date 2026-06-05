@@ -936,6 +936,22 @@ const FormBuilder: React.FC = () => {
                 y: startY + Math.floor(idx / cardsPerRow) * gapY,
             }
         })));
+
+        if (sections.length > 0 && flowCanvasRef.current) {
+            const viewportWidth = flowCanvasRef.current.clientWidth;
+            const viewportHeight = flowCanvasRef.current.clientHeight;
+            const nodeWidth = FLOW_NODE_WIDTH;
+            const nodeHeight = 240;
+
+            const targetScrollLeft = (startX + nodeWidth / 2) * zoom - (viewportWidth / 2);
+            const targetScrollTop = (startY + nodeHeight / 2) * zoom - (viewportHeight / 2);
+
+            flowCanvasRef.current.scrollTo({
+                left: Math.max(0, targetScrollLeft),
+                top: Math.max(0, targetScrollTop),
+                behavior: 'smooth'
+            });
+        }
     };
 
     const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1080,8 +1096,8 @@ const FormBuilder: React.FC = () => {
         const nodeWidth = layout.width || FLOW_NODE_WIDTH;
         const nodeHeight = 240; // Estimated height for section card
 
-        const targetScrollLeft = layout.x - (viewportWidth / 2) + (nodeWidth / 2);
-        const targetScrollTop = layout.y - (viewportHeight / 2) + (nodeHeight / 2);
+        const targetScrollLeft = (layout.x + nodeWidth / 2) * zoom - (viewportWidth / 2);
+        const targetScrollTop = (layout.y + nodeHeight / 2) * zoom - (viewportHeight / 2);
 
         flowCanvasRef.current.scrollTo({
             left: Math.max(0, targetScrollLeft),

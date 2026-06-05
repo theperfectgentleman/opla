@@ -10,7 +10,7 @@ import {
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
     Eye, RotateCcw, Star, Search, Globe, AlertCircle, CheckCircle2,
-    ListTodo, Sliders
+    ListTodo, Sliders, ChevronsUpDown
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
@@ -877,6 +877,23 @@ const FormBuilder: React.FC = () => {
                 ...ensureSectionLayout(section.layout, idx),
                 collapse_mode: nextMode,
                 collapsed: nextMode !== 'full',
+            }
+        })));
+    };
+
+    const handleAutoArrangeSections = () => {
+        const cardsPerRow = 5;
+        const startX = 80;
+        const startY = 80;
+        const gapX = FLOW_NODE_GAP_X;
+        const gapY = 320;
+
+        setSections((prev) => prev.map((section, idx) => ({
+            ...section,
+            layout: {
+                ...ensureSectionLayout(section.layout, idx),
+                x: startX + (idx % cardsPerRow) * gapX,
+                y: startY + Math.floor(idx / cardsPerRow) * gapY,
             }
         })));
     };
@@ -2523,15 +2540,23 @@ const FormBuilder: React.FC = () => {
                             >
                                 <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
                                     <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Canvas</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))] mr-1">Canvas</span>
                                             <button
                                                 onClick={handleToggleAllCollapseModes}
-                                                className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all shadow-sm"
+                                                className="w-[120px] inline-flex items-center justify-center gap-1.5 rounded-lg border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all shadow-sm"
                                                 title="Toggle all sections view mode"
                                             >
-                                                <Sliders className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                                <ChevronsUpDown className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
                                                 <span>{globalCollapseMode === 'full' ? '100%' : globalCollapseMode === 'summary' ? '50%' : globalCollapseMode === 'quarter' ? '25%' : 'collapse'}</span>
+                                            </button>
+                                            <button
+                                                onClick={handleAutoArrangeSections}
+                                                className="w-[120px] inline-flex items-center justify-center gap-1.5 rounded-lg border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all shadow-sm"
+                                                title="Auto-arrange sections right-to-left"
+                                            >
+                                                <Sliders className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                                <span>Arrange</span>
                                             </button>
                                         </div>
                                         <button
@@ -2545,7 +2570,7 @@ const FormBuilder: React.FC = () => {
                                     </div>
 
                                         <div ref={flowCanvasRef} className="relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
-                                            <svg className="pointer-events-none absolute left-0 top-0 h-[1600px] w-[1600px]" viewBox="0 0 1600 1600" fill="none">
+                                            <svg className="pointer-events-none absolute left-0 top-0 h-[1600px] w-[2400px]" viewBox="0 0 2400 1600" fill="none">
                                                 {getFlowConnections().map((link) => {
                                                     const sourceIndex = sections.findIndex((section) => section.id === link.sourceId);
                                                     const targetIndex = sections.findIndex((section) => section.id === link.targetId);
@@ -2582,7 +2607,7 @@ const FormBuilder: React.FC = () => {
                                                 })}
                                             </svg>
 
-<div className="relative h-[1600px] w-[1600px]">
+                                            <div className="relative h-[1600px] w-[2400px]">
                                                 {sections.map((section, idx) => {
                                                     const layout = ensureSectionLayout(section.layout, idx);
                                                     const collapseMode = layout.collapse_mode || 'full';
@@ -2789,7 +2814,7 @@ const FormBuilder: React.FC = () => {
                                                                         className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] transition-all hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--primary))]"
                                                                         title="Cycle card collapse mode"
                                                                     >
-                                                                        <Sliders className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                                                        <ChevronsUpDown className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
                                                                         <span>{collapseMode === 'full' ? '100%' : collapseMode === 'summary' ? '50%' : collapseMode === 'quarter' ? '25%' : 'collapse'}</span>
                                                                     </button>
                                                                     {sections.length > 1 && (

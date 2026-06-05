@@ -2673,7 +2673,7 @@ const FormBuilder: React.FC = () => {
                                             onPointerDown={handleCanvasPointerDown}
                                             onPointerMove={handleCanvasPointerMove}
                                             onPointerUp={handleCanvasPointerUp}
-                                            className={`relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))] ${
+                                            className={`relative min-h-[420px] flex-1 overflow-auto hide-scrollbar bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))] ${
                                                 isPanning
                                                     ? 'cursor-grabbing select-none'
                                                     : isSpacePressed
@@ -4820,11 +4820,13 @@ const FormBuilder: React.FC = () => {
 
                 <style>{`
                 .hide-scrollbar::-webkit-scrollbar {
-                    display: none;
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
                 }
                 .hide-scrollbar {
-                    -ms-overflow-style: none;
-                    scrollbar-width: none;
+                    -ms-overflow-style: none !important;
+                    scrollbar-width: none !important;
                 }
                 .sidebar-btn {
                     width: 100%;

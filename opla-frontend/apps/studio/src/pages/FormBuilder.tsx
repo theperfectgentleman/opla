@@ -862,6 +862,43 @@ const FormBuilder: React.FC = () => {
     const sectionListRef = React.useRef<HTMLDivElement | null>(null);
     const [globalCollapseMode, setGlobalCollapseMode] = useState<SectionCollapseMode>('full');
     const [zoom, setZoom] = useState<number>(1);
+    const [isSpacePressed, setIsSpacePressed] = useState(false);
+    const [isPanning, setIsPanning] = useState(false);
+    const panStartRef = React.useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.code === 'Space') {
+                const activeEl = document.activeElement;
+                if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('contenteditable') === 'true')) {
+                    return;
+                }
+                event.preventDefault();
+                setIsSpacePressed(true);
+            }
+        };
+
+        const handleKeyUp = (event: KeyboardEvent) => {
+            if (event.code === 'Space') {
+                setIsSpacePressed(false);
+                setIsPanning(false);
+            }
+        };
+
+        const handleBlur = () => {
+            setIsSpacePressed(false);
+            setIsPanning(false);
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        window.addEventListener('blur', handleBlur);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+            window.removeEventListener('blur', handleBlur);
+        };
+    }, []);
 
     const handleToggleAllCollapseModes = () => {
         const nextMode = globalCollapseMode === 'full'
@@ -897,6 +934,38 @@ const FormBuilder: React.FC = () => {
                 y: startY + Math.floor(idx / cardsPerRow) * gapY,
             }
         })));
+    };
+
+    const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (!isSpacePressed) return;
+        event.preventDefault();
+        setIsPanning(true);
+        panStartRef.current = {
+            x: event.clientX,
+            y: event.clientY,
+            scrollLeft: flowCanvasRef.current?.scrollLeft || 0,
+            scrollTop: flowCanvasRef.current?.scrollTop || 0,
+        };
+        (event.currentTarget as HTMLDivElement).setPointerCapture(event.pointerId);
+    };
+
+    const handleCanvasPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (!isPanning || !flowCanvasRef.current) return;
+        event.preventDefault();
+        const deltaX = event.clientX - panStartRef.current.x;
+        const deltaY = event.clientY - panStartRef.current.y;
+        flowCanvasRef.current.scrollLeft = panStartRef.current.scrollLeft - deltaX;
+        flowCanvasRef.current.scrollTop = panStartRef.current.scrollTop - deltaY;
+    };
+
+    const handleCanvasPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (!isPanning) return;
+        setIsPanning(false);
+        try {
+            (event.currentTarget as HTMLDivElement).releasePointerCapture(event.pointerId);
+        } catch (e) {
+            // ignore
+        }
     };
 
     useEffect(() => {
@@ -2584,7 +2653,19 @@ const FormBuilder: React.FC = () => {
                                         </button>
                                     </div>
 
-                                        <div ref={flowCanvasRef} className="relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
+                                        <div
+                                            ref={flowCanvasRef}
+                                            onPointerDown={handleCanvasPointerDown}
+                                            onPointerMove={handleCanvasPointerMove}
+                                            onPointerUp={handleCanvasPointerUp}
+                                            className={`relative min-h-[420px] flex-1 overflow-auto bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.08),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))] ${
+                                                isSpacePressed
+                                                    ? isPanning
+                                                        ? 'cursor-grabbing select-none'
+                                                        : 'cursor-grab select-none'
+                                                    : ''
+                                            }`}
+                                        >
                                             <div
                                                 style={{
                                                     transform: `scale(${zoom})`,
@@ -2649,6 +2730,9 @@ const FormBuilder: React.FC = () => {
                                                         >
                                                             <div
                                                                 onPointerDown={(event) => {
+                                                                    if (isSpacePressed) {
+                                                                        return;
+                                                                    }
                                                                     if ((event.target as HTMLElement).closest('button')) {
                                                                         return;
                                                                     }

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import type {
   FormRule,
   RuleNode,
@@ -31,16 +31,25 @@ const ACTION_EFFECTS: Array<{ value: RuleActionEffect; label: string }> = [
 
 export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: RulesBuilderProps) {
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(rules[0]?.id || null);
+  const [draggedRuleId, setDraggedRuleId] = useState<string | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const dragCounter = useRef(0);
 
   const activeRule = useMemo(() => {
     return rules.find(r => r.id === selectedRuleId) || null;
   }, [rules, selectedRuleId]);
+
+  // Auto-assign priority based on list position
+  const applyPriority = useCallback((ruleList: FormRule[]): FormRule[] => {
+    return ruleList.map((r, idx) => ({ ...r, priority: idx }));
+  }, []);
 
   const createNewRule = () => {
     const newRule: FormRule = {
       id: 'rule_' + Date.now(),
       name: 'New Rule ' + (rules.length + 1),
       enabled: true,
+      priority: rules.length,
       condition: {
         id: 'root',
         type: 'group',
@@ -49,13 +58,13 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
       },
       actions: [],
     };
-    const updated = [...rules, newRule];
+    const updated = applyPriority([...rules, newRule]);
     onRulesChange(updated);
     setSelectedRuleId(newRule.id);
   };
 
   const deleteRule = (ruleId: string) => {
-    const updated = rules.filter(r => r.id !== ruleId);
+    const updated = applyPriority(rules.filter(r => r.id !== ruleId));
     onRulesChange(updated);
     if (selectedRuleId === ruleId) {
       setSelectedRuleId(updated[0]?.id || null);
@@ -77,58 +86,127 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
     onRulesChange(updated);
   };
 
+  // ─── Drag-to-reorder handlers ───
+  const handleDragStart = (e: React.DragEvent, ruleId: string) => {
+    setDraggedRuleId(ruleId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', ruleId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedRuleId(null);
+    setDragOverIdx(null);
+    dragCounter.current = 0;
+  };
+
+  const handleDragEnter = (idx: number) => {
+    dragCounter.current++;
+    setDragOverIdx(idx);
+  };
+
+  const handleDragLeave = () => {
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      setDragOverIdx(null);
+      dragCounter.current = 0;
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIdx: number) => {
+    e.preventDefault();
+    if (!draggedRuleId) return;
+    const srcIdx = rules.findIndex(r => r.id === draggedRuleId);
+    if (srcIdx === -1 || srcIdx === targetIdx) {
+      handleDragEnd();
+      return;
+    }
+    const reordered = [...rules];
+    const [moved] = reordered.splice(srcIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+    onRulesChange(applyPriority(reordered));
+    handleDragEnd();
+  };
+
   return (
-    <div className="flex flex-row h-full min-h-[600px] border border-slate-800 rounded-xl bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="flex flex-row h-full min-h-[600px] border border-[hsl(var(--border))] rounded-xl bg-[hsl(var(--surface))] text-[hsl(var(--text-primary))] overflow-hidden">
       {/* Left Sidebar: Rules List */}
-      <div className="w-1/4 border-r border-slate-800 bg-slate-900/40 p-4 flex flex-col justify-between">
+      <div className="w-1/4 min-w-[180px] border-r border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/40 p-4 flex flex-col justify-between">
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Form Rules</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Form Rules</h3>
             <button
               onClick={createNewRule}
-              className="text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded transition"
+              className="text-[11px] font-semibold bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/85 text-white px-2 py-1 rounded transition"
             >
               + Add
             </button>
           </div>
+          <p className="text-[10px] text-[hsl(var(--text-tertiary))]/70 mb-3">Drag to reorder priority</p>
           <div className="space-y-1 overflow-y-auto max-h-[500px]">
             {rules.length === 0 ? (
-              <p className="text-xs text-slate-500 italic p-2">No rules defined.</p>
+              <p className="text-xs text-[hsl(var(--text-tertiary))] italic p-2">No rules defined.</p>
             ) : (
-              rules.map(rule => (
+              rules.map((rule, idx) => (
                 <div
                   key={rule.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, rule.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragEnter={() => handleDragEnter(idx)}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, idx)}
                   onClick={() => setSelectedRuleId(rule.id)}
-                  className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition ${
+                  className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-all ${
+                    draggedRuleId === rule.id
+                      ? 'opacity-40 scale-95'
+                      : dragOverIdx === idx && draggedRuleId !== rule.id
+                        ? 'border-t-2 border-t-[hsl(var(--primary))]'
+                        : ''
+                  } ${
                     selectedRuleId === rule.id
-                      ? 'bg-indigo-600/20 border border-indigo-500/40 text-white'
-                      : 'border border-transparent hover:bg-slate-800 text-slate-400'
+                      ? 'bg-[hsl(var(--primary))]/10 border border-[hsl(var(--primary))]/30 text-[hsl(var(--text-primary))]'
+                      : 'border border-transparent hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
                   }`}
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
+                    {/* Drag handle */}
+                    <svg className="w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]/50 shrink-0 cursor-grab active:cursor-grabbing" viewBox="0 0 16 16" fill="currentColor">
+                      <circle cx="5" cy="3" r="1.2" /><circle cx="11" cy="3" r="1.2" />
+                      <circle cx="5" cy="8" r="1.2" /><circle cx="11" cy="8" r="1.2" />
+                      <circle cx="5" cy="13" r="1.2" /><circle cx="11" cy="13" r="1.2" />
+                    </svg>
                     <span
                       onClick={(e) => {
                         e.stopPropagation();
                         updateRuleMeta(rule.id, { enabled: !rule.enabled });
                       }}
                       className={`h-2.5 w-2.5 rounded-full flex-shrink-0 cursor-pointer ${
-                        rule.enabled ? 'bg-emerald-500' : 'bg-slate-600'
+                        rule.enabled ? 'bg-emerald-500' : 'bg-[hsl(var(--text-tertiary))]/40'
                       }`}
                       title={rule.enabled ? 'Enabled' : 'Disabled'}
                     />
                     <span className="text-xs font-medium truncate">{rule.name}</span>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteRule(rule.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-500 hover:text-red-400 rounded transition"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-bold text-[hsl(var(--text-tertiary))]/60 bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded" title={`Priority: ${idx} (top = first)`}>#{idx + 1}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteRule(rule.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded transition"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -137,37 +215,31 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
       </div>
 
       {/* Right Content: Builder Workspace */}
-      <div className="flex-1 flex flex-col bg-slate-950 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 flex flex-col bg-[hsl(var(--surface))] overflow-y-auto p-6 space-y-6">
         {activeRule ? (
           <>
             {/* Rule Header Metadata */}
-            <div className="border-b border-slate-800/80 pb-4 space-y-3">
+            <div className="border-b border-[hsl(var(--border))]/60 pb-4 space-y-3">
               <div className="flex items-center justify-between">
                 <input
                   type="text"
                   value={activeRule.name}
                   onChange={(e) => updateRuleMeta(activeRule.id, { name: e.target.value })}
-                  className="bg-transparent text-lg font-bold border-b border-transparent hover:border-slate-800 focus:border-indigo-500 focus:outline-none py-0.5 px-1 w-2/3"
+                  className="bg-transparent text-lg font-bold border-b border-transparent hover:border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] focus:outline-none py-0.5 px-1 w-2/3 text-[hsl(var(--text-primary))]"
                   placeholder="Enter rule name..."
                 />
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                    Priority:
-                    <input
-                      type="number"
-                      value={activeRule.priority ?? 0}
-                      onChange={(e) => updateRuleMeta(activeRule.id, { priority: Number(e.target.value) })}
-                      className="bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded px-2 py-1 text-xs text-slate-200 outline-none w-16 text-right"
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-400 cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))]/40 px-2 py-1 rounded" title="Priority is determined by list order (drag to reorder)">
+                    Priority #{(rules.findIndex(r => r.id === activeRule.id) + 1) || '?'}
+                  </span>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[hsl(var(--text-secondary))] cursor-pointer">
                     <input
                       type="checkbox"
                       checked={activeRule.enabled}
                       onChange={(e) => updateRuleMeta(activeRule.id, { enabled: e.target.checked })}
-                      className="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-indigo-500"
+                      className="rounded border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
                     />
-                    Rule Active
+                    Active
                   </label>
                 </div>
               </div>
@@ -175,16 +247,16 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
                 type="text"
                 value={activeRule.description || ''}
                 onChange={(e) => updateRuleMeta(activeRule.id, { description: e.target.value })}
-                className="bg-transparent text-xs border-b border-transparent hover:border-slate-800 focus:border-indigo-500 focus:outline-none py-0.5 px-1 w-full text-slate-400"
+                className="bg-transparent text-xs border-b border-transparent hover:border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] focus:outline-none py-0.5 px-1 w-full text-[hsl(var(--text-secondary))]"
                 placeholder="Add rule description..."
               />
             </div>
 
             {/* Condition Tree (IF) */}
-            <div className="border border-slate-800/60 rounded-xl p-5 bg-slate-900/10 space-y-4">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-800/40">
-                <span className="text-[10px] uppercase font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">IF</span>
-                <span className="text-xs font-bold text-slate-300">Conditions Block</span>
+            <div className="border border-[hsl(var(--border))]/50 rounded-xl p-5 bg-[hsl(var(--surface-elevated))]/20 space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-[hsl(var(--border))]/30">
+                <span className="text-[10px] uppercase font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded">IF</span>
+                <span className="text-xs font-bold text-[hsl(var(--text-primary))]">Conditions Block</span>
               </div>
               <ConditionTreeEditor
                 rootGroup={activeRule.condition}
@@ -194,10 +266,10 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
             </div>
 
             {/* Actions List (THEN) */}
-            <div className="border border-slate-800/60 rounded-xl p-5 bg-slate-900/10 space-y-4">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-800/40">
-                <span className="text-[10px] uppercase font-bold bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">THEN</span>
-                <span className="text-xs font-bold text-slate-300">Action Consequences</span>
+            <div className="border border-[hsl(var(--border))]/50 rounded-xl p-5 bg-[hsl(var(--surface-elevated))]/20 space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-[hsl(var(--border))]/30">
+                <span className="text-[10px] uppercase font-bold bg-[hsl(var(--primary))]/10 border border-[hsl(var(--primary))]/20 text-[hsl(var(--primary))] px-2 py-0.5 rounded">THEN</span>
+                <span className="text-xs font-bold text-[hsl(var(--text-primary))]">Action Consequences</span>
               </div>
               <ActionsListEditor
                 actions={activeRule.actions || []}
@@ -208,8 +280,8 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 italic py-12">
-            <svg className="w-12 h-12 text-slate-700 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex-1 flex flex-col items-center justify-center text-[hsl(var(--text-tertiary))] italic py-12">
+            <svg className="w-12 h-12 text-[hsl(var(--text-tertiary))]/40 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             Select a rule or create a new one to begin editing.
@@ -326,7 +398,7 @@ function ConditionTreeEditor({ rootGroup, onChange, fields }: ConditionTreeProps
   };
 
   return (
-    <div className="bg-slate-900/20 p-2.5 rounded-lg border border-slate-800/40">
+    <div className="bg-[hsl(var(--surface-elevated))]/15 p-2.5 rounded-lg border border-[hsl(var(--border))]/30">
       <RecursiveGroupRenderer
         groupNode={rootGroup}
         onAddRule={handleAddRule}
@@ -368,29 +440,29 @@ function RecursiveGroupRenderer({
 
   return (
     <div className={`p-4 rounded-xl border transition-all ${
-      depth === 0 ? 'bg-slate-900/30 border-slate-850' : 'bg-slate-950/40 border-slate-900'
+      depth === 0 ? 'bg-[hsl(var(--surface-elevated))]/20 border-[hsl(var(--border))]/40' : 'bg-[hsl(var(--surface))]/60 border-[hsl(var(--border))]/30'
     }`}>
       <div className="flex items-center justify-between mb-4">
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+        <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-widest">
           Group depth {depth}
         </span>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onAddRule(groupNode.id)}
-            className="text-[10px] font-semibold bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded px-2.5 py-1 text-slate-300 hover:text-white"
+            className="text-[10px] font-semibold bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))] rounded px-2.5 py-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
           >
             + Add Rule
           </button>
           <button
             onClick={() => onAddGroup(groupNode.id)}
-            className="text-[10px] font-semibold bg-indigo-950/20 hover:bg-indigo-950/40 border border-indigo-900/30 rounded px-2.5 py-1 text-indigo-400"
+            className="text-[10px] font-semibold bg-[hsl(var(--primary))]/8 hover:bg-[hsl(var(--primary))]/15 border border-[hsl(var(--primary))]/20 rounded px-2.5 py-1 text-[hsl(var(--primary))]"
           >
             + Add Group
           </button>
           {groupNode.id !== 'root' && (
             <button
               onClick={() => onDeleteNode(groupNode.id)}
-              className="p-1 text-slate-500 hover:text-red-400 rounded transition"
+              className="p-1 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded transition"
               title="Delete group"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -402,7 +474,7 @@ function RecursiveGroupRenderer({
       </div>
 
       {children.length === 0 ? (
-        <p className="text-xs text-slate-500 italic py-2 text-center">No validation constraints in this group.</p>
+        <p className="text-xs text-[hsl(var(--text-tertiary))] italic py-2 text-center">No validation constraints in this group.</p>
       ) : (
         <div className="flex flex-col gap-4">
           {children.map((child, index) => {
@@ -430,13 +502,13 @@ function RecursiveGroupRenderer({
                 )}
                 {!isLast && (
                   <div className="relative flex items-center justify-center my-1">
-                    <div className="absolute left-0 right-0 h-px bg-slate-800/80"></div>
+                    <div className="absolute left-0 right-0 h-px bg-[hsl(var(--border))]/50"></div>
                     <button
                       onClick={() => onToggleCombinator(groupNode.id)}
                       className={`relative z-10 px-3 py-0.5 rounded-full text-[9px] font-extrabold border transition-all uppercase tracking-widest ${
                         groupNode.combinator === 'AND'
-                          ? 'bg-emerald-950 text-emerald-400 border-emerald-800/40'
-                          : 'bg-indigo-950 text-indigo-400 border-indigo-800/40'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
+                          : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border-[hsl(var(--primary))]/25'
                       }`}
                     >
                       {groupNode.combinator}
@@ -466,13 +538,13 @@ function ConditionRuleRow({ rule, onDelete, onUpdate, fields }: ConditionRuleRow
   const operators = activeField ? (RULE_OPERATORS_BY_FIELD_TYPE[activeField.type] || ['==']) : ['=='];
 
   return (
-    <div className="flex flex-wrap items-center gap-3 bg-slate-950 p-3 rounded-lg border border-slate-900 relative">
+    <div className="flex flex-wrap items-center gap-3 bg-[hsl(var(--surface))] p-3 rounded-lg border border-[hsl(var(--border))]/40 relative">
       <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-        <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Field</label>
+        <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Field</label>
         <select
           value={rule.field}
           onChange={(e) => onUpdate(rule.id, { field: e.target.value })}
-          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+          className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
         >
           {fields.map(f => (
             <option key={f.id} value={f.id}>{f.label || f.id}</option>
@@ -481,11 +553,11 @@ function ConditionRuleRow({ rule, onDelete, onUpdate, fields }: ConditionRuleRow
       </div>
 
       <div className="flex flex-col gap-1 w-32">
-        <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Operator</label>
+        <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Operator</label>
         <select
           value={rule.operator}
           onChange={(e) => onUpdate(rule.id, { operator: e.target.value as RuleOperator })}
-          className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+          className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
         >
           {operators.map(op => (
             <option key={op} value={op}>{op}</option>
@@ -495,14 +567,14 @@ function ConditionRuleRow({ rule, onDelete, onUpdate, fields }: ConditionRuleRow
 
       {rule.operator !== 'empty' && rule.operator !== 'not_empty' && (
         <div className="flex flex-col gap-1 flex-1 min-w-[120px]">
-          <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+          <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">
             {rule.operator === 'between' ? 'Range bounds (min,max)' : 'Value'}
           </label>
           {activeField?.options?.length ? (
             <select
               value={rule.value}
               onChange={(e) => onUpdate(rule.id, { value: e.target.value })}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+              className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
             >
               <option value="">Select option...</option>
               {activeField.options.map(opt => (
@@ -514,7 +586,7 @@ function ConditionRuleRow({ rule, onDelete, onUpdate, fields }: ConditionRuleRow
               type="text"
               value={rule.value || ''}
               onChange={(e) => onUpdate(rule.id, { value: e.target.value })}
-              className="bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none w-full"
+              className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] outline-none w-full"
               placeholder={rule.operator === 'between' ? 'e.g. 10,20' : 'e.g. 5'}
             />
           )}
@@ -523,7 +595,7 @@ function ConditionRuleRow({ rule, onDelete, onUpdate, fields }: ConditionRuleRow
 
       <button
         onClick={() => onDelete(rule.id)}
-        className="p-1.5 text-slate-600 hover:text-red-400 mt-4 rounded transition"
+        className="p-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] mt-4 rounded transition"
         title="Delete rule condition"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -579,7 +651,7 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
   return (
     <div className="space-y-4">
       {actions.length === 0 ? (
-        <p className="text-xs text-slate-500 italic py-2 text-center">No actions configured for this rule.</p>
+        <p className="text-xs text-[hsl(var(--text-tertiary))] italic py-2 text-center">No actions configured for this rule.</p>
       ) : (
         <div className="space-y-3">
           {actions.map((action, idx) => {
@@ -589,13 +661,13 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
             const isValidate = action.effect === 'VALIDATE';
 
             return (
-              <div key={idx} className="flex flex-wrap items-center gap-3 bg-slate-950 p-4 rounded-xl border border-slate-900">
+              <div key={idx} className="flex flex-wrap items-center gap-3 bg-[hsl(var(--surface))] p-4 rounded-xl border border-[hsl(var(--border))]/40">
                 <div className="flex flex-col gap-1 w-48">
-                  <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Effect</label>
+                  <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Effect</label>
                   <select
                     value={action.effect}
                     onChange={(e) => updateAction(idx, { effect: e.target.value as RuleActionEffect })}
-                    className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+                    className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
                   >
                     {ACTION_EFFECTS.map(eff => (
                       <option key={eff.value} value={eff.value}>{eff.label}</option>
@@ -605,11 +677,11 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
 
                 {!isNav && (
                   <div className="flex flex-col gap-1 w-36">
-                    <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Target Type</label>
+                    <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Target Type</label>
                     <select
                       value={action.target_type}
                       onChange={(e) => updateAction(idx, { target_type: e.target.value as 'field' | 'section', target_id: '' })}
-                      className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+                      className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
                     >
                       <option value="field">Field</option>
                       {action.effect !== 'REQUIRE' && action.effect !== 'UNREQUIRE' && action.effect !== 'FILTER_OPTIONS' && action.effect !== 'SET_VALUE' && action.effect !== 'VALIDATE' && (
@@ -621,12 +693,12 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
 
                 {!isNav && (
                   <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
-                    <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Target Node</label>
+                    <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Target Node</label>
                     {action.target_type === 'section' ? (
                       <select
                         value={action.target_id}
                         onChange={(e) => updateAction(idx, { target_id: e.target.value })}
-                        className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+                        className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
                       >
                         <option value="">Select section...</option>
                         {sections.map(s => (
@@ -637,7 +709,7 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
                       <select
                         value={action.target_id}
                         onChange={(e) => updateAction(idx, { target_id: e.target.value })}
-                        className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+                        className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
                       >
                         <option value="">Select field...</option>
                         {fields.map(f => (
@@ -651,14 +723,14 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
                 {/* Extra configurations: message for DISABLE_NAV or VALIDATE */}
                 {(isNav || isValidate) && (
                   <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-                    <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Message</label>
+                    <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Message</label>
                     <input
                       type="text"
                       value={action.config?.message || action.config?.error_message || ''}
                       onChange={(e) => updateAction(idx, {
                         config: isValidate ? { error_message: e.target.value } : { message: e.target.value }
                       })}
-                      className="bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none w-full"
+                      className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] outline-none w-full"
                       placeholder="e.g. Please watch the ad stimulus first"
                     />
                   </div>
@@ -667,13 +739,13 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
                 {/* Extra configurations: value mapping for FILTER_OPTIONS */}
                 {isFilter && (
                   <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-                    <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Parent Field Dependency</label>
+                    <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Parent Field Dependency</label>
                     <select
                       value={action.config?.parent_field_id || ''}
                       onChange={(e) => updateAction(idx, {
                         config: { ...action.config, parent_field_id: e.target.value, filter_map: action.config?.filter_map || {} }
                       })}
-                      className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none w-full"
+                      className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
                     >
                       <option value="">Select parent field...</option>
                       {fields.map(f => (
@@ -686,14 +758,14 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
                 {/* Extra configurations: set specific value for SET_VALUE */}
                 {isValue && (
                   <div className="flex flex-col gap-1 flex-1 min-w-[150px]">
-                    <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Set Value To</label>
+                    <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Set Value To</label>
                     <input
                       type="text"
                       value={action.config?.value || ''}
                       onChange={(e) => updateAction(idx, {
                         config: { value: e.target.value }
                       })}
-                      className="bg-slate-900 border border-slate-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none w-full"
+                      className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] outline-none w-full"
                       placeholder="e.g. 100"
                     />
                   </div>
@@ -701,7 +773,7 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
 
                 <button
                   onClick={() => deleteAction(idx)}
-                  className="p-1.5 text-slate-600 hover:text-red-400 mt-4 rounded transition"
+                  className="p-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] mt-4 rounded transition"
                   title="Remove action"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -715,7 +787,7 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
       )}
       <button
         onClick={addAction}
-        className="text-xs font-bold bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 px-3.5 py-2 rounded-lg border border-indigo-500/20 transition"
+        className="text-xs font-bold bg-[hsl(var(--primary))]/8 hover:bg-[hsl(var(--primary))]/15 text-[hsl(var(--primary))] px-3.5 py-2 rounded-lg border border-[hsl(var(--primary))]/20 transition"
       >
         + Add Action Consequence
       </button>

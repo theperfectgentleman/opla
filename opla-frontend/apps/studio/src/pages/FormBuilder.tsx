@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formAPI, projectAPI, sectionTemplateAPI } from '../lib/api';
 import { useOrg } from '../contexts/OrgContext';
@@ -9,8 +9,8 @@ import {
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
-    Eye, RotateCcw, Star, Search, Globe, AlertCircle, CheckCircle2,
-    ListTodo, Sliders, ChevronsUpDown, LayoutGrid, ExternalLink
+    Star, Search, Globe, AlertCircle, CheckCircle2,
+    ListTodo, Sliders, ChevronsUpDown, LayoutGrid, ExternalLink, Maximize2, X
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import type { FormRule } from '@opla/types';
@@ -869,18 +869,22 @@ const FormBuilder: React.FC = () => {
     const [currentSectionId, setCurrentSectionId] = useState<string>('screen_1');
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [logic, setLogic] = useState<LogicRule[]>([]);
-        const [isSaving, setIsSaving] = useState(false);
-    const [activeLeftTab, setActiveLeftTab] = useState<'sections' | 'widgets'>('sections');
+        const [, setIsSaving] = useState(false);
+    const [activeLeftTab, setActiveLeftTab] = useState<'sections' | 'widgets' | 'rules'>('sections');
     const [hoveredProperty, setHoveredProperty] = useState<{ name: string; description: string } | null>(null);
     const [collapsedPropCategories, setCollapsedPropCategories] = useState<Record<string, boolean>>({});
     const [collapsedWidgetCategories, setCollapsedWidgetCategories] = useState<Record<string, boolean>>({});
     const [sectionSearchQuery, setSectionSearchQuery] = useState('');
     const [widgetSearchQuery, setWidgetSearchQuery] = useState('');
     const [isLeftPanelPinned, setIsLeftPanelPinned] = useState(false);
+    const [leftPanelWidth, setLeftPanelWidth] = useState(320);
+    const isResizingLeftPanel = useRef(false);
+    const leftPanelStartX = useRef(0);
+    const leftPanelStartW = useRef(0);
     const [isRightSidebarPinned, setIsRightSidebarPinned] = useState(true);
     const [view, setView] = useState<'flow' | 'section' | 'rules'>('flow');
     const [formRules, setFormRules] = useState<FormRule[]>([]);
-    const [formVisibility, setFormVisibility] = useState<'listed' | 'child'>('listed');
+    const [formVisibility] = useState<'listed' | 'child'>('listed'); // kept for type compat, auto-detected on mobile
     const [projectForms, setProjectForms] = useState<Array<{ id: string; title: string; slug: string }>>([]);
 
     const allFieldsFlattened = useMemo(() => {
@@ -906,11 +910,11 @@ const FormBuilder: React.FC = () => {
     const [moveMenuFieldId, setMoveMenuFieldId] = useState<string | null>(null);
     const [draggingSectionId, setDraggingSectionId] = useState<string | null>(null);
     const [sectionDragOffset, setSectionDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-    const [showSimulatorMenu, setShowSimulatorMenu] = useState(false);
-    const [showMultiActionMenu, setShowMultiActionMenu] = useState(false);
-    const [showBackupTools, setShowBackupTools] = useState(false);
+    const [, setShowMultiActionMenu] = useState(false);
+    const [, setShowBackupTools] = useState(false);
     const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
-    const [activeSidebarTab, setActiveSidebarTab] = useState<'section' | 'widget' | 'console'>('section');
+    const [activeSidebarTab, setActiveSidebarTab] = useState<'form' | 'section' | 'widget'>('section');
+    const [isConsoleOpen, setIsConsoleOpen] = useState(false);
     const [isSectionListOpen, setIsSectionListOpen] = useState(false);
     const sectionListRef = React.useRef<HTMLDivElement | null>(null);
     const [globalCollapseMode, setGlobalCollapseMode] = useState<SectionCollapseMode>('full');
@@ -1081,7 +1085,7 @@ const FormBuilder: React.FC = () => {
         blueprint?: any;
     }>>([]);
     const [catalogItems, setCatalogItems] = useState<ProjectCatalogItem[]>([]);
-    const [previewSlot, setPreviewSlot] = useState<2 | 3 | null>(null);
+
     const multiActionMenuRef = React.useRef<HTMLDivElement | null>(null);
 
     const computeHash = (t: string, s: any[], l: any[], r: any[]) => JSON.stringify({ t, s, l, r });
@@ -1120,6 +1124,38 @@ const FormBuilder: React.FC = () => {
         document.addEventListener('mousedown', handleOutsideClick);
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, [swipedFieldId]);
+
+    // ─── Left panel resize drag handlers ───
+    const defaultWidthForTab = activeLeftTab === 'rules' ? 520 : 320;
+
+    useEffect(() => {
+        setLeftPanelWidth(defaultWidthForTab);
+    }, [activeLeftTab]);
+
+    const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        isResizingLeftPanel.current = true;
+        leftPanelStartX.current = e.clientX;
+        leftPanelStartW.current = leftPanelWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (ev: MouseEvent) => {
+            if (!isResizingLeftPanel.current) return;
+            const delta = ev.clientX - leftPanelStartX.current;
+            const newW = Math.max(280, Math.min(900, leftPanelStartW.current + delta));
+            setLeftPanelWidth(newW);
+        };
+        const onMouseUp = () => {
+            isResizingLeftPanel.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }, [leftPanelWidth]);
 
     const enterSection = (sectionId: string) => {
         setSlideDir('forward');
@@ -1612,7 +1648,6 @@ const FormBuilder: React.FC = () => {
         setLogic(blueprint.logic || []);
         const loadedRules = blueprint.rules || [];
         setFormRules(loadedRules);
-        setFormVisibility(blueprint?.meta?.visibility || 'listed');
         setTitle(blueprint?.meta?.title || fallbackTitle || title);
         setInitialHash(computeHash(blueprint?.meta?.title || fallbackTitle || title, loadedSections, blueprint.logic || [], loadedRules));
         setHasUnsavedChanges(false);
@@ -2035,7 +2070,8 @@ const FormBuilder: React.FC = () => {
         navigate(`/dashboard?tab=${key}`);
     };
 
-    const handlePublish = async () => {
+    // @ts-ignore — Will be wired to console actions
+    const _handlePublish = async () => {
         if (!formId || isPublishing) return;
         setIsPublishing(true);
 
@@ -2065,7 +2101,8 @@ const FormBuilder: React.FC = () => {
         }
     };
 
-    const handleSaveToBackup = async (slot: 2 | 3) => {
+    // @ts-ignore — Will be wired to console actions
+    const _handleSaveToBackup = async (slot: 2 | 3) => {
         if (!formId) return;
         setIsSaving(true);
         try {
@@ -2121,7 +2158,8 @@ const FormBuilder: React.FC = () => {
         }
     };
 
-    const handleRestoreBackupToDraft = async (slot: 2 | 3) => {
+    // @ts-ignore — Will be wired to console actions
+    const _handleRestoreBackupToDraft = async (slot: 2 | 3) => {
         if (!formId) return;
         const backup = getSlotVersion(slot);
         if (!backup?.blueprint) {
@@ -2454,20 +2492,6 @@ const FormBuilder: React.FC = () => {
                             onChange={(e) => setTitle(e.target.value)}
                             className="min-w-0 max-w-[320px] bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
                         />
-                        <button
-                            type="button"
-                            onClick={() => setFormVisibility(formVisibility === 'listed' ? 'child' : 'listed')}
-                            title={formVisibility === 'child'
-                                ? 'Child form — hidden from mobile form list. Click to make listed.'
-                                : 'Listed form — visible in mobile form list. Click to make child.'}
-                            className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border transition-all cursor-pointer ${
-                                formVisibility === 'child'
-                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
-                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                            }`}
-                        >
-                            {formVisibility === 'child' ? '🔗 Child' : '📋 Listed'}
-                        </button>
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
@@ -2536,17 +2560,22 @@ const FormBuilder: React.FC = () => {
                             <button
                                 id="rules-trigger-rail"
                                 onClick={() => {
-                                    if (view === 'rules') {
-                                        setView('flow');
-                                    } else {
-                                        setView('rules');
+                                    if (isSectionListOpen && activeLeftTab === 'rules') {
                                         setIsSectionListOpen(false);
+                                    } else {
+                                        setIsSectionListOpen(true);
+                                        setActiveLeftTab('rules');
+                                        if (view === 'rules') {
+                                            setView('flow');
+                                        }
                                     }
                                 }}
                                 className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
-                                    view === 'rules'
+                                    isSectionListOpen && activeLeftTab === 'rules'
                                         ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
-                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
+                                        : view === 'rules'
+                                            ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
                                 }`}
                                 title="Form Rules Engine"
                             >
@@ -2563,13 +2592,22 @@ const FormBuilder: React.FC = () => {
                     {isSectionListOpen && (
                         <aside
                             ref={sectionListRef}
+                            style={isLeftPanelPinned ? { width: leftPanelWidth } : { width: Math.max(defaultWidthForTab, 320) }}
                             className={`${
                                 isLeftPanelPinned
-                                    ? 'w-80 border-r border-[hsl(var(--border))]/45 bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden shrink-0'
-                                    : 'absolute left-4 top-3 bottom-4 z-40 w-80 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col h-auto overflow-hidden rounded-2xl shadow-2xl'
+                                    ? 'border-r border-[hsl(var(--border))]/45 bg-[hsl(var(--surface))] flex flex-col h-full overflow-hidden shrink-0 relative'
+                                    : 'absolute left-4 top-3 bottom-4 z-40 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col h-auto overflow-hidden rounded-2xl shadow-2xl'
                             } animate-in slide-in-from-left-4 fade-in duration-300`}
                         >
-                            {activeLeftTab === 'sections' ? (
+                            {/* Drag resize handle (pinned only) */}
+                            {isLeftPanelPinned && (
+                                <div
+                                    onMouseDown={onResizeMouseDown}
+                                    className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 hover:bg-[hsl(var(--primary))]/20 active:bg-[hsl(var(--primary))]/30 transition-colors"
+                                    title="Drag to resize"
+                                />
+                            )}
+                            {activeLeftTab === 'sections' && (
                                 <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                                     <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
                                         <div className="flex items-center justify-between gap-3">
@@ -2656,7 +2694,8 @@ const FormBuilder: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
-                            ) : (
+                            )}
+                            {activeLeftTab === 'widgets' && (
                                 <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                                     <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
                                         <div className="flex items-center justify-between gap-3">
@@ -2757,6 +2796,45 @@ const FormBuilder: React.FC = () => {
                                                 );
                                             });
                                         })()}
+                                    </div>
+                                </div>
+                            )}
+                            {activeLeftTab === 'rules' && (
+                                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                    <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Rules Engine</p>
+                                                <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Logic Rules</h3>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    onClick={() => {
+                                                        setView('rules');
+                                                        setIsSectionListOpen(false);
+                                                    }}
+                                                    className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors"
+                                                    title="Expand to full canvas"
+                                                >
+                                                    <Maximize2 className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setIsLeftPanelPinned(!isLeftPanelPinned)}
+                                                    className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors"
+                                                    title={isLeftPanelPinned ? "Unpin (Float)" : "Pin (Dock)"}
+                                                >
+                                                    <Pin className={`w-3.5 h-3.5 ${isLeftPanelPinned ? 'fill-current rotate-45' : ''}`} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto hide-scrollbar p-3">
+                                        <RulesBuilder
+                                            fields={allFieldsFlattened}
+                                            sections={sections.map(s => ({ id: s.id, title: s.title }))}
+                                            rules={formRules}
+                                            onRulesChange={(newRules) => setFormRules(newRules)}
+                                        />
                                     </div>
                                 </div>
                             )}
@@ -3332,9 +3410,9 @@ const FormBuilder: React.FC = () => {
                                 {/* Top Tab Bar */}
                                 <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-2 py-2 flex items-center justify-between gap-1 select-none">
                                     <div className="flex gap-1 flex-1">
-                                        {(['section', 'widget', 'console'] as const).map((tab) => {
-                                            const label = tab === 'section' ? 'Section' : tab === 'widget' ? 'Field' : 'Console';
-                                            const Icon = tab === 'section' ? Settings : tab === 'widget' ? ListTodo : Terminal;
+                                        {(['form', 'section', 'widget'] as const).map((tab) => {
+                                            const label = tab === 'form' ? 'Form' : tab === 'section' ? 'Section' : 'Field';
+                                            const Icon = tab === 'form' ? Layout : tab === 'section' ? Settings : ListTodo;
                                             const isActive = activeSidebarTab === tab;
                                             return (
                                                 <button
@@ -3365,6 +3443,124 @@ const FormBuilder: React.FC = () => {
 
                                 {/* Tab Contents */}
                                 <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col">
+                                    {/* ─── FORM TAB ─── */}
+                                    {activeSidebarTab === 'form' && (
+                                        <div className="flex-1 flex flex-col">
+                                            <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar">
+                                                <div className="space-y-5 animate-in fade-in duration-200">
+                                                    <h3 className="text-sm font-bold text-[hsl(var(--text-primary))] flex items-center">
+                                                        <Layout className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
+                                                        Form Properties
+                                                    </h3>
+
+                                                    {/* Form Title (editable) */}
+                                                    <div>
+                                                        <label className="label">Form Title</label>
+                                                        <input
+                                                            value={title}
+                                                            onChange={(e) => setTitle(e.target.value)}
+                                                            className="input"
+                                                            placeholder="Untitled Form"
+                                                        />
+                                                    </div>
+
+                                                    {/* Slug */}
+                                                    <div>
+                                                        <label className="label">Form Slug</label>
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                value={formMeta?.slug || ''}
+                                                                readOnly
+                                                                className="input flex-1 text-[hsl(var(--text-secondary))] bg-[hsl(var(--surface-elevated))]/40 cursor-default"
+                                                                placeholder="auto-generated"
+                                                            />
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (formMeta?.slug) {
+                                                                        navigator.clipboard.writeText(formMeta.slug);
+                                                                    }
+                                                                }}
+                                                                className="p-2 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors"
+                                                                title="Copy slug"
+                                                            >
+                                                                <Copy className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Public toggle */}
+                                                    <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
+                                                        <div>
+                                                            <p className="text-sm font-semibold">Public Form</p>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Allow anonymous submissions via public URL</p>
+                                                        </div>
+                                                        <div className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${
+                                                            formMeta?.is_public
+                                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                                : 'bg-slate-500/10 text-slate-400 border-slate-500/30'
+                                                        }`}>
+                                                            {formMeta?.is_public ? 'Public' : 'Private'}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Status badge */}
+                                                    <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
+                                                        <div>
+                                                            <p className="text-sm font-semibold">Status</p>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Current form status</p>
+                                                        </div>
+                                                        <div className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${
+                                                            formMeta?.status === 'live'
+                                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                                        }`}>
+                                                            {formMeta?.status || 'draft'}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Stats summary */}
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div className="p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl text-center">
+                                                            <p className="text-lg font-bold text-[hsl(var(--text-primary))]">{sections.length}</p>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium uppercase tracking-wider">Sections</p>
+                                                        </div>
+                                                        <div className="p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl text-center">
+                                                            <p className="text-lg font-bold text-[hsl(var(--text-primary))]">{sections.reduce((sum, s) => sum + s.fields.length, 0)}</p>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium uppercase tracking-wider">Fields</p>
+                                                        </div>
+                                                        <div className="p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl text-center">
+                                                            <p className="text-lg font-bold text-[hsl(var(--text-primary))]">{formRules.length}</p>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium uppercase tracking-wider">Rules</p>
+                                                        </div>
+                                                        <div className="p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl text-center">
+                                                            <p className="text-lg font-bold text-[hsl(var(--text-primary))]">v{formMeta?.version || 1}</p>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium uppercase tracking-wider">Version</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Linked Forms */}
+                                                    {projectForms.length > 0 && (
+                                                        <div>
+                                                            <label className="label">Linked Forms in Project</label>
+                                                            <div className="space-y-1">
+                                                                {projectForms.slice(0, 5).map(f => (
+                                                                    <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-[hsl(var(--surface-elevated))]/40 rounded-lg text-xs">
+                                                                        <FileText className="w-3 h-3 text-[hsl(var(--text-tertiary))] shrink-0" />
+                                                                        <span className="text-[hsl(var(--text-secondary))] truncate">{f.title}</span>
+                                                                    </div>
+                                                                ))}
+                                                                {projectForms.length > 5 && (
+                                                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))] pl-3">+{projectForms.length - 5} more</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* ─── SECTION TAB ─── */}
                                                                         {activeSidebarTab === 'section' && (
                                          <div className="flex-1 flex flex-col">
                                              <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar">
@@ -3516,242 +3712,12 @@ const FormBuilder: React.FC = () => {
                                                                 Update Linked Template
                                                             </button>
                                                         )}
-                                                    </div>
+                                                     </div>
 
                                                                                                          <p className="text-[hsl(var(--text-tertiary))] text-xs italic">Select a field in the canvas to see its individual properties.</p>
 
                                                      </div>
-                                                     {/* Border Divider */}
-                                                     <div className="border-t border-[hsl(var(--border))]/30 my-6 pt-6" />
-                                                     <div className="space-y-6 animate-in fade-in duration-200">
-                                                                                                            <div className="flex items-center justify-between">
-                                                        <h3 className="text-sm font-bold flex items-center">
-                                                            <GitBranch className="w-4 h-4 mr-2 text-[hsl(var(--primary))]" />
-                                                            Section Logic
-                                                        </h3>
-                                                    </div>
-                                                    <p className="text-[hsl(var(--text-secondary))] text-xs">Control this section's visibility and navigation.</p>
 
-                                                    {/* Section Visibility Rules */}
-                                                    <div className="space-y-2">
-                                                        <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Visibility</p>
-                                                        {logic.filter(r => r.type === 'section_visibility' && r.source_id === currentSectionId).map(rule => (
-                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group">
-                                                                <button
-                                                                    onClick={() => removeLogicRule(rule.id)}
-                                                                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-
-                                                                {/* Timing badge */}
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
-                                                                    <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
-                                                                        {(['pre', 'post'] as const).map(t => (
-                                                                            <button
-                                                                                key={t}
-                                                                                onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                    ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
-                                                                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
-                                                                                    }`}
-                                                                            >
-                                                                                {t}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-3">
-                                                                    {rule.conditions.map((cond, cIdx) => (
-                                                                        <div key={cIdx} className="space-y-2">
-                                                                            <select
-                                                                                value={cond.field}
-                                                                                onChange={(e) => {
-                                                                                    const newConds = [...rule.conditions];
-                                                                                    newConds[cIdx].field = e.target.value;
-                                                                                    updateLogicRule(rule.id, { conditions: newConds });
-                                                                                }}
-                                                                                className="input-sm w-full py-1.5"
-                                                                            >
-                                                                                <option value="">Select Field...</option>
-                                                                                {sections.flatMap(p => p.fields).map(f => (
-                                                                                    <option key={f.id} value={f.id}>{f.label}</option>
-                                                                                ))}
-                                                                            </select>
-                                                                            <div className="flex space-x-2">
-                                                                                <select
-                                                                                    value={cond.operator}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].operator = e.target.value as any;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                >
-                                                                                    <option value="eq">Equals</option>
-                                                                                    <option value="neq">Not Equal</option>
-                                                                                    <option value="contains">Contains</option>
-                                                                                    <option value="gt">Greater Than</option>
-                                                                                    <option value="lt">Less Than</option>
-                                                                                </select>
-                                                                                <input
-                                                                                    value={cond.value}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].value = e.target.value;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    placeholder="Value"
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-
-                                                                <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
-                                                                    <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">THEN</span>
-                                                                    <select
-                                                                        value={rule.action}
-                                                                        onChange={(e) => updateLogicRule(rule.id, { action: e.target.value as any })}
-                                                                        className="bg-transparent border-none text-[hsl(var(--primary))] font-bold p-0 focus:ring-0 cursor-pointer"
-                                                                    >
-                                                                        <option value="show">Show Section</option>
-                                                                        <option value="hide">Hide Section</option>
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                        <button
-                                                            onClick={() => addLogicRule({
-                                                                type: 'section_visibility',
-                                                                timing: 'pre',
-                                                                source_id: currentSectionId,
-                                                                target_id: currentSectionId,
-                                                                action: 'show',
-                                                                conditions: [{ field: '', operator: 'eq', value: '' }]
-                                                            })}
-                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
-                                                        >
-                                                            + Add Visibility Rule
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Section Skip / Jump Rules */}
-                                                    <div className="space-y-2">
-                                                        <p className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Navigation</p>
-                                                        {logic.filter(r => r.type === 'section_jump' && r.source_id === currentSectionId).map(rule => (
-                                                            <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] space-y-4 relative group">
-                                                                <button
-                                                                    onClick={() => removeLogicRule(rule.id)}
-                                                                    className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
-
-                                                                {/* Timing badge */}
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">IF</span>
-                                                                    <div className="flex items-center bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg p-0.5 gap-0.5">
-                                                                        {(['pre', 'post'] as const).map(t => (
-                                                                            <button
-                                                                                key={t}
-                                                                                onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                    ? 'bg-[hsl(var(--primary))] text-white'
-                                                                                    : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
-                                                                                    }`}
-                                                                            >
-                                                                                {t}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-3">
-                                                                    {rule.conditions.map((cond, cIdx) => (
-                                                                        <div key={cIdx} className="space-y-2">
-                                                                            <select
-                                                                                value={cond.field}
-                                                                                onChange={(e) => {
-                                                                                    const newConds = [...rule.conditions];
-                                                                                    newConds[cIdx].field = e.target.value;
-                                                                                    updateLogicRule(rule.id, { conditions: newConds });
-                                                                                }}
-                                                                                className="input-sm w-full py-1.5"
-                                                                            >
-                                                                                <option value="">Select Field...</option>
-                                                                                {sections.find(p => p.id === currentSectionId)?.fields.map(f => (
-                                                                                    <option key={f.id} value={f.id}>{f.label}</option>
-                                                                                ))}
-                                                                            </select>
-
-                                                                            <div className="flex space-x-2">
-                                                                                <select
-                                                                                    value={cond.operator}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].operator = e.target.value as any;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                >
-                                                                                    <option value="eq">Equals</option>
-                                                                                    <option value="neq">Not Equal</option>
-                                                                                    <option value="contains">Contains</option>
-                                                                                    <option value="gt">Greater Than</option>
-                                                                                    <option value="lt">Less Than</option>
-                                                                                </select>
-                                                                                <input
-                                                                                    value={cond.value}
-                                                                                    onChange={(e) => {
-                                                                                        const newConds = [...rule.conditions];
-                                                                                        newConds[cIdx].value = e.target.value;
-                                                                                        updateLogicRule(rule.id, { conditions: newConds });
-                                                                                    }}
-                                                                                    placeholder="Value"
-                                                                                    className="input-sm w-1/2 py-1.5"
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-
-                                                                <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
-                                                                    <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">GOTO</span>
-                                                                    <select
-                                                                        value={rule.target_id}
-                                                                        onChange={(e) => updateLogicRule(rule.id, { target_id: e.target.value })}
-                                                                        className="bg-transparent border-none text-[hsl(var(--primary))] font-bold p-0 focus:ring-0 cursor-pointer"
-                                                                    >
-                                                                        <option value="">Next Section (Default)</option>
-                                                                        {sections.filter(p => p.id !== currentSectionId).map(p => (
-                                                                            <option key={p.id} value={p.id}>{p.title}</option>
-                                                                        ))}
-                                                                        <option value="end">End Survey</option>
-                                                                    </select>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-
-                                                        <button
-                                                            onClick={() => addLogicRule({
-                                                                type: 'section_jump',
-                                                                timing: 'post',
-                                                                source_id: currentSectionId,
-                                                                action: 'jump_to',
-                                                                target_id: '',
-                                                                conditions: [{ field: '', operator: 'eq', value: '' }]
-                                                            })}
-                                                            className="w-full py-2.5 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
-                                                        >
-                                                            + Add Skip Rule
-                                                        </button>
-                                                                                                         </div>
-
-                                                     </div>
                                              </div>
                                          </div>
                                      )}
@@ -4782,177 +4748,73 @@ const FormBuilder: React.FC = () => {
                                             )}
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        )}
 
-                                    {activeSidebarTab === 'console' && (
-                                        <div className="flex-1 flex flex-col overflow-hidden">
-                                            <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-4 py-3">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Builder Panel</p>
-                                                        <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Form Console</h3>
-                                                    </div>
-                                                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                        {view === 'flow' ? 'flow' : 'inspector'}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                                                            <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div ref={multiActionMenuRef} className="relative">
-                                            <div className="w-full flex rounded-md overflow-hidden border border-[hsl(var(--primary))] shadow-lg shadow-black/10">
-                                                <button
-                                                    onClick={handleSave}
-                                                    disabled={isSaving || isPublishing}
-                                                    className="flex-1 flex items-center justify-center px-3 py-2.5 bg-[hsl(var(--primary))] text-white hover:brightness-110 transition-all disabled:opacity-60"
-                                                    title="Save draft"
-                                                >
-                                                    <span className="font-semibold text-sm">{isSaving ? 'Saving...' : 'Save Draft'}</span>
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setShowMultiActionMenu(prev => {
-                                                            const next = !prev;
-                                                            if (!next) setShowBackupTools(false);
-                                                            return next;
-                                                        });
-                                                    }}
-                                                    disabled={isSaving || isPublishing}
-                                                    className="w-10 flex items-center justify-center bg-[hsl(var(--primary))] text-white border-l border-white/20 hover:brightness-110 transition-all disabled:opacity-60"
-                                                    title="More actions"
-                                                >
-                                                    <ChevronDown className="w-4 h-4" />
-                                                </button>
-                                            </div>
-
-                                            {showMultiActionMenu && (
-                                                <div className="absolute left-0 top-full mt-2 w-72 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-2xl z-50 overflow-hidden p-2 space-y-2">
-                                                    <button
-                                                        onClick={async () => {
-                                                            setShowMultiActionMenu(false);
-                                                            setShowBackupTools(false);
-                                                            await handlePublish();
-                                                        }}
-                                                        className="w-full text-left px-3 py-2.5 text-sm font-semibold text-[hsl(var(--success))] bg-[hsl(var(--success))]/12 hover:bg-[hsl(var(--success))]/18 rounded-md transition-all duration-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_1px_6px_rgba(34,197,94,0.10)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_0_0_1px_rgba(34,197,94,0.20),0_3px_10px_rgba(34,197,94,0.16)] flex items-center space-x-2"
-                                                    >
-                                                        <Zap className="w-4 h-4 text-[hsl(var(--success))]" />
-                                                        <span>Publish</span>
-                                                    </button>
-
-                                                    <button
-                                                        onClick={() => setShowBackupTools((prev) => !prev)}
-                                                        className="w-full text-left px-3 py-2 text-xs font-semibold tracking-wide text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-colors flex items-center justify-between"
-                                                    >
-                                                        <span>Backup Tools</span>
-                                                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showBackupTools ? 'rotate-180' : ''}`} />
-                                                    </button>
-
-                                                    {showBackupTools && (
-                                                        <div className="px-1 py-1 bg-[hsl(var(--surface-elevated))]/20 rounded-md space-y-1.5">
-                                                            {[2, 3].map((slot) => {
-                                                                const backup = getSlotVersion(slot as 2 | 3);
-                                                                const shortLabel = slot === 2 ? 'A' : 'B';
-                                                                const isPreviewing = previewSlot === slot;
-                                                                const previewBlueprint = isPreviewing ? backup?.blueprint : null;
-                                                                const sectionCount = previewBlueprint?.ui?.length || 0;
-                                                                const fieldCount = previewBlueprint?.ui?.reduce((acc: number, s: any) => acc + ((s.children || []).length), 0) || 0;
-
-                                                                return (
-                                                                    <div
-                                                                        key={slot}
-                                                                        className="group rounded-lg px-2 py-1.5 bg-gradient-to-r from-[hsl(var(--surface))] via-[hsl(var(--surface-elevated))]/55 to-[hsl(var(--surface))] shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_1px_8px_rgba(15,23,42,0.08)] transition-all duration-200 hover:brightness-[1.02] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(15,23,42,0.12)]"
-                                                                    >
-                                                                        <div className="flex items-center justify-between gap-2">
-                                                                            <p className="text-[10px] font-medium text-[hsl(var(--text-tertiary))] truncate">
-                                                                                {backup ? `v${backup.version_number}` : 'Empty'}
-                                                                                {isPreviewing && backup ? ` · ${sectionCount}s ${fieldCount}f` : ''}
-                                                                            </p>
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                <span className="text-[11px] font-semibold text-[hsl(var(--text-primary))] w-3 text-center transition-colors group-hover:text-[hsl(var(--primary))]">{shortLabel}</span>
-                                                                                <button
-                                                                                    onClick={async () => {
-                                                                                        await handleSaveToBackup(slot as 2 | 3);
-                                                                                    }}
-                                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
-                                                                                    title={`Save current draft to backup ${shortLabel}`}
-                                                                                >
-                                                                                    <Save className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
-                                                                                </button>
-                                                                                <button
-                                                                                    onClick={() => setPreviewSlot(isPreviewing ? null : (slot as 2 | 3))}
-                                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95"
-                                                                                    title={`Preview backup ${shortLabel}`}
-                                                                                >
-                                                                                    <Eye className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
-                                                                                </button>
-                                                                                <button
-                                                                                    onClick={async () => {
-                                                                                        setShowMultiActionMenu(false);
-                                                                                        setShowBackupTools(false);
-                                                                                        await handleRestoreBackupToDraft(slot as 2 | 3);
-                                                                                    }}
-                                                                                    disabled={!backup}
-                                                                                    className="h-7 w-7 inline-flex items-center justify-center rounded-lg bg-[hsl(var(--surface))]/75 hover:bg-[hsl(var(--surface))] transition-all duration-150 hover:scale-105 active:scale-95 disabled:opacity-40"
-                                                                                    title={`Restore backup ${shortLabel} into draft`}
-                                                                                >
-                                                                                    <RotateCcw className="w-3.5 h-3.5 text-[hsl(var(--success))]" />
-                                                                                </button>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+                        {/* ─── FLOATING CONSOLE WINDOW ─── */}
+                        {isConsoleOpen && (
+                            <div className="absolute bottom-4 right-20 z-50 w-96 max-h-[70vh] border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-300">
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-4 py-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Builder Panel</p>
+                                            <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Form Console</h3>
                                         </div>
-
-                                        <div className="relative">
+                                        <div className="flex items-center gap-2">
+                                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                {view === 'flow' ? 'flow' : 'inspector'}
+                                            </div>
                                             <button
-                                                onClick={() => {
-                                                    if (view === 'section') {
-                                                        setShowSimulatorMenu(!showSimulatorMenu);
-                                                    } else {
-                                                        navigate(`/simulator/${formId}`);
-                                                    }
-                                                }}
-                                                className="w-full flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] px-3 py-2.5 rounded-md transition-all shadow-lg shadow-black/10 text-white"
+                                                onClick={() => setIsConsoleOpen(false)}
+                                                className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg transition-colors"
+                                                title="Close Console"
                                             >
-                                                <Play className="w-4 h-4" />
-                                                <span className="font-semibold text-sm">Simulator</span>
+                                                <X className="w-3.5 h-3.5" />
                                             </button>
-
-                                            {showSimulatorMenu && (
-                                                <div className="absolute right-0 top-full mt-2 w-56 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-xl z-50 overflow-hidden">
-                                                    <button
-                                                        onClick={() => {
-                                                            setShowSimulatorMenu(false);
-                                                            navigate(`/simulator/${formId}`);
-                                                        }}
-                                                        className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors border-b border-[hsl(var(--border))] flex items-center space-x-2"
-                                                    >
-                                                        <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                                        <span>Run From Beginning</span>
-                                                    </button>
-                                                    {view === 'section' && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setShowSimulatorMenu(false);
-                                                                navigate(`/simulator/${formId}?section=${currentSectionId}`);
-                                                            }}
-                                                            className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors flex items-center space-x-2"
-                                                        >
-                                                            <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                                            <span>Run Current Section</span>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 </div>
 
+                                <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`h-2.5 w-2.5 rounded-full ${hasUnsavedChanges ? 'bg-[hsl(var(--warning))] animate-pulse' : 'bg-[hsl(var(--success))]'}`} />
+                                            <span className="text-[11px] font-semibold text-[hsl(var(--text-secondary))]">{hasUnsavedChanges ? 'Unsaved Changes' : 'All Saved'}</span>
+                                        </div>
+                                        <div className="ml-auto flex items-center gap-2">
+                                            <div className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${
+                                                formMeta?.status === 'live'
+                                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                            }`}>
+                                                {formMeta?.status || 'draft'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Simulate Buttons */}
+                                <div className="p-4 space-y-2 border-b border-[hsl(var(--border))]">
+                                    <button
+                                        onClick={() => navigate(`/simulator/${formId}`)}
+                                        className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors rounded-lg flex items-center space-x-2 border border-[hsl(var(--border))]/40"
+                                    >
+                                        <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                        <span>Run From Beginning</span>
+                                    </button>
+                                    {view === 'section' && (
+                                        <button
+                                            onClick={() => navigate(`/simulator/${formId}?section=${currentSectionId}`)}
+                                            className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors rounded-lg flex items-center space-x-2 border border-[hsl(var(--border))]/40"
+                                        >
+                                            <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                            <span>Run Current Section</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Summary Stats */}
                                 <div className="flex-1 overflow-y-auto p-4 text-xs text-[hsl(var(--text-tertiary))] space-y-2">
                                     <p className="font-semibold uppercase tracking-[0.18em]">Summary</p>
                                     <div className="grid grid-cols-2 gap-2">
@@ -4966,10 +4828,6 @@ const FormBuilder: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         )}
 
@@ -4980,32 +4838,14 @@ const FormBuilder: React.FC = () => {
                         >
                             {/* Top Tab Icons */}
                             <div className="flex flex-col items-center gap-3 w-full">
-                                {(['section', 'widget', 'console'] as const).map((tab) => {
-                                    const Icon = tab === 'section' ? Settings : tab === 'widget' ? ListTodo : Terminal;
-                                    const tooltip = tab === 'section' ? 'Section Settings' : tab === 'widget' ? 'Field Settings' : 'Form Console';
+                                {(['form', 'section', 'widget'] as const).map((tab) => {
+                                    const Icon = tab === 'form' ? Layout : tab === 'section' ? Settings : ListTodo;
+                                    const tooltip = tab === 'form' ? 'Form Properties' : tab === 'section' ? 'Section Settings' : 'Field Settings';
                                     const isActive = isRightSidebarOpen && activeSidebarTab === tab;
-                                    const isConsole = tab === 'console';
 
-                                    let btnStyle = '';
-                                    if (isConsole) {
-                                        if (hasUnsavedChanges) {
-                                            btnStyle = isActive
-                                                ? 'border-[hsl(var(--warning))]/50 bg-[hsl(var(--warning))]/12 text-[hsl(var(--warning))] shadow-[0_0_12px_rgba(245,158,11,0.15)]'
-                                                : 'border-[hsl(var(--warning))]/35 bg-[hsl(var(--warning))]/6 text-[hsl(var(--warning))] hover:bg-[hsl(var(--warning))]/12 hover:border-[hsl(var(--warning))]/60';
-                                        } else if (formMeta?.status === 'live') {
-                                            btnStyle = isActive
-                                                ? 'border-[hsl(var(--success))]/50 bg-[hsl(var(--success))]/12 text-[hsl(var(--success))] shadow-[0_0_12px_rgba(16,185,129,0.15)]'
-                                                : 'border-[hsl(var(--success))]/35 bg-[hsl(var(--success))]/6 text-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/12 hover:border-[hsl(var(--success))]/60';
-                                        } else {
-                                            btnStyle = isActive
-                                                ? 'border-[hsl(var(--info))]/50 bg-[hsl(var(--info))]/12 text-[hsl(var(--info))] shadow-[0_0_12px_rgba(59,130,246,0.15)]'
-                                                : 'border-[hsl(var(--info))]/35 bg-[hsl(var(--info))]/6 text-[hsl(var(--info))] hover:bg-[hsl(var(--info))]/12 hover:border-[hsl(var(--info))]/60';
-                                        }
-                                    } else {
-                                        btnStyle = isActive
-                                            ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
-                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]';
-                                    }
+                                    const btnStyle = isActive
+                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]';
 
                                     return (
                                         <button
@@ -5023,18 +4863,42 @@ const FormBuilder: React.FC = () => {
                                             title={tooltip}
                                         >
                                             <Icon className="w-4 h-4" />
-                                            {isConsole && (
-                                                <span className={`absolute top-1 right-1 h-2 w-2 rounded-full ${
-                                                    hasUnsavedChanges
-                                                        ? 'bg-[hsl(var(--warning))] animate-pulse'
-                                                        : formMeta?.status === 'live'
-                                                            ? 'bg-[hsl(var(--success))]'
-                                                            : 'bg-[hsl(var(--info))]'
-                                                }`} />
-                                            )}
                                         </button>
                                     );
                                 })}
+
+                                {/* Console Button — separate from property tabs */}
+                                <div className="border-t border-[hsl(var(--border))]/30 pt-3 mt-1">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsConsoleOpen(!isConsoleOpen);
+                                        }}
+                                        className={`h-10 w-10 relative inline-flex items-center justify-center rounded-lg border transition-all ${
+                                            isConsoleOpen
+                                                ? hasUnsavedChanges
+                                                    ? 'border-[hsl(var(--warning))]/50 bg-[hsl(var(--warning))]/12 text-[hsl(var(--warning))] shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+                                                    : formMeta?.status === 'live'
+                                                        ? 'border-[hsl(var(--success))]/50 bg-[hsl(var(--success))]/12 text-[hsl(var(--success))] shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                                                        : 'border-[hsl(var(--info))]/50 bg-[hsl(var(--info))]/12 text-[hsl(var(--info))] shadow-[0_0_12px_rgba(59,130,246,0.15)]'
+                                                : hasUnsavedChanges
+                                                    ? 'border-[hsl(var(--warning))]/35 bg-[hsl(var(--warning))]/6 text-[hsl(var(--warning))] hover:bg-[hsl(var(--warning))]/12 hover:border-[hsl(var(--warning))]/60'
+                                                    : formMeta?.status === 'live'
+                                                        ? 'border-[hsl(var(--success))]/35 bg-[hsl(var(--success))]/6 text-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/12 hover:border-[hsl(var(--success))]/60'
+                                                        : 'border-[hsl(var(--info))]/35 bg-[hsl(var(--info))]/6 text-[hsl(var(--info))] hover:bg-[hsl(var(--info))]/12 hover:border-[hsl(var(--info))]/60'
+                                        }`}
+                                        title="Form Console"
+                                    >
+                                        <Terminal className="w-4 h-4" />
+                                        <span className={`absolute top-1 right-1 h-2 w-2 rounded-full ${
+                                            hasUnsavedChanges
+                                                ? 'bg-[hsl(var(--warning))] animate-pulse'
+                                                : formMeta?.status === 'live'
+                                                    ? 'bg-[hsl(var(--success))]'
+                                                    : 'bg-[hsl(var(--info))]'
+                                        }`} />
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Middle State Indicators (Draft/Live & Saved/Unsaved) */}

@@ -109,14 +109,14 @@ export default function ProjectFormsScreen() {
     setRefreshing(false);
   };
 
-  // Separate listed forms from child forms
-  const isChildForm = (form: Form): boolean => {
-    const vis = form.blueprint_live?.meta?.visibility;
-    return vis === 'child';
-  };
+  // Auto-detect child forms: a form is a "child" if its ID appears
+  // in any other form's linked_form_ids (i.e. it's only reachable via a form_link).
+  const allLinkedIds = new Set(
+    forms.flatMap(f => (f.blueprint_live?.linked_form_ids ?? []) as string[])
+  );
 
-  const listedForms = forms.filter(f => !isChildForm(f));
-  const childForms = forms.filter(f => isChildForm(f));
+  const listedForms = forms.filter(f => !allLinkedIds.has(f.id));
+  const childForms = forms.filter(f => allLinkedIds.has(f.id));
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0f172a' }}>

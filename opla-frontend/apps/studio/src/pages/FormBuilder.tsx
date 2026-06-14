@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formAPI, projectAPI, sectionTemplateAPI } from '../lib/api';
 import { useOrg } from '../contexts/OrgContext';
@@ -10,9 +10,11 @@ import {
     ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
     Eye, RotateCcw, Star, Search, Globe, AlertCircle, CheckCircle2,
-    ListTodo, Sliders, ChevronsUpDown, LayoutGrid
+    ListTodo, Sliders, ChevronsUpDown, LayoutGrid, ExternalLink
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
+import type { FormRule } from '@opla/types';
+import { RulesBuilder } from '../components/RulesBuilder';
 
 type Platform = 'mobile' | 'web' | 'ussd';
 type RenderMode = 'single' | 'list';
@@ -23,9 +25,11 @@ type FieldType =
     | 'phone_input'
     | 'date_picker'
     | 'time_picker'
+    | 'time_range'
     | 'dropdown'
     | 'radio_group'
     | 'checkbox_group'
+    | 'multi_select_dropdown'
     | 'toggle'
     | 'textarea'
     | 'gps_capture'
@@ -38,7 +42,8 @@ type FieldType =
     | 'lookup_list'
     | 'rating_scale'
     | 'object_collection'
-    | 'object_instance';
+    | 'object_instance'
+    | 'form_link';
 
 interface FieldOption {
     label: string;        // Display text shown to respondent
@@ -158,6 +163,30 @@ interface FormField {
     allow_add_items?: boolean;
     allow_remove_items?: boolean;
     catalog_source_type?: 'project_catalog';
+
+    // Cascading / filtered dropdown support
+    cascade_parent_field_id?: string;
+    cascade_options_map?: Record<string, FieldOption[]>;
+    cascade_dataset_filter_key?: string;
+
+    // Decimal / currency input support
+    decimal_places?: number;
+    input_prefix?: string;
+    input_suffix?: string;
+
+    // Auto-timestamp / dynamic values support
+    auto_value?: string;
+    auto_value_timing?: 'on_load' | 'on_submit';
+    auto_value_editable?: boolean;
+
+    // Form link support
+    linked_form_id?: string;
+    linked_form_slug?: string;
+    linked_form_param_map?: Record<string, string>;
+
+    // Input parameter annotations
+    is_input_param?: boolean;
+    input_param_readonly?: boolean;
 }
 
 interface SectionProperties {
@@ -226,6 +255,7 @@ interface FormBlueprint {
         title: string;
         slug: string;
         is_public: boolean;
+        visibility?: 'listed' | 'child';
         theme: {
             primary_color: string;
             mode: string;
@@ -234,6 +264,8 @@ interface FormBlueprint {
     schema: Array<Record<string, any>>;
     ui: Array<Record<string, any>>;
     logic: Array<Record<string, any>>;
+    rules?: FormRule[];
+    linked_form_ids?: string[];
 }
 
 const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNode; defaults?: Partial<FormField> }> = [
@@ -243,9 +275,11 @@ const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNo
     { type: 'phone_input', label: 'Phone Input', icon: <Phone className="w-4 h-4" /> },
     { type: 'date_picker', label: 'Date Picker', icon: <Calendar className="w-4 h-4" /> },
     { type: 'time_picker', label: 'Time Picker', icon: <Clock className="w-4 h-4" /> },
+    { type: 'time_range', label: 'Time Range', icon: <Clock className="w-4 h-4" /> },
     { type: 'dropdown', label: 'Dropdown', icon: <List className="w-4 h-4" /> },
     { type: 'radio_group', label: 'Radio Group', icon: <CheckSquare className="w-4 h-4" /> },
     { type: 'checkbox_group', label: 'Checkbox Group', icon: <CheckSquare className="w-4 h-4" /> },
+    { type: 'multi_select_dropdown', label: 'Multi-Select Dropdown', icon: <List className="w-4 h-4" /> },
     { type: 'toggle', label: 'Toggle', icon: <ToggleLeft className="w-4 h-4" /> },
     { type: 'textarea', label: 'Textarea', icon: <FileText className="w-4 h-4" /> },
     { type: 'gps_capture', label: 'GPS Capture', icon: <MapPin className="w-4 h-4" /> },
@@ -259,6 +293,7 @@ const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNo
     { type: 'rating_scale', label: 'Rating Scale', icon: <Star className="w-4 h-4" />, defaults: { min: 1, max: 5, min_label: 'Very Difficult', max_label: 'Very Easy' } },
     { type: 'object_collection', label: 'Object Collection', icon: <Layers className="w-4 h-4" />, defaults: { allow_add_items: true, allow_remove_items: true, collection_layout: 'cards' } },
     { type: 'object_instance', label: 'Object Reference', icon: <FileText className="w-4 h-4" /> },
+    { type: 'form_link', label: 'Form Link', icon: <ExternalLink className="w-4 h-4" /> },
 ];
 
 const widgetCategoryMap: Record<FieldType, string> = {
@@ -269,9 +304,11 @@ const widgetCategoryMap: Record<FieldType, string> = {
     textarea: 'Standard Inputs',
     date_picker: 'Time & Date',
     time_picker: 'Time & Date',
+    time_range: 'Time & Date',
     dropdown: 'Selection Fields',
     radio_group: 'Selection Fields',
     checkbox_group: 'Selection Fields',
+    multi_select_dropdown: 'Selection Fields',
     toggle: 'Selection Fields',
     gps_capture: 'Device Metrics',
     barcode_scanner: 'Device Metrics',
@@ -284,6 +321,7 @@ const widgetCategoryMap: Record<FieldType, string> = {
     rating_scale: 'Advanced Inputs',
     object_collection: 'Advanced Inputs',
     object_instance: 'Advanced Inputs',
+    form_link: 'Navigation',
 };
 
 const widgetHints: Record<FieldType, string> = {
@@ -293,9 +331,11 @@ const widgetHints: Record<FieldType, string> = {
     phone_input: 'Contact telephone numeric format input placeholder',
     date_picker: 'Calendar dropdown select widget to stamp standard format dates',
     time_picker: 'Clock dial select interface to stamp standard format times',
+    time_range: 'Compound open and close time selection for business hours and schedules',
     dropdown: 'Compact select dropdown containing customizable choices',
     radio_group: 'Radio-button choices layout. Single option select only',
     checkbox_group: 'Multi-checkbox list selector. Allows multiple options',
+    multi_select_dropdown: 'Compact dropdown select allowing multiple selections',
     toggle: 'Sleek active toggles list for binary state choices',
     textarea: 'Rich or plain multiple lines responsive narrative description box',
     gps_capture: 'Locates coordinate position via mobile GPS hardware integration',
@@ -309,6 +349,7 @@ const widgetHints: Record<FieldType, string> = {
     rating_scale: 'Responsive 5-star custom visual scale review meter widget',
     object_collection: 'Manage a repeating collection of custom object structures',
     object_instance: 'Reference a single structured data object or catalog item',
+    form_link: 'Navigational link card that opens a different form with optional parameter passing',
 };
 
 
@@ -837,7 +878,19 @@ const FormBuilder: React.FC = () => {
     const [widgetSearchQuery, setWidgetSearchQuery] = useState('');
     const [isLeftPanelPinned, setIsLeftPanelPinned] = useState(false);
     const [isRightSidebarPinned, setIsRightSidebarPinned] = useState(true);
-    const [view, setView] = useState<'flow' | 'section'>('flow');
+    const [view, setView] = useState<'flow' | 'section' | 'rules'>('flow');
+    const [formRules, setFormRules] = useState<FormRule[]>([]);
+    const [formVisibility, setFormVisibility] = useState<'listed' | 'child'>('listed');
+    const [projectForms, setProjectForms] = useState<Array<{ id: string; title: string; slug: string }>>([]);
+
+    const allFieldsFlattened = useMemo(() => {
+        return sections.flatMap(s => s.fields.map(f => ({
+            id: f.id,
+            label: f.label || f.id,
+            type: f.type,
+            options: f.options
+        })));
+    }, [sections]);
     const [slideDir, setSlideDir] = useState<'forward' | 'back'>('forward');
     const [dragOverFieldId, setDragOverFieldId] = useState<string | null>(null);
     const [dragEnabledFieldId, setDragEnabledFieldId] = useState<string | null>(null);
@@ -1031,14 +1084,14 @@ const FormBuilder: React.FC = () => {
     const [previewSlot, setPreviewSlot] = useState<2 | 3 | null>(null);
     const multiActionMenuRef = React.useRef<HTMLDivElement | null>(null);
 
-    const computeHash = (t: string, s: any[], l: any[]) => JSON.stringify({ t, s, l });
+    const computeHash = (t: string, s: any[], l: any[], r: any[]) => JSON.stringify({ t, s, l, r });
 
     useEffect(() => {
         if (initialHash) {
-            const currentHash = computeHash(title, sections, logic);
+            const currentHash = computeHash(title, sections, logic, formRules);
             setHasUnsavedChanges(currentHash !== initialHash);
         }
-    }, [title, sections, logic, initialHash]);
+    }, [title, sections, logic, formRules, initialHash]);
 
     useEffect(() => {
         const handleOutsideClick = (event: MouseEvent) => {
@@ -1544,14 +1597,24 @@ const FormBuilder: React.FC = () => {
                 allow_add_items: child.allow_add_items,
                 allow_remove_items: child.allow_remove_items,
                 catalog_source_type: child.catalog_source_type,
+                // Form link
+                linked_form_id: child.linked_form_id,
+                linked_form_slug: child.linked_form_slug,
+                linked_form_param_map: child.linked_form_param_map,
+                // Input param annotations
+                is_input_param: child.is_input_param,
+                input_param_readonly: child.input_param_readonly,
             })) : []
         }));
 
         setSections(loadedSections);
         setCurrentSectionId(loadedSections[0].id);
         setLogic(blueprint.logic || []);
+        const loadedRules = blueprint.rules || [];
+        setFormRules(loadedRules);
+        setFormVisibility(blueprint?.meta?.visibility || 'listed');
         setTitle(blueprint?.meta?.title || fallbackTitle || title);
-        setInitialHash(computeHash(blueprint?.meta?.title || fallbackTitle || title, loadedSections, blueprint.logic || []));
+        setInitialHash(computeHash(blueprint?.meta?.title || fallbackTitle || title, loadedSections, blueprint.logic || [], loadedRules));
         setHasUnsavedChanges(false);
     };
 
@@ -1577,6 +1640,19 @@ const FormBuilder: React.FC = () => {
                 });
                 setActiveVersions(Array.isArray(versions) ? versions : []);
                 setTitle(data.title || 'Untitled Form');
+
+                // Load sibling forms in same project for form-link picker
+                if (data.project_id) {
+                    formAPI.list(data.project_id)
+                        .then((forms: any[]) => {
+                            setProjectForms(
+                                (Array.isArray(forms) ? forms : [])
+                                    .filter((f: any) => f.id !== data.id) // exclude current form
+                                    .map((f: any) => ({ id: f.id, title: f.title, slug: f.slug }))
+                            );
+                        })
+                        .catch(() => { /* non-critical */ });
+                }
 
                 const blueprint = data.blueprint_draft || data.blueprint_live;
                 if (blueprint?.ui?.length) {
@@ -1625,13 +1701,16 @@ const FormBuilder: React.FC = () => {
                     setSections(loadedSections);
                     setCurrentSectionId(loadedSections[0].id);
                     setLogic(blueprint.logic || []);
-                    setInitialHash(computeHash(data.title || 'Untitled Form', loadedSections, blueprint.logic || []));
+                    const loadedRules = blueprint.rules || [];
+                    setFormRules(loadedRules);
+                    setInitialHash(computeHash(data.title || 'Untitled Form', loadedSections, blueprint.logic || [], loadedRules));
                 } else {
                     const defaultSecs: FormSection[] = [{ id: 'screen_1', title: 'Section 1', fields: [], properties: { render_mode: 'list', platforms: ['mobile', 'web'] }, layout: ensureSectionLayout(undefined, 0) }];
                     setSections(defaultSecs);
                     setCurrentSectionId('screen_1');
                     setLogic([]);
-                    setInitialHash(computeHash('Untitled Form', defaultSecs, []));
+                    setFormRules([]);
+                    setInitialHash(computeHash('Untitled Form', defaultSecs, [], []));
                 }
             } catch (err) {
                 console.error('Failed to load form', err);
@@ -1880,6 +1959,13 @@ const FormBuilder: React.FC = () => {
         allow_add_items: field.allow_add_items,
         allow_remove_items: field.allow_remove_items,
         catalog_source_type: field.catalog_source_type,
+        // Form link
+        linked_form_id: field.linked_form_id,
+        linked_form_slug: field.linked_form_slug,
+        linked_form_param_map: field.linked_form_param_map,
+        // Input param annotations
+        is_input_param: field.is_input_param,
+        input_param_readonly: field.input_param_readonly,
     });
 
     const handleSave = async () => {
@@ -1898,6 +1984,7 @@ const FormBuilder: React.FC = () => {
                     title,
                     slug: formMeta?.slug || title.toLowerCase().replace(/\s+/g, '-'),
                     is_public: formMeta?.is_public || false,
+                    visibility: formVisibility,
                     theme: {
                         primary_color: primaryColor,
                         mode: themeMode
@@ -1918,7 +2005,12 @@ const FormBuilder: React.FC = () => {
                     shuffle_options: p.properties.shuffle_options,
                     children: p.fields.map(f => serializeUiField(f))
                 })),
-                logic: logic
+                logic: logic,
+                rules: formRules,
+                linked_form_ids: sections.flatMap(s => s.fields)
+                    .filter(f => f.type === 'form_link' && f.linked_form_id)
+                    .map(f => f.linked_form_id!)
+                    .filter((id, idx, arr) => arr.indexOf(id) === idx),
             };
             // Working draft is always slot 1.
             await formAPI.updateBlueprint(formId, blueprint, 1);
@@ -1926,7 +2018,7 @@ const FormBuilder: React.FC = () => {
             const versions = await formAPI.listVersions(formId);
             setActiveVersions(Array.isArray(versions) ? versions : []);
 
-            const newHash = computeHash(title, sections, logic);
+            const newHash = computeHash(title, sections, logic, formRules);
             setInitialHash(newHash);
             setHasUnsavedChanges(false);
 
@@ -1989,6 +2081,7 @@ const FormBuilder: React.FC = () => {
                     title,
                     slug: formMeta?.slug || title.toLowerCase().replace(/\s+/g, '-'),
                     is_public: formMeta?.is_public || false,
+                    visibility: formVisibility,
                     theme: {
                         primary_color: primaryColor,
                         mode: themeMode
@@ -2008,7 +2101,12 @@ const FormBuilder: React.FC = () => {
                     shuffle_options: p.properties.shuffle_options,
                     children: p.fields.map(f => serializeUiField(f))
                 })),
-                logic: logic
+                logic: logic,
+                rules: formRules,
+                linked_form_ids: sections.flatMap(s => s.fields)
+                    .filter(f => f.type === 'form_link' && f.linked_form_id)
+                    .map(f => f.linked_form_id!)
+                    .filter((id, idx, arr) => arr.indexOf(id) === idx),
             };
 
             await formAPI.updateBlueprint(formId, blueprint, slot);
@@ -2356,6 +2454,20 @@ const FormBuilder: React.FC = () => {
                             onChange={(e) => setTitle(e.target.value)}
                             className="min-w-0 max-w-[320px] bg-transparent border-none text-xl font-bold focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2"
                         />
+                        <button
+                            type="button"
+                            onClick={() => setFormVisibility(formVisibility === 'listed' ? 'child' : 'listed')}
+                            title={formVisibility === 'child'
+                                ? 'Child form — hidden from mobile form list. Click to make listed.'
+                                : 'Listed form — visible in mobile form list. Click to make child.'}
+                            className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border transition-all cursor-pointer ${
+                                formVisibility === 'child'
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                            }`}
+                        >
+                            {formVisibility === 'child' ? '🔗 Child' : '📋 Listed'}
+                        </button>
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
@@ -2381,6 +2493,9 @@ const FormBuilder: React.FC = () => {
                                     } else {
                                         setIsSectionListOpen(true);
                                         setActiveLeftTab('sections');
+                                        if (view === 'rules') {
+                                            setView('flow');
+                                        }
                                     }
                                 }}
                                 className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
@@ -2402,6 +2517,9 @@ const FormBuilder: React.FC = () => {
                                     } else {
                                         setIsSectionListOpen(true);
                                         setActiveLeftTab('widgets');
+                                        if (view === 'rules') {
+                                            setView('flow');
+                                        }
                                     }
                                 }}
                                 className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
@@ -2412,6 +2530,27 @@ const FormBuilder: React.FC = () => {
                                 title="Fields Toolbox"
                             >
                                 <ListTodo className="w-4 h-4" />
+                            </button>
+
+                            {/* Rules Tab Button */}
+                            <button
+                                id="rules-trigger-rail"
+                                onClick={() => {
+                                    if (view === 'rules') {
+                                        setView('flow');
+                                    } else {
+                                        setView('rules');
+                                        setIsSectionListOpen(false);
+                                    }
+                                }}
+                                className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
+                                    view === 'rules'
+                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
+                                }`}
+                                title="Form Rules Engine"
+                            >
+                                <Zap className="w-4 h-4" />
                             </button>
                         </div>
                     </aside>
@@ -2984,7 +3123,7 @@ const FormBuilder: React.FC = () => {
 
                                     </div>
                             </div>
-                        ) : (
+                        ) : view === 'section' ? (
                             /* ═══════════════════════════════════════════════
                                SECTION VIEW  — edit fields inside one section
                             ═══════════════════════════════════════════════ */
@@ -3145,7 +3284,34 @@ const FormBuilder: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        ) : view === 'rules' ? (
+                            <div className="p-4 h-full flex flex-col overflow-hidden animate-in fade-in duration-300">
+                                <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Rules Engine</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setView('flow')}
+                                            title="Flow Mode"
+                                            className="rounded-xl border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] p-2.5 text-[hsl(var(--text-primary))] transition-all hover:text-[hsl(var(--primary))] shadow-sm"
+                                        >
+                                            <GitBranch className="w-[18px] h-[18px]" />
+                                        </button>
+                                    </div>
+                                    <div className="flex-grow overflow-hidden bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.03),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
+                                        <div className="w-full h-full p-4 lg:p-6 overflow-y-auto">
+                                            <RulesBuilder
+                                                fields={allFieldsFlattened}
+                                                sections={sections.map(s => ({ id: s.id, title: s.title }))}
+                                                rules={formRules}
+                                                onRulesChange={(newRules) => setFormRules(newRules)}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
                         </div>
                     </main>
 
@@ -4327,10 +4493,86 @@ const FormBuilder: React.FC = () => {
                                                                                     })}
                                                                                 </div>
                                                                             )
-                                                                        }
+                                                                        },
+                                                                        // --- Form Link Settings ---
+                                                                        {
+                                                                            category: 'Form Link',
+                                                                            key: 'linked_form_id',
+                                                                            label: 'Linked Form',
+                                                                            metaKey: 'linked_form_id',
+                                                                            visible: selectedField.type === 'form_link',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.linked_form_id || ''}
+                                                                                    onChange={e => {
+                                                                                        const selectedId = e.target.value;
+                                                                                        const match = projectForms.find(f => f.id === selectedId);
+                                                                                        updateField(selectedField.id, {
+                                                                                            linked_form_id: selectedId || undefined,
+                                                                                            linked_form_slug: match?.slug || selectedField.linked_form_slug,
+                                                                                        });
+                                                                                    }}
+                                                                                    onFocus={() => setHoveredProperty(null)}
+                                                                                    className="w-full text-[11px] px-1.5 py-1 rounded border bg-[hsl(var(--background))] border-[hsl(var(--border))] text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                                                >
+                                                                                    <option value="">— Select a form —</option>
+                                                                                    {projectForms.map(f => (
+                                                                                        <option key={f.id} value={f.id}>{f.title}</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Form Link',
+                                                                            key: 'linked_form_slug',
+                                                                            label: 'Linked Form Slug',
+                                                                            metaKey: 'linked_form_slug',
+                                                                            visible: selectedField.type === 'form_link',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.linked_form_slug || ''}
+                                                                                    onChange={e => updateField(selectedField.id, { linked_form_slug: e.target.value })}
+                                                                                    onFocus={() => setHoveredProperty(null)}
+                                                                                    className="w-full text-[11px] px-1.5 py-1 rounded border bg-[hsl(var(--background))] border-[hsl(var(--border))] text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                                                    placeholder="slug of target form"
+                                                                                />
+                                                                            )
+                                                                        },
+
+                                                                        // --- Input Parameter Settings ---
+                                                                        {
+                                                                            category: 'Navigation',
+                                                                            key: 'is_input_param',
+                                                                            label: 'Is Input Parameter',
+                                                                            metaKey: 'is_input_param',
+                                                                            visible: selectedField.type !== 'form_link',
+                                                                            render: () => (
+                                                                                <button
+                                                                                    onClick={() => updateField(selectedField.id, { is_input_param: !selectedField.is_input_param })}
+                                                                                    className={`w-7 h-4 rounded-full transition-colors ${selectedField.is_input_param ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--surface-elevated))]'}`}
+                                                                                >
+                                                                                    <div className={`w-3 h-3 rounded-full bg-white shadow transition-transform ${selectedField.is_input_param ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                                                                </button>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Navigation',
+                                                                            key: 'input_param_readonly',
+                                                                            label: 'Lock When Pre-filled',
+                                                                            metaKey: 'input_param_readonly',
+                                                                            visible: selectedField.is_input_param === true,
+                                                                            render: () => (
+                                                                                <button
+                                                                                    onClick={() => updateField(selectedField.id, { input_param_readonly: !selectedField.input_param_readonly })}
+                                                                                    className={`w-7 h-4 rounded-full transition-colors ${selectedField.input_param_readonly ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--surface-elevated))]'}`}
+                                                                                >
+                                                                                    <div className={`w-3 h-3 rounded-full bg-white shadow transition-transform ${selectedField.input_param_readonly ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                                                                </button>
+                                                                            )
+                                                                        },
                                                                     ];
 
-                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic Rules', 'Validation', 'Behavior', 'Matrix Setup', 'API Integration', 'System Settings'];
+                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic Rules', 'Validation', 'Behavior', 'Matrix Setup', 'API Integration', 'Form Link', 'Navigation', 'System Settings'];
 
                                                                      return (
                                                                          <div className="flex-1 overflow-y-auto hide-scrollbar border border-[hsl(var(--border))]/25 rounded-xl bg-[hsl(var(--background))]">

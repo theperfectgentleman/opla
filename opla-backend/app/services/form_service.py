@@ -665,6 +665,56 @@ class FormService:
         return form
 
     @staticmethod
+    def get_linked_forms(
+        db: Session,
+        form_id: uuid.UUID,
+        max_depth: int = 3,
+    ) -> List[Form]:
+        """Recursively resolve linked_form_ids from blueprint_live.
+
+        Walks the form-link graph breadth-first up to *max_depth* levels,
+        collecting every referenced form that is live and has a blueprint.
+        Returns a flat, deduplicated list (excludes the root form itself).
+        Circular references and missing forms are silently skipped.
+        """
+        visited: set = set()
+        result: List[Form] = []
+        queue: List[tuple] = [(form_id, 0)]  # (form_id, depth)
+
+        while queue:
+            current_id, depth = queue.pop(0)
+
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            form = db.query(Form).filter(Form.id == current_id).first()
+            if not form or not form.blueprint_live:
+                continue
+
+            # Don't include the root form in the result list
+            if current_id != form_id:
+                if form.status == FormStatus.LIVE:
+                    result.append(form)
+
+            # Stop recursing if we've hit the depth limit
+            if depth >= max_depth:
+                continue
+
+            # Extract linked_form_ids from blueprint
+            blueprint = form.blueprint_live
+            linked_ids = blueprint.get("linked_form_ids") or []
+            for linked_id_str in linked_ids:
+                try:
+                    linked_uuid = uuid.UUID(str(linked_id_str))
+                    if linked_uuid not in visited:
+                        queue.append((linked_uuid, depth + 1))
+                except (ValueError, AttributeError):
+                    continue
+
+        return result
+
+    @staticmethod
     def publish_form(
         db: Session,
         form_id: uuid.UUID,

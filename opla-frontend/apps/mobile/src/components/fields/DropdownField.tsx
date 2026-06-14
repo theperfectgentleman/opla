@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
 import { FormField } from '@opla/types';
 
@@ -7,11 +7,33 @@ interface Props {
     value: string;
     onChange: (value: string) => void;
     error?: string;
+    responses?: Record<string, any>;
 }
 
-export function DropdownField({ field, value, onChange, error }: Props) {
+export function DropdownField({ field, value, onChange, error, responses = {} }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
-    const options = field.options || [];
+
+    // Resolve cascading options
+    const options = useMemo(() => {
+        if (field.cascade_parent_field_id && field.cascade_options_map) {
+            const parentValue = responses[field.cascade_parent_field_id];
+            if (parentValue && field.cascade_options_map[parentValue]) {
+                return field.cascade_options_map[parentValue];
+            }
+            return []; // Parent not selected — show no options
+        }
+        return field.options || [];
+    }, [field.options, field.cascade_parent_field_id, field.cascade_options_map, responses]);
+
+    // Clear value if parent changes and current value is no longer valid
+    useEffect(() => {
+        if (field.cascade_parent_field_id && value) {
+            const stillValid = options.some(o => o.value === value);
+            if (!stillValid) {
+                onChange('');
+            }
+        }
+    }, [options]);
 
     const selectedOption = options.find(o => o.value === value);
 

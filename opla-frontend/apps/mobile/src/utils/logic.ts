@@ -80,3 +80,37 @@ export function isFieldVisible(fieldId: string, logic: LogicRule[], responses: R
 
     return visible;
 }
+
+/**
+ * Determines whether a section should be shown based on section_visibility
+ * and section_skip logic rules from the old logic system.
+ * Returns true if the section should be displayed.
+ */
+export function isSectionVisible(
+    sectionId: string,
+    logic: LogicRule[],
+    responses: Record<string, any>
+): boolean {
+    const rules = logic.filter(
+        r => (r.type === 'section_visibility' || r.type === 'section_skip') && r.target_id === sectionId
+    );
+    if (rules.length === 0) return true;
+
+    let visible = true;
+    let hasShowRule = false;
+    let showRulePassed = false;
+
+    for (const rule of rules) {
+        const passed = evaluateLogicRule(rule, responses);
+        if (rule.type === 'section_skip' && rule.action === 'skip' && passed) return false;
+        if (rule.action === 'hide' && passed) return false;
+        if (rule.action === 'show') {
+            hasShowRule = true;
+            if (passed) showRulePassed = true;
+        }
+    }
+
+    if (hasShowRule && !showRulePassed) visible = false;
+    return visible;
+}
+

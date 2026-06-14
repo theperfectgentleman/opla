@@ -23,6 +23,10 @@ export default function YardFormScreen() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
+  // Parse prefill data from route params (passed via form_link navigation)
+  const rawPrefill = (useLocalSearchParams() as any).prefillData;
+  const prefillData = rawPrefill ? (() => { try { return JSON.parse(rawPrefill); } catch { return undefined; } })() : undefined;
+
   useEffect(() => {
     if (!slug) return;
     publicFormAPI.getBySlug(slug)
@@ -60,11 +64,11 @@ export default function YardFormScreen() {
         <TouchableOpacity
           onPress={() => router.back()}
           style={{
-            marginTop: 32, backgroundColor: '#6366f1', borderRadius: 14,
-            paddingHorizontal: 32, paddingVertical: 14,
+            marginTop: 28, backgroundColor: '#6366f1',
+            borderRadius: 12, paddingHorizontal: 28, paddingVertical: 14,
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Back to Yard</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Done</Text>
         </TouchableOpacity>
       </View>
     );
@@ -107,6 +111,21 @@ export default function YardFormScreen() {
         <FormRenderer
           blueprint={form}
           onSubmitSuccess={() => setSubmitted(true)}
+          prefillData={prefillData}
+          onFormLinkPress={(link) => {
+            // Yard uses slug-based routing; prefer slug, fallback to ID
+            const targetSlug = link.formSlug || link.formId;
+            if (!targetSlug) return;
+            router.push({
+              pathname: '/(main)/(yard)/form/[slug]' as any,
+              params: {
+                slug: targetSlug,
+                prefillData: Object.keys(link.params).length > 0
+                  ? JSON.stringify(link.params)
+                  : undefined,
+              },
+            });
+          }}
           extraBottomPad={72}
         />
       ) : null}

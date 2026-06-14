@@ -2,6 +2,7 @@
  * project-forms/[projectId].tsx
  * Lists all LIVE (published) forms inside a project.
  * Only forms with status === 'live' are shown — draft/archived forms are excluded on mobile.
+ * Forms with visibility === 'child' are hidden from the main list but shown in an info section.
  */
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -10,7 +11,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FileText, ChevronRight, Inbox } from 'lucide-react-native';
+import { FileText, ChevronRight, ChevronDown, Inbox, Info, Link2 } from 'lucide-react-native';
 import { projectAPI } from '../../../../services/api';
 import { fmtDate } from '../../../../src/utils/dateFormat';
 
@@ -21,6 +22,7 @@ type Form = {
   version?: number;
   published_at?: string;
   description?: string;
+  blueprint_live?: Record<string, any>;
 };
 
 function FormCard({ form, accent, onPress }: { form: Form; accent: string; onPress: () => void }) {
@@ -80,6 +82,7 @@ export default function ProjectFormsScreen() {
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]       = useState('');
+  const [infoExpanded, setInfoExpanded] = useState(false);
 
   const accent = orgColor ?? '#6366f1';
 
@@ -106,6 +109,15 @@ export default function ProjectFormsScreen() {
     setRefreshing(false);
   };
 
+  // Separate listed forms from child forms
+  const isChildForm = (form: Form): boolean => {
+    const vis = form.blueprint_live?.meta?.visibility;
+    return vis === 'child';
+  };
+
+  const listedForms = forms.filter(f => !isChildForm(f));
+  const childForms = forms.filter(f => isChildForm(f));
+
   return (
     <View style={{ flex: 1, backgroundColor: '#0f172a' }}>
       <StatusBar barStyle="light-content" />
@@ -125,7 +137,7 @@ export default function ProjectFormsScreen() {
         </View>
         {!loading && (
           <View style={{ backgroundColor: '#1e293b', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 }}>
-            <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '600' }}>{forms.length}</Text>
+            <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '600' }}>{listedForms.length}</Text>
           </View>
         )}
       </View>
@@ -146,7 +158,7 @@ export default function ProjectFormsScreen() {
           contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accent} />}
         >
-          {forms.length === 0 ? (
+          {listedForms.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 48 }}>
               <Inbox size={40} color="#334155" />
               <Text style={{ color: '#475569', marginTop: 14, fontSize: 15, fontWeight: '600' }}>
@@ -157,7 +169,7 @@ export default function ProjectFormsScreen() {
               </Text>
             </View>
           ) : (
-            forms.map((form) => (
+            listedForms.map((form) => (
               <FormCard
                 key={form.id}
                 form={form}
@@ -177,6 +189,70 @@ export default function ProjectFormsScreen() {
                 }
               />
             ))
+          )}
+
+          {/* ── Linked Resources Info Section ─────────────────────────── */}
+          {childForms.length > 0 && (
+            <View style={{ marginTop: 20 }}>
+              <TouchableOpacity
+                onPress={() => setInfoExpanded(!infoExpanded)}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
+                  borderWidth: 1, borderColor: '#334155',
+                }}
+              >
+                <Info size={16} color="#64748b" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#94a3b8' }}>
+                    Linked Resources
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                    {childForms.length} child form{childForms.length === 1 ? '' : 's'} downloaded for offline use
+                  </Text>
+                </View>
+                {infoExpanded
+                  ? <ChevronDown size={16} color="#64748b" />
+                  : <ChevronRight size={16} color="#64748b" />
+                }
+              </TouchableOpacity>
+
+              {infoExpanded && (
+                <View style={{
+                  backgroundColor: '#0f172a', borderRadius: 10,
+                  borderWidth: 1, borderColor: '#1e293b',
+                  marginTop: 6, overflow: 'hidden',
+                }}>
+                  {childForms.map((form, idx) => (
+                    <View
+                      key={form.id}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 10,
+                        padding: 12,
+                        borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#1e293b',
+                      }}
+                    >
+                      <Link2 size={14} color="#475569" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#94a3b8' }}>{form.title}</Text>
+                        <Text style={{ fontSize: 10, color: '#475569' }}>
+                          v{form.version ?? 1} · child form · accessed via launcher
+                        </Text>
+                      </View>
+                      <View style={{
+                        backgroundColor: '#1e293b', borderRadius: 6,
+                        paddingHorizontal: 6, paddingVertical: 2,
+                      }}>
+                        <Text style={{ fontSize: 9, color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>
+                          Cached
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
           )}
         </ScrollView>
       )}

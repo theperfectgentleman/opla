@@ -43,6 +43,10 @@ export default function DeskFormScreen() {
   const [syncMode, setSyncMode] = useState<SyncMode>('idle');
   const [pendingCount, setPendingCount] = useState(0);
 
+  // Parse prefill data from route params (passed via form_link navigation)
+  const rawPrefill = (useLocalSearchParams() as any).prefillData;
+  const prefillData = rawPrefill ? (() => { try { return JSON.parse(rawPrefill); } catch { return undefined; } })() : undefined;
+
   // Captured payload waiting for user's sync choice
   const pendingPayload = useRef<{
     formId: string;
@@ -92,7 +96,16 @@ export default function DeskFormScreen() {
         const payload = res?.data ?? res;
         setForm(payload?.blueprint_live ?? payload);
       })
-      .catch((e: any) => {
+      .catch(async (e: any) => {
+        // Try offline cache (pre-loaded by form-start screen)
+        try {
+          const cached = await AsyncStorage.getItem(`linked_form_${id}`);
+          if (cached) {
+            setForm(JSON.parse(cached));
+            return;
+          }
+        } catch { /* cache miss — continue to error */ }
+
         const detail = e?.response?.data?.detail;
         if (e?.response?.status === 404 || e?.response?.status === 409) {
           setError(detail || 'This form is not deployed yet. Ask your admin to publish it first.');
@@ -328,6 +341,25 @@ export default function DeskFormScreen() {
           blueprint={form}
           lookupMode="desk"
           onSubmitAttempt={handleSubmitAttempt}
+          prefillData={prefillData}
+          onFormLinkPress={(link) => {
+            const targetId = link.formId || link.formSlug;
+            if (!targetId) return;
+            router.push({
+              pathname: '/(main)/(desk)/form/[id]' as any,
+              params: {
+                id: targetId,
+                orgId,
+                projectId,
+                projectName,
+                formTitle: undefined,
+                orgColor: accent,
+                prefillData: Object.keys(link.params).length > 0
+                  ? JSON.stringify(link.params)
+                  : undefined,
+              },
+            });
+          }}
           extraBottomPad={72}
         />
       ) : null}

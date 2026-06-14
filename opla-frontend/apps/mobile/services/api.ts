@@ -126,6 +126,19 @@ export const deskFormAPI = {
     const res = await apiClient.get(`/forms/${formId}/runtime`);
     return res.data;
   },
+  /** Fetch all transitively linked child forms for offline pre-loading. */
+  getLinkedForms: async (formId: string) => {
+    const res = await apiClient.get(`/forms/${formId}/linked-forms`);
+    return res.data as Array<{
+      id: string;
+      project_id: string;
+      title: string;
+      slug: string;
+      blueprint_live: Record<string, any>;
+      published_version?: number | null;
+      published_at?: string | null;
+    }>;
+  },
   submit: async (formId: string, data: Record<string, any>, metadata: Record<string, any>) => {
     const res = await apiClient.post('/submissions', { form_id: formId, data, metadata });
     return res.data;

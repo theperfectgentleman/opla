@@ -139,6 +139,17 @@ function applyCatalogSelection(record: RowValue, path: string[], property: Objec
         }
     });
 
+    // GAP-8: Auto-inject default_price (MSRP) if it exists on the selected catalog item
+    const defaultPrice = selectedItem.default_price;
+    if (defaultPrice !== undefined && defaultPrice !== null) {
+        if (!reference.field_mappings || !reference.field_mappings.hasOwnProperty('unit_price')) {
+            nextRecord = setNestedValue(nextRecord, [...parentPath, 'unit_price'], defaultPrice);
+        }
+        if (!reference.field_mappings || !reference.field_mappings.hasOwnProperty('price')) {
+            nextRecord = setNestedValue(nextRecord, [...parentPath, 'price'], defaultPrice);
+        }
+    }
+
     return nextRecord;
 }
 

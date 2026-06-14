@@ -15,7 +15,7 @@ import {
   FileText, Users, Clock, CheckCircle2,
   WifiOff, PlayCircle, Trash2, Database, ChevronRight,
 } from 'lucide-react-native';
-import { formAPI } from '../../../../services/api';
+import { formAPI, deskFormAPI } from '../../../../services/api';
 import { syncAllLookupDatasets } from '../../../../src/utils/lookupCache';
 import { fmtDate } from '../../../../src/utils/dateFormat';
 import {
@@ -78,6 +78,7 @@ export default function FormStartScreen() {
   const [loading, setLoading]             = useState(true);
   const [preloading, setPreloading]       = useState(false);
   const [error, setError]                 = useState('');
+  const [linkedFormsCount, setLinkedFormsCount] = useState(0);
 
   // Sanitize: strip old purple values that may still be stored in DB / routing params
   const rawColor = orgColor ?? '#158754';
@@ -106,6 +107,21 @@ export default function FormStartScreen() {
       // Load local (offline-queued) records for this form
       const allQueued = await getQueue();
       setLocalRecords(allQueued.filter(q => q.form_id === id));
+
+      // Pre-fetch linked forms in background and cache for offline use
+      try {
+        const linked = await deskFormAPI.getLinkedForms(id);
+        setLinkedFormsCount(linked.length);
+        // Cache each linked form's blueprint for offline access
+        for (const lf of linked) {
+          await AsyncStorage.setItem(
+            `linked_form_${lf.id}`,
+            JSON.stringify(lf.blueprint_live),
+          );
+        }
+      } catch {
+        // Non-critical — linked forms will be fetched on-demand if offline fails
+      }
     };
 
     load().finally(() => setLoading(false));
@@ -136,14 +152,33 @@ export default function FormStartScreen() {
       const blueprint = meta.blueprint_live as any;
       const context = { mode: 'desk' as const, formId: id, slug: meta.slug };
       const synced = await syncAllLookupDatasets(blueprint, context);
+
+      // Also pre-load linked forms
+      let linkedCount = 0;
+      try {
+        const linked = await deskFormAPI.getLinkedForms(id);
+        linkedCount = linked.length;
+        setLinkedFormsCount(linkedCount);
+        for (const lf of linked) {
+          await AsyncStorage.setItem(
+            `linked_form_${lf.id}`,
+            JSON.stringify(lf.blueprint_live),
+          );
+        }
+      } catch { /* linked forms fetch is non-critical */ }
+
+      const parts: string[] = [];
+      if (synced > 0) parts.push(`${synced} lookup dataset${synced === 1 ? '' : 's'}`);
+      if (linkedCount > 0) parts.push(`${linkedCount} linked form${linkedCount === 1 ? '' : 's'}`);
+
       Alert.alert(
         'Ready offline',
-        synced > 0
-          ? `${synced} lookup dataset${synced === 1 ? '' : 's'} cached for offline use.`
-          : 'No lookup datasets to cache — form is fully ready offline.',
+        parts.length > 0
+          ? `${parts.join(' and ')} cached for offline use.`
+          : 'No extra data to cache — form is fully ready offline.',
       );
     } catch {
-      Alert.alert('Sync failed', 'Could not pre-load lookup data. Check your connection.');
+      Alert.alert('Sync failed', 'Could not pre-load data. Check your connection.');
     } finally {
       setPreloading(false);
     }
@@ -314,7 +349,7 @@ export default function FormStartScreen() {
         >
           <WifiOff size={15} color={preloading ? '#475569' : '#94a3b8'} />
           <Text style={{ flex: 1, fontSize: 13, color: preloading ? '#475569' : '#94a3b8', fontWeight: '600' }}>
-            {preloading ? 'Pre-loading…' : 'Pre-load for offline use'}
+            {preloading ? 'Pre-loading…' : `Pre-load for offline use${linkedFormsCount > 0 ? ` · ${linkedFormsCount} linked` : ''}`}
           </Text>
           {preloading ? <ActivityIndicator size="small" color="#475569" /> : null}
         </TouchableOpacity>

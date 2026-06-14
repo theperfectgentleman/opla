@@ -10,9 +10,10 @@ interface Props {
     onChange: (value: string) => void;
     error?: string;
     lookupContext: LookupContext;
+    responses?: Record<string, any>;
 }
 
-export function LookupListField({ field, value, onChange, error, lookupContext }: Props) {
+export function LookupListField({ field, value, onChange, error, lookupContext, responses = {} }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [options, setOptions] = useState<LookupOption[]>([]);
@@ -83,10 +84,32 @@ export function LookupListField({ field, value, onChange, error, lookupContext }
         }
     }, [field.lookup_preset_id, field.lookup_source_type]);
 
+    // Resolve cascading options
+    const cascadeFilteredOptions = useMemo(() => {
+        if (field.cascade_parent_field_id && field.cascade_options_map && responses) {
+            const parentValue = responses[field.cascade_parent_field_id];
+            if (parentValue && field.cascade_options_map[parentValue]) {
+                return field.cascade_options_map[parentValue];
+            }
+            return []; // Parent not selected yet — show nothing
+        }
+        return options;
+    }, [options, field.cascade_parent_field_id, field.cascade_options_map, responses]);
+
+    // Clear value if parent changes and current value is no longer valid
+    useEffect(() => {
+        if (field.cascade_parent_field_id && value) {
+            const stillValid = cascadeFilteredOptions.some(o => o.value === value);
+            if (!stillValid) {
+                onChange('');
+            }
+        }
+    }, [cascadeFilteredOptions]);
+
     const selectedOption = options.find(o => o.value === value);
 
     // Filter based on search query
-    const filteredOptions = options.filter(o => o.label.toLowerCase().includes(searchQuery.toLowerCase()));
+    const filteredOptions = cascadeFilteredOptions.filter(o => o.label.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return (
         <View style={{ marginBottom: 16 }}>

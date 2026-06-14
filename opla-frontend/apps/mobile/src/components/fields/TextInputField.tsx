@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { TextInput, View, Text } from 'react-native';
 import { FormField } from '@opla/types';
 
@@ -11,6 +11,12 @@ interface TextInputFieldProps {
 
 export function TextInputField({ field, value, error, onChange }: TextInputFieldProps) {
     const isTextArea = field.type === 'textarea';
+    const isPhone = field.type === 'phone_input';
+    const isEmail = field.type === 'email_input';
+
+    const keyboardType = isPhone ? 'phone-pad' as const
+        : isEmail ? 'email-address' as const
+        : 'default' as const;
 
     return (
         <View>
@@ -20,6 +26,8 @@ export function TextInputField({ field, value, error, onChange }: TextInputField
                 placeholder={field.placeholder || field.label}
                 placeholderTextColor="#64748b"
                 multiline={isTextArea}
+                keyboardType={keyboardType}
+                autoCapitalize={isEmail ? 'none' : undefined}
                 style={{
                     backgroundColor: '#1e293b',
                     borderColor: error ? '#ef4444' : '#334155',

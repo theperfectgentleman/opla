@@ -94,6 +94,27 @@ def get_runtime_form(
         raise HTTPException(status_code=404, detail="Form is not deployed")
     return form
 
+
+@router.get("/{form_id}/linked-forms", response_model=List[FormRuntimeOut])
+def get_linked_forms(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return all transitively linked child forms for offline pre-loading.
+
+    Recursively resolves `linked_form_ids` from each form's live blueprint
+    up to 3 levels deep. Returns runtime-shaped objects so the mobile client
+    can cache and render them directly.
+    """
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+
+    linked = FormService.get_linked_forms(db, form_id)
+    return linked
+
 @router.put("/{form_id}/blueprint", response_model=FormOut)
 def update_form_blueprint(
     form_id: uuid.UUID,

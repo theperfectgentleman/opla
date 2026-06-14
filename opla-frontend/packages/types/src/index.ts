@@ -36,9 +36,11 @@ export type FieldType =
   | 'phone_input'
   | 'date_picker'
   | 'time_picker'
+  | 'time_range'
   | 'dropdown'
   | 'radio_group'
   | 'checkbox_group'
+  | 'multi_select_dropdown'
   | 'toggle'
   | 'textarea'
   | 'gps_capture'
@@ -51,7 +53,8 @@ export type FieldType =
   | 'lookup_list'
   | 'rating_scale'
   | 'object_instance'
-  | 'object_collection';
+  | 'object_collection'
+  | 'form_link';
 
 export type SchemaFieldType =
   | 'string'
@@ -184,6 +187,31 @@ export interface FormField {
   allow_add_items?: boolean;
   allow_remove_items?: boolean;
   catalog_source_type?: 'project_catalog';
+
+  // Cascading / filtered dropdown support
+  cascade_parent_field_id?: string;
+  cascade_options_map?: Record<string, FieldOption[]>;
+  cascade_dataset_filter_key?: string;
+
+  // Decimal / currency input support
+  decimal_places?: number;
+  input_prefix?: string;
+  input_suffix?: string;
+
+  // Auto-timestamp / dynamic values support
+  auto_value?: string;
+  auto_value_timing?: 'on_load' | 'on_submit';
+  auto_value_editable?: boolean;
+
+  // Form link support (launcher / menu hub)
+  linked_form_id?: string;
+  linked_form_slug?: string;
+  /** Maps source_field_id → target_field_id for parameter passing */
+  linked_form_param_map?: Record<string, string>;
+
+  // Input parameter annotations (for fields that receive data from a parent form)
+  is_input_param?: boolean;
+  input_param_readonly?: boolean;
 }
 
 export type RenderMode = 'single' | 'list';
@@ -238,6 +266,135 @@ export interface LogicRule {
   logic_operator: LogicOperator;
 }
 
+// ─── Centralized Rules Engine (v2) ──────────────────────────────────────────
+
+/**
+ * Comparison operators available in rule conditions.
+ * The runtime picks which operators are valid based on the source field type.
+ */
+export type RuleOperator =
+  | '=='       // equals (works on all types)
+  | '!='       // not equals
+  | '>'        // greater than (number, date)
+  | '<'        // less than (number, date)
+  | '>='       // greater than or equal
+  | '<='       // less than or equal
+  | 'contains'     // array/string contains value
+  | 'not_contains' // array/string does not contain value
+  | 'empty'        // field is null, undefined, or empty string/array
+  | 'not_empty'    // field has a meaningful value
+  | 'between';     // value is between two bounds (for number/date)
+
+/**
+ * A leaf rule node — a single condition comparing a field value to a target.
+ */
+export interface RuleConditionNode {
+  id: string;
+  type: 'rule';
+  /** The field ID whose value to evaluate */
+  field: string;
+  /** The comparison operator */
+  operator: RuleOperator;
+  /** The target value to compare against. For 'between', use "min,max" string. For 'empty'/'not_empty', this is ignored. */
+  value: any;
+}
+
+/**
+ * A group node — combines child nodes (rules or sub-groups) with AND/OR.
+ * This is the recursive building block that allows arbitrary nesting.
+ */
+export interface RuleGroupNode {
+  id: string;
+  type: 'group';
+  /** How to combine children results: AND = all must pass, OR = any must pass */
+  combinator: 'AND' | 'OR';
+  /** Child nodes — can be leaf rules or nested groups */
+  children: RuleNode[];
+}
+
+/** A node in the rule tree is either a leaf condition or a group. */
+export type RuleNode = RuleConditionNode | RuleGroupNode;
+
+/**
+ * The actions that a rule can trigger when its condition tree evaluates to true.
+ */
+export type RuleActionEffect =
+  | 'SHOW'            // Make target field/section visible
+  | 'HIDE'            // Hide target field/section
+  | 'REQUIRE'         // Make target field required
+  | 'UNREQUIRE'       // Make target field optional
+  | 'DISABLE_NAV'     // Block the "Next" button with a message
+  | 'ENABLE_NAV'      // Unblock the "Next" button
+  | 'FILTER_OPTIONS'  // Filter the options of a target dropdown/lookup based on a mapping
+  | 'SET_VALUE'       // Set a field to a specific value
+  | 'VALIDATE'        // Run custom validation with an error message
+  | 'JUMP_TO_SECTION'; // Navigate to a specific section (evaluated on Next press only)
+
+/**
+ * The action consequence when a rule's conditions are met.
+ */
+export interface RuleAction {
+  /** What effect to apply */
+  effect: RuleActionEffect;
+  /** The field ID or section ID this action targets */
+  target_id: string;
+  /** Whether target is a field or section */
+  target_type: 'field' | 'section' | 'navigation';
+  /** Extra config depending on effect:
+   * - FILTER_OPTIONS: { filter_key: string, filter_map?: Record<string, FieldOption[]> }
+   * - DISABLE_NAV: { message: string }
+   * - SET_VALUE: { value: any }
+   * - VALIDATE: { error_message: string }
+   */
+  config?: Record<string, any>;
+}
+
+/**
+ * A complete rule definition — one entry in blueprint.rules[].
+ * Pattern: IF [condition_tree evaluates true] THEN [apply actions].
+ * When condition_tree evaluates false, the inverse is implicitly applied
+ * (e.g., SHOW→HIDE, REQUIRE→UNREQUIRE).
+ */
+export interface FormRule {
+  id: string;
+  /** Human-readable name shown in Studio (e.g., "Show reason when qty is 0") */
+  name: string;
+  /** Optional description for documentation */
+  description?: string;
+  /** Whether this rule is active — allows toggling without deleting */
+  enabled: boolean;
+  /** The nested condition tree (root is always a group node) */
+  condition: RuleGroupNode;
+  /** The actions to execute when condition evaluates to true */
+  actions: RuleAction[];
+  /** Evaluation priority — lower numbers run first. Default 0. */
+  priority?: number;
+}
+
+/**
+ * Maps field/schema types to the operators that make sense for them.
+ * Used by the Studio rules builder to show relevant operators.
+ */
+export const RULE_OPERATORS_BY_FIELD_TYPE: Record<string, RuleOperator[]> = {
+  string:           ['==', '!=', 'contains', 'not_contains', 'empty', 'not_empty'],
+  number:           ['==', '!=', '>', '<', '>=', '<=', 'between', 'empty', 'not_empty'],
+  integer:          ['==', '!=', '>', '<', '>=', '<=', 'between', 'empty', 'not_empty'],
+  decimal:          ['==', '!=', '>', '<', '>=', '<=', 'between', 'empty', 'not_empty'],
+  boolean:          ['==', '!='],
+  date:             ['==', '!=', '>', '<', '>=', '<=', 'between', 'empty', 'not_empty'],
+  datetime:         ['==', '!=', '>', '<', '>=', '<=', 'between', 'empty', 'not_empty'],
+  time:             ['==', '!=', '>', '<', 'empty', 'not_empty'],
+  select:           ['==', '!=', 'empty', 'not_empty'],
+  dropdown:         ['==', '!=', 'empty', 'not_empty'],
+  radio_group:      ['==', '!=', 'empty', 'not_empty'],
+  checkbox_group:   ['contains', 'not_contains', 'empty', 'not_empty'],
+  multi_select_dropdown: ['contains', 'not_contains', 'empty', 'not_empty'],
+  toggle:           ['==', '!='],
+  input_text:       ['==', '!=', 'contains', 'not_contains', 'empty', 'not_empty'],
+  input_number:     ['==', '!=', '>', '<', '>=', '<=', 'between', 'empty', 'not_empty'],
+  form_link:        [],
+};
+
 export interface FormBlueprintMeta {
   app_id: string;
   app_id_slug: string;
@@ -248,6 +405,10 @@ export interface FormBlueprintMeta {
   is_public: boolean;
   /** Which area this form is intended for. Defaults to 'yard' when public. */
   area?: FormArea;
+  /** Controls whether this form appears in the mobile form list.
+   *  'listed' (default) = visible in form list.
+   *  'child' = hidden from list, only accessible via a parent form's form_link. */
+  visibility?: 'listed' | 'child';
   theme: {
     primary_color: string;
     mode: string;
@@ -259,6 +420,9 @@ export interface FormBlueprint {
   schema: FormSchemaField[];
   ui: FormSection[];
   logic: LogicRule[];
+  rules: FormRule[];
+  /** Form IDs referenced by form_link fields — used for dependency resolution during sync */
+  linked_form_ids?: string[];
 }
 
 // ─── Submission ────────────────────────────────────────────────────────────

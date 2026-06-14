@@ -246,26 +246,6 @@ export interface FormSection {
   children: FormField[];
 }
 
-export type LogicOperator = 'AND' | 'OR';
-export type ConditionOperator = 'eq' | 'neq' | 'contains' | 'gt' | 'lt';
-
-export interface LogicCondition {
-  field: string;
-  operator: ConditionOperator;
-  value: any;
-}
-
-export interface LogicRule {
-  id: string;
-  type: 'section_jump' | 'field_visibility' | 'section_visibility' | 'section_skip';
-  timing: 'pre' | 'post';
-  action: 'jump_to' | 'show' | 'hide' | 'skip';
-  target_id: string;
-  source_id?: string;
-  conditions: LogicCondition[];
-  logic_operator: LogicOperator;
-}
-
 // ─── Centralized Rules Engine (v2) ──────────────────────────────────────────
 
 /**
@@ -369,6 +349,12 @@ export interface FormRule {
   actions: RuleAction[];
   /** Evaluation priority — lower numbers run first. Default 0. */
   priority?: number;
+  /** The anchor/trigger field or section ID */
+  trigger_id?: string;
+  /** Whether trigger is a field or section */
+  trigger_type?: 'field' | 'section';
+  /** Whether it evaluates reactively (pre) or on screen exit/validation (post) */
+  timing?: 'pre' | 'post';
 }
 
 /**
@@ -419,7 +405,6 @@ export interface FormBlueprint {
   meta: FormBlueprintMeta;
   schema: FormSchemaField[];
   ui: FormSection[];
-  logic: LogicRule[];
   rules: FormRule[];
   /** Form IDs referenced by form_link fields — used for dependency resolution during sync */
   linked_form_ids?: string[];

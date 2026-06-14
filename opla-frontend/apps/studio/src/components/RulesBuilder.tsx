@@ -15,6 +15,9 @@ interface RulesBuilderProps {
   sections: Array<{ id: string; title: string }>;
   rules: FormRule[];
   onRulesChange: (rules: FormRule[]) => void;
+  triggerId?: string;
+  triggerType?: 'field' | 'section';
+  timing?: 'pre' | 'post';
 }
 
 const ACTION_EFFECTS: Array<{ value: RuleActionEffect; label: string }> = [
@@ -29,17 +32,39 @@ const ACTION_EFFECTS: Array<{ value: RuleActionEffect; label: string }> = [
   { value: 'JUMP_TO_SECTION', label: 'Jump to Section' },
 ];
 
-export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: RulesBuilderProps) {
-  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(rules[0]?.id || null);
+export function RulesBuilder({
+  fields,
+  sections,
+  rules = [],
+  onRulesChange,
+  triggerId,
+  triggerType,
+  timing,
+}: RulesBuilderProps) {
+  const filteredRules = useMemo(() => {
+    if (!triggerId || !timing) return rules;
+    return rules.filter(r => r.trigger_id === triggerId && r.timing === timing);
+  }, [rules, triggerId, timing]);
+
+  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [draggedRuleId, setDraggedRuleId] = useState<string | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const dragCounter = useRef(0);
 
-  const activeRule = useMemo(() => {
-    return rules.find(r => r.id === selectedRuleId) || null;
-  }, [rules, selectedRuleId]);
+  // Synchronize selectedRuleId with filteredRules changes
+  React.useEffect(() => {
+    if (filteredRules.length > 0 && !filteredRules.some(r => r.id === selectedRuleId)) {
+      setSelectedRuleId(filteredRules[0].id);
+    } else if (filteredRules.length === 0) {
+      setSelectedRuleId(null);
+    }
+  }, [filteredRules, selectedRuleId]);
 
-  // Auto-assign priority based on list position
+  const activeRule = useMemo(() => {
+    return filteredRules.find(r => r.id === selectedRuleId) || null;
+  }, [filteredRules, selectedRuleId]);
+
+  // Auto-assign priority based on list position within the subset
   const applyPriority = useCallback((ruleList: FormRule[]): FormRule[] => {
     return ruleList.map((r, idx) => ({ ...r, priority: idx }));
   }, []);
@@ -47,9 +72,9 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
   const createNewRule = () => {
     const newRule: FormRule = {
       id: 'rule_' + Date.now(),
-      name: 'New Rule ' + (rules.length + 1),
+      name: 'New Rule ' + (filteredRules.length + 1),
       enabled: true,
-      priority: rules.length,
+      priority: filteredRules.length,
       condition: {
         id: 'root',
         type: 'group',
@@ -57,17 +82,30 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
         children: [],
       },
       actions: [],
+      trigger_id: triggerId,
+      trigger_type: triggerType,
+      timing: timing,
     };
-    const updated = applyPriority([...rules, newRule]);
-    onRulesChange(updated);
+    
+    const updatedFiltered = applyPriority([...filteredRules, newRule]);
+    
+    // Merge back into the global list
+    const nonFiltered = rules.filter(r => !(r.trigger_id === triggerId && r.timing === timing));
+    onRulesChange([...nonFiltered, ...updatedFiltered]);
     setSelectedRuleId(newRule.id);
   };
 
   const deleteRule = (ruleId: string) => {
-    const updated = applyPriority(rules.filter(r => r.id !== ruleId));
-    onRulesChange(updated);
+    const updatedGlobal = rules.filter(r => r.id !== ruleId);
+    const updatedFiltered = filteredRules.filter(r => r.id !== ruleId);
+    
+    // Re-apply priorities to the remaining filtered subset
+    const withPriorities = applyPriority(updatedFiltered);
+    const nonFiltered = updatedGlobal.filter(r => !(r.trigger_id === triggerId && r.timing === timing));
+    
+    onRulesChange([...nonFiltered, ...withPriorities]);
     if (selectedRuleId === ruleId) {
-      setSelectedRuleId(updated[0]?.id || null);
+      setSelectedRuleId(withPriorities[0]?.id || null);
     }
   };
 
@@ -120,15 +158,28 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
   const handleDrop = (e: React.DragEvent, targetIdx: number) => {
     e.preventDefault();
     if (!draggedRuleId) return;
-    const srcIdx = rules.findIndex(r => r.id === draggedRuleId);
+    const srcIdx = filteredRules.findIndex(r => r.id === draggedRuleId);
     if (srcIdx === -1 || srcIdx === targetIdx) {
       handleDragEnd();
       return;
     }
-    const reordered = [...rules];
-    const [moved] = reordered.splice(srcIdx, 1);
-    reordered.splice(targetIdx, 0, moved);
-    onRulesChange(applyPriority(reordered));
+    const reorderedFiltered = [...filteredRules];
+    const [moved] = reorderedFiltered.splice(srcIdx, 1);
+    reorderedFiltered.splice(targetIdx, 0, moved);
+    
+    // Assign local priorities to the reordered subset
+    const updatedFiltered = applyPriority(reorderedFiltered);
+    
+    // Merge back into the global list preserving slots of non-matching rules
+    let filteredIdx = 0;
+    const nextRules = rules.map(r => {
+      if (r.trigger_id === triggerId && r.timing === timing) {
+        return updatedFiltered[filteredIdx++];
+      }
+      return r;
+    });
+    
+    onRulesChange(nextRules);
     handleDragEnd();
   };
 
@@ -148,10 +199,10 @@ export function RulesBuilder({ fields, sections, rules = [], onRulesChange }: Ru
           </div>
           <p className="text-[10px] text-[hsl(var(--text-tertiary))]/70 mb-3">Drag to reorder priority</p>
           <div className="space-y-1 overflow-y-auto max-h-[500px]">
-            {rules.length === 0 ? (
+            {filteredRules.length === 0 ? (
               <p className="text-xs text-[hsl(var(--text-tertiary))] italic p-2">No rules defined.</p>
             ) : (
-              rules.map((rule, idx) => (
+              filteredRules.map((rule, idx) => (
                 <div
                   key={rule.id}
                   draggable

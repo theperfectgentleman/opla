@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FormBlueprint, FormField, FormObjectDefinition, FormSchemaField, ObjectPropertyDefinition } from '@opla/types';
-import { isFieldVisible, isSectionVisible, evaluateLogicRule } from '../utils/logic';
 import {
   evaluateAllRules,
   isFieldVisibleByRules,
@@ -184,6 +183,14 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
         return 'This field is required';
     }
 
+    // Check for VALIDATE rules (custom validation from the rules engine)
+    if (rulesResult) {
+        const rulesValidationError = getValidationErrorByRules(field.id, rulesResult);
+        if (rulesValidationError) {
+            return rulesValidationError;
+        }
+    }
+
     // Format & pattern validations
     if (value !== undefined && value !== null && value !== '') {
         if (field.type === 'phone_input') {
@@ -205,14 +212,6 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
                     return 'Input does not match the required format';
                 }
             } catch { /* skip invalid regex */ }
-        }
-
-        // Check for VALIDATE rules (custom validation from the rules engine)
-        if (rulesResult) {
-            const rulesValidationError = getValidationErrorByRules(field.id, rulesResult);
-            if (rulesValidationError) {
-                return rulesValidationError;
-            }
         }
     }
 
@@ -497,16 +496,15 @@ export function FormRenderer({
         }
     }, [blueprint.ui]);
 
-    // Filter sections based on both rules engine and old logic system
+    // Filter sections based on rules engine
     const sections = useMemo(() => {
         const allSections = blueprint.ui || [];
         return allSections.filter(section => {
             const rulesVisible = isSectionVisibleByRules(section.id, rulesResult);
             if (rulesVisible === false) return false;
-            if (rulesVisible === true) return true;
-            return isSectionVisible(section.id, blueprint.logic || [], responses);
+            return true;
         });
-    }, [blueprint.ui, blueprint.logic, responses, rulesResult]);
+    }, [blueprint.ui, rulesResult]);
 
     // Clamp currentSectionIndex to stay within the valid range of filtered sections
     useEffect(() => {
@@ -514,6 +512,101 @@ export function FormRenderer({
             setCurrentSectionIndex(sections.length - 1);
         }
     }, [sections.length, currentSectionIndex]);
+
+    const currentSection = sections[currentSectionIndex] || sections[0];
+    const isSingleMode = currentSection?.render_mode === 'single';
+
+    const visibleFields = useMemo(() => {
+        return currentSection ? currentSection.children.filter(field => {
+            const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+            return rulesVisible !== null ? rulesVisible : true;
+        }) : [];
+    }, [currentSection, rulesResult]);
+
+    const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+
+    // Sync activeFieldId on load / check if it becomes hidden reactively
+    useEffect(() => {
+        if (isSingleMode && visibleFields.length > 0) {
+            if (!activeFieldId || !visibleFields.some(f => f.id === activeFieldId)) {
+                setActiveFieldId(visibleFields[0].id);
+            }
+        } else {
+            setActiveFieldId(null);
+        }
+    }, [isSingleMode, visibleFields, activeFieldId]);
+
+    // Initializer when loading draft finishes
+    useEffect(() => {
+        if (!loadingDraft && sections.length > 0) {
+            const firstSec = sections[0];
+            if (firstSec && firstSec.render_mode === 'single') {
+                const vFields = firstSec.children.filter(field => {
+                    const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+                    return rulesVisible !== null ? rulesVisible : true;
+                });
+                if (vFields.length > 0) {
+                    setActiveFieldId(vFields[0].id);
+                }
+            }
+        }
+    }, [loadingDraft]);
+
+    // Returns the next index of a section that has visible content
+    const findNextSectionIndex = (startIndex: number, direction: 'forward' | 'backward'): number => {
+        let index = startIndex;
+        while (index >= 0 && index < sections.length) {
+            const sec = sections[index];
+            const hasFormLinks = sec.children.some(f => f.type === 'form_link');
+            const vFields = sec.children.filter(field => {
+                const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+                return rulesVisible !== null ? rulesVisible : true;
+            });
+            // A section is navigable/not empty if it has visible fields or contains form links (menu section)
+            if (vFields.length > 0 || hasFormLinks) {
+                return index;
+            }
+            index = direction === 'forward' ? index + 1 : index - 1;
+        }
+        return -1;
+    };
+
+    const changeSection = (newIndex: number, direction: 'forward' | 'backward') => {
+        const targetIndex = findNextSectionIndex(newIndex, direction);
+        if (targetIndex >= 0) {
+            setCurrentSectionIndex(targetIndex);
+            const nextSec = sections[targetIndex];
+            if (nextSec && nextSec.render_mode === 'single') {
+                const vFields = nextSec.children.filter(field => {
+                    const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+                    return rulesVisible !== null ? rulesVisible : true;
+                });
+                if (vFields.length > 0) {
+                    if (direction === 'forward') {
+                        setActiveFieldId(vFields[0].id);
+                    } else {
+                        setActiveFieldId(vFields[vFields.length - 1].id);
+                    }
+                } else {
+                    setActiveFieldId(null);
+                }
+            } else {
+                setActiveFieldId(null);
+            }
+        } else {
+            // No more sections in this direction
+            if (direction === 'forward') {
+                submitForm();
+            }
+        }
+    };
+
+    const singleModeProgressText = useMemo(() => {
+        if (!isSingleMode || visibleFields.length <= 1 || !activeFieldId) return null;
+        const index = visibleFields.findIndex(f => f.id === activeFieldId);
+        if (index < 0) return null;
+        return `${index + 1} of ${visibleFields.length}`;
+    }, [isSingleMode, visibleFields, activeFieldId]);
 
     if (loadingDraft) {
         return <ActivityIndicator style={{ flex: 1 }} color="#158754" size="large" />;
@@ -523,77 +616,85 @@ export function FormRenderer({
         return <Text style={{ color: '#fff', padding: 20 }}>This form has no sections.</Text>;
     }
 
-    const currentSection = sections[currentSectionIndex] || sections[0];
 
     const handleNext = () => {
-        // Validate current section
-        const newErrors: Record<string, string> = {};
-        currentSection.children.forEach(field => {
-            // Skip form_link fields — they are navigational, not data fields
-            if (field.type === 'form_link') return;
+        if (isSingleMode && activeFieldId) {
+            // Validate ONLY the current active field
+            const activeField = visibleFields.find(f => f.id === activeFieldId);
+            if (activeField) {
+                const fieldError = validateField(activeField, responses[activeField.id], blueprint, rulesResult);
+                if (fieldError) {
+                    setErrors({ [activeField.id]: fieldError });
+                    return;
+                }
+            }
+            setErrors({});
 
-            const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
-            const visible = rulesVisible !== null
-                ? rulesVisible
-                : isFieldVisible(field.id, blueprint.logic || [], responses);
-
-            if (!visible) {
+            // Block navigation if rules engine blocks it
+            if (rulesResult.navigationBlocked) {
                 return;
             }
-            const fieldError = validateField(field, responses[field.id], blueprint, rulesResult);
-            if (fieldError) {
-                newErrors[field.id] = fieldError;
+
+            // Move to the next visible field in this section if there is one
+            const currentIndex = visibleFields.findIndex(f => f.id === activeFieldId);
+            if (currentIndex >= 0 && currentIndex < visibleFields.length - 1) {
+                setActiveFieldId(visibleFields[currentIndex + 1].id);
+                return;
             }
-        });
+        } else {
+            // List Mode: Validate ALL visible fields in the current section
+            const newErrors: Record<string, string> = {};
+            visibleFields.forEach(field => {
+                const fieldError = validateField(field, responses[field.id], blueprint, rulesResult);
+                if (fieldError) {
+                    newErrors[field.id] = fieldError;
+                }
+            });
 
-        if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            return;
+            if (Object.keys(newErrors).length > 0) {
+                setErrors(newErrors);
+                return;
+            }
+            setErrors({});
+
+            // Block navigation if rules engine blocks it
+            if (rulesResult.navigationBlocked) {
+                return;
+            }
         }
 
-        setErrors({});
-
-        // Block navigation if rules engine blocks it
-        if (rulesResult.navigationBlocked) {
-            return;
-        }
-
+        // --- Transitioning to the next section ---
         // Check for JUMP_TO_SECTION from the centralized rules engine
         const jumpTarget = getJumpToSectionTarget(rulesResult);
         if (jumpTarget) {
             const targetIndex = sections.findIndex(s => s.id === jumpTarget);
             if (targetIndex >= 0) {
-                setCurrentSectionIndex(targetIndex);
+                changeSection(targetIndex, 'forward');
                 return;
             }
         }
 
-        // Check for post-answer section_jump rules from the old logic system
-        const jumpRules = (blueprint.logic || []).filter(
-            r => r.type === 'section_jump' && r.timing === 'post' && r.source_id === currentSection.id
-        );
-        for (const rule of jumpRules) {
-            if (evaluateLogicRule(rule, responses)) {
-                const targetIndex = sections.findIndex(s => s.id === rule.target_id);
-                if (targetIndex >= 0) {
-                    setCurrentSectionIndex(targetIndex);
-                    return;
-                }
-            }
-        }
-
         if (currentSectionIndex < sections.length - 1) {
-            setCurrentSectionIndex(currentSectionIndex + 1);
+            changeSection(currentSectionIndex + 1, 'forward');
         } else {
             submitForm();
         }
     };
 
     const handleBack = () => {
+        if (isSingleMode && activeFieldId) {
+            const currentIndex = visibleFields.findIndex(f => f.id === activeFieldId);
+            if (currentIndex > 0) {
+                setActiveFieldId(visibleFields[currentIndex - 1].id);
+                return;
+            }
+        }
+
         if (currentSectionIndex > 0) {
-            setCurrentSectionIndex(currentSectionIndex - 1);
+            changeSection(currentSectionIndex - 1, 'backward');
         }
     };
+
 
     const submitForm = async () => {
         setSubmitting(true);
@@ -645,7 +746,14 @@ export function FormRenderer({
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + extraBottomPad + 80 }}>
                 {currentSection.title && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', color: '#f1f5f9', flex: 1, paddingRight: 12 }}>{currentSection.title}</Text>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', paddingRight: 12 }}>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: '#f1f5f9', marginRight: 8 }}>{currentSection.title}</Text>
+                            {singleModeProgressText && (
+                                <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+                                    <Text style={{ color: '#60a5fa', fontSize: 11, fontWeight: '600' }}>{singleModeProgressText}</Text>
+                                </View>
+                            )}
+                        </View>
                         <TouchableOpacity
                             onPress={handleManualLookupSync}
                             disabled={syncingLookups}
@@ -670,10 +778,10 @@ export function FormRenderer({
 
                 {currentSection.children.map(field => {
                     const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
-                    const visible = rulesVisible !== null
-                        ? rulesVisible
-                        : isFieldVisible(field.id, blueprint.logic || [], responses);
+                    const visible = rulesVisible !== null ? rulesVisible : true;
                     if (!visible) return null;
+
+                    if (isSingleMode && field.id !== activeFieldId) return null;
 
                     const rulesRequired = isFieldRequiredByRules(field.id, rulesResult);
                     const isRequired = rulesRequired !== null ? rulesRequired : field.required;
@@ -708,7 +816,16 @@ export function FormRenderer({
                             <FieldRenderer
                                 field={field}
                                 value={responses[field.id]}
-                                onChange={(val: any) => setResponses({ ...responses, [field.id]: val })}
+                                onChange={(val: any) => {
+                                    setResponses({ ...responses, [field.id]: val });
+                                    if (errors[field.id]) {
+                                        setErrors(prev => {
+                                            const next = { ...prev };
+                                            delete next[field.id];
+                                            return next;
+                                        });
+                                    }
+                                }}
                                 error={errors[field.id]}
                                 lookupContext={lookupContext}
                                 blueprint={blueprint}

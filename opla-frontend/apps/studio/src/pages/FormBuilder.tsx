@@ -7,10 +7,10 @@ import {
     Save, Play, Trash2, Settings, Smartphone, Layout,
     MapPin, Camera, Type, Hash, CheckSquare, List, Mail,
     Phone, Calendar, Clock, FileText, ToggleLeft, Mic, PenTool, Barcode,
-    ChevronDown, ArrowLeft, Zap, GitBranch, Terminal, Pin,
+    ChevronDown, ArrowLeft, GitBranch, Terminal, Pin,
     Layers, Copy, MoveRight, Table2, Database,
     Star, Search, Globe, AlertCircle, CheckCircle2,
-    ListTodo, Sliders, ChevronsUpDown, LayoutGrid, ExternalLink, Maximize2, X
+    ListTodo, Sliders, ChevronsUpDown, LayoutGrid, ExternalLink, X
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 import type { FormRule } from '@opla/types';
@@ -229,23 +229,6 @@ const toSmartValue = (label: string): string => {
     return words.length > 0 ? words.join('_') : label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30);
 };
 
-interface LogicCondition {
-    field: string;
-    operator: 'eq' | 'neq' | 'contains' | 'gt' | 'lt';
-    value: any;
-}
-
-interface LogicRule {
-    id: string;
-    type: 'section_jump' | 'field_visibility' | 'section_visibility' | 'section_skip';
-    timing: 'pre' | 'post';        // pre = before load/enter | post = after completion
-    action: 'jump_to' | 'show' | 'hide' | 'skip';
-    target_id: string;             // section_id to jump to, or field_id to show/hide
-    source_id?: string;            // Field or section this rule is attached to for UI grouping
-    conditions: LogicCondition[];
-    logic_operator: 'AND' | 'OR';
-}
-
 interface FormBlueprint {
     meta: {
         app_id: string;
@@ -263,7 +246,7 @@ interface FormBlueprint {
     };
     schema: Array<Record<string, any>>;
     ui: Array<Record<string, any>>;
-    logic: Array<Record<string, any>>;
+    logic: any[];
     rules?: FormRule[];
     linked_form_ids?: string[];
 }
@@ -868,9 +851,10 @@ const FormBuilder: React.FC = () => {
     const [sections, setSections] = useState<FormSection[]>([{ id: 'screen_1', title: 'Section 1', fields: [], properties: defaultSectionProperties(), layout: ensureSectionLayout(undefined, 0) }]);
     const [currentSectionId, setCurrentSectionId] = useState<string>('screen_1');
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
-    const [logic, setLogic] = useState<LogicRule[]>([]);
+    const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+    const [rulesModalContext, setRulesModalContext] = useState<{ triggerId: string; triggerType: 'field' | 'section'; timing: 'pre' | 'post'; label: string } | null>(null);
         const [, setIsSaving] = useState(false);
-    const [activeLeftTab, setActiveLeftTab] = useState<'sections' | 'widgets' | 'rules'>('sections');
+    const [activeLeftTab, setActiveLeftTab] = useState<'sections' | 'widgets'>('sections');
     const [hoveredProperty, setHoveredProperty] = useState<{ name: string; description: string } | null>(null);
     const [collapsedPropCategories, setCollapsedPropCategories] = useState<Record<string, boolean>>({});
     const [collapsedWidgetCategories, setCollapsedWidgetCategories] = useState<Record<string, boolean>>({});
@@ -882,7 +866,7 @@ const FormBuilder: React.FC = () => {
     const leftPanelStartX = useRef(0);
     const leftPanelStartW = useRef(0);
     const [isRightSidebarPinned, setIsRightSidebarPinned] = useState(true);
-    const [view, setView] = useState<'flow' | 'section' | 'rules'>('flow');
+    const [view, setView] = useState<'flow' | 'section'>('flow');
     const [formRules, setFormRules] = useState<FormRule[]>([]);
     const [formVisibility] = useState<'listed' | 'child'>('listed'); // kept for type compat, auto-detected on mobile
     const [projectForms, setProjectForms] = useState<Array<{ id: string; title: string; slug: string }>>([]);
@@ -1088,14 +1072,14 @@ const FormBuilder: React.FC = () => {
 
     const multiActionMenuRef = React.useRef<HTMLDivElement | null>(null);
 
-    const computeHash = (t: string, s: any[], l: any[], r: any[]) => JSON.stringify({ t, s, l, r });
+    const computeHash = (t: string, s: any[], r: any[]) => JSON.stringify({ t, s, r });
 
     useEffect(() => {
         if (initialHash) {
-            const currentHash = computeHash(title, sections, logic, formRules);
+            const currentHash = computeHash(title, sections, formRules);
             setHasUnsavedChanges(currentHash !== initialHash);
         }
-    }, [title, sections, logic, formRules, initialHash]);
+    }, [title, sections, formRules, initialHash]);
 
     useEffect(() => {
         const handleOutsideClick = (event: MouseEvent) => {
@@ -1126,7 +1110,7 @@ const FormBuilder: React.FC = () => {
     }, [swipedFieldId]);
 
     // ─── Left panel resize drag handlers ───
-    const defaultWidthForTab = activeLeftTab === 'rules' ? 520 : 320;
+    const defaultWidthForTab = 320;
 
     useEffect(() => {
         setLeftPanelWidth(defaultWidthForTab);
@@ -1421,25 +1405,27 @@ const FormBuilder: React.FC = () => {
             });
         });
 
-        logic.forEach((rule) => {
-            if (!rule.target_id || !sectionById.has(rule.target_id)) {
+        formRules.forEach((rule) => {
+            const triggerId = rule.trigger_id;
+            if (!triggerId || !rule.enabled) {
                 return;
             }
-            if (!['section_jump', 'section_skip'].includes(rule.type)) {
-                return;
-            }
-            const sourceId = rule.source_id && sectionById.has(rule.source_id)
-                ? rule.source_id
-                : sections.find((section) => section.fields.some((field) => field.id === rule.source_id))?.id;
-            if (!sourceId || !sectionById.has(sourceId)) {
-                return;
-            }
-            links.push({
-                id: `logic-${rule.id}`,
-                sourceId,
-                targetId: rule.target_id,
-                label: rule.action === 'skip' ? 'Skip' : 'Jump',
-                tone: 'logic',
+            rule.actions.forEach((action) => {
+                if (action.effect === 'JUMP_TO_SECTION' && action.target_id && sectionById.has(action.target_id)) {
+                    const sourceId = rule.trigger_type === 'section' && sectionById.has(triggerId)
+                        ? triggerId
+                        : sections.find((section) => section.fields.some((field) => field.id === triggerId))?.id;
+                    if (!sourceId || !sectionById.has(sourceId)) {
+                        return;
+                    }
+                    links.push({
+                        id: `logic-${rule.id}-${action.target_id}`,
+                        sourceId,
+                        targetId: action.target_id,
+                        label: 'Jump',
+                        tone: 'logic',
+                    });
+                }
             });
         });
 
@@ -1645,11 +1631,10 @@ const FormBuilder: React.FC = () => {
 
         setSections(loadedSections);
         setCurrentSectionId(loadedSections[0].id);
-        setLogic(blueprint.logic || []);
         const loadedRules = blueprint.rules || [];
         setFormRules(loadedRules);
         setTitle(blueprint?.meta?.title || fallbackTitle || title);
-        setInitialHash(computeHash(blueprint?.meta?.title || fallbackTitle || title, loadedSections, blueprint.logic || [], loadedRules));
+        setInitialHash(computeHash(blueprint?.meta?.title || fallbackTitle || title, loadedSections, loadedRules));
         setHasUnsavedChanges(false);
     };
 
@@ -1735,17 +1720,15 @@ const FormBuilder: React.FC = () => {
                     }));
                     setSections(loadedSections);
                     setCurrentSectionId(loadedSections[0].id);
-                    setLogic(blueprint.logic || []);
                     const loadedRules = blueprint.rules || [];
                     setFormRules(loadedRules);
-                    setInitialHash(computeHash(data.title || 'Untitled Form', loadedSections, blueprint.logic || [], loadedRules));
+                    setInitialHash(computeHash(data.title || 'Untitled Form', loadedSections, loadedRules));
                 } else {
                     const defaultSecs: FormSection[] = [{ id: 'screen_1', title: 'Section 1', fields: [], properties: { render_mode: 'list', platforms: ['mobile', 'web'] }, layout: ensureSectionLayout(undefined, 0) }];
                     setSections(defaultSecs);
                     setCurrentSectionId('screen_1');
-                    setLogic([]);
                     setFormRules([]);
-                    setInitialHash(computeHash('Untitled Form', defaultSecs, [], []));
+                    setInitialHash(computeHash('Untitled Form', defaultSecs, []));
                 }
             } catch (err) {
                 console.error('Failed to load form', err);
@@ -1841,28 +1824,7 @@ const FormBuilder: React.FC = () => {
         setSections(prev => prev.map(p => p.id === currentSectionId ? { ...p, title } : p));
     };
 
-    const addLogicRule = (rule: Partial<LogicRule>) => {
-        const newRule: LogicRule = {
-            id: `rule_${Date.now()}`,
-            type: 'field_visibility',
-            timing: 'pre',
-            action: 'show',
-            target_id: '',
-            conditions: [],
-            logic_operator: 'AND',
-            ...rule
-        };
-        setLogic(prev => [...prev, newRule]);
-        return newRule;
-    };
 
-    const removeLogicRule = (id: string) => {
-        setLogic(prev => prev.filter(r => r.id !== id));
-    };
-
-    const updateLogicRule = (id: string, patch: Partial<LogicRule>) => {
-        setLogic(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
-    };
 
 
     const [isSaveTemplateModalOpen, setIsSaveTemplateModalOpen] = useState(false);
@@ -2036,11 +1998,11 @@ const FormBuilder: React.FC = () => {
                     description: p.properties.description,
                     platforms: p.properties.platforms,
                     is_repeatable: p.properties.is_repeatable,
-                    max_repeats: p.properties.max_repeats,
+                                    max_repeats: p.properties.max_repeats,
                     shuffle_options: p.properties.shuffle_options,
                     children: p.fields.map(f => serializeUiField(f))
                 })),
-                logic: logic,
+                logic: [],
                 rules: formRules,
                 linked_form_ids: sections.flatMap(s => s.fields)
                     .filter(f => f.type === 'form_link' && f.linked_form_id)
@@ -2053,7 +2015,7 @@ const FormBuilder: React.FC = () => {
             const versions = await formAPI.listVersions(formId);
             setActiveVersions(Array.isArray(versions) ? versions : []);
 
-            const newHash = computeHash(title, sections, logic, formRules);
+            const newHash = computeHash(title, sections, formRules);
             setInitialHash(newHash);
             setHasUnsavedChanges(false);
 
@@ -2134,11 +2096,11 @@ const FormBuilder: React.FC = () => {
                     description: p.properties.description,
                     platforms: p.properties.platforms,
                     is_repeatable: p.properties.is_repeatable,
-                    max_repeats: p.properties.max_repeats,
+                                        max_repeats: p.properties.max_repeats,
                     shuffle_options: p.properties.shuffle_options,
                     children: p.fields.map(f => serializeUiField(f))
                 })),
-                logic: logic,
+                logic: [],
                 rules: formRules,
                 linked_form_ids: sections.flatMap(s => s.fields)
                     .filter(f => f.type === 'form_link' && f.linked_form_id)
@@ -2517,9 +2479,6 @@ const FormBuilder: React.FC = () => {
                                     } else {
                                         setIsSectionListOpen(true);
                                         setActiveLeftTab('sections');
-                                        if (view === 'rules') {
-                                            setView('flow');
-                                        }
                                     }
                                 }}
                                 className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
@@ -2541,9 +2500,6 @@ const FormBuilder: React.FC = () => {
                                     } else {
                                         setIsSectionListOpen(true);
                                         setActiveLeftTab('widgets');
-                                        if (view === 'rules') {
-                                            setView('flow');
-                                        }
                                     }
                                 }}
                                 className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
@@ -2554,32 +2510,6 @@ const FormBuilder: React.FC = () => {
                                 title="Fields Toolbox"
                             >
                                 <ListTodo className="w-4 h-4" />
-                            </button>
-
-                            {/* Rules Tab Button */}
-                            <button
-                                id="rules-trigger-rail"
-                                onClick={() => {
-                                    if (isSectionListOpen && activeLeftTab === 'rules') {
-                                        setIsSectionListOpen(false);
-                                    } else {
-                                        setIsSectionListOpen(true);
-                                        setActiveLeftTab('rules');
-                                        if (view === 'rules') {
-                                            setView('flow');
-                                        }
-                                    }
-                                }}
-                                className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition-all ${
-                                    isSectionListOpen && activeLeftTab === 'rules'
-                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
-                                        : view === 'rules'
-                                            ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
-                                            : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))]'
-                                }`}
-                                title="Form Rules Engine"
-                            >
-                                <Zap className="w-4 h-4" />
                             </button>
                         </div>
                     </aside>
@@ -2799,45 +2729,7 @@ const FormBuilder: React.FC = () => {
                                     </div>
                                 </div>
                             )}
-                            {activeLeftTab === 'rules' && (
-                                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                                    <div className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/45 px-4 py-3">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div>
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Rules Engine</p>
-                                                <h3 className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">Logic Rules</h3>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <button
-                                                    onClick={() => {
-                                                        setView('rules');
-                                                        setIsSectionListOpen(false);
-                                                    }}
-                                                    className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors"
-                                                    title="Expand to full canvas"
-                                                >
-                                                    <Maximize2 className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => setIsLeftPanelPinned(!isLeftPanelPinned)}
-                                                    className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-lg transition-colors"
-                                                    title={isLeftPanelPinned ? "Unpin (Float)" : "Pin (Dock)"}
-                                                >
-                                                    <Pin className={`w-3.5 h-3.5 ${isLeftPanelPinned ? 'fill-current rotate-45' : ''}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto hide-scrollbar p-3">
-                                        <RulesBuilder
-                                            fields={allFieldsFlattened}
-                                            sections={sections.map(s => ({ id: s.id, title: s.title }))}
-                                            rules={formRules}
-                                            onRulesChange={(newRules) => setFormRules(newRules)}
-                                        />
-                                    </div>
-                                </div>
-                            )}
+
                         </aside>
                     )}
 
@@ -3362,33 +3254,6 @@ const FormBuilder: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        ) : view === 'rules' ? (
-                            <div className="p-4 h-full flex flex-col overflow-hidden animate-in fade-in duration-300">
-                                <div className="flex-1 flex flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
-                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/70 px-5 py-3">
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Rules Engine</p>
-                                        </div>
-                                        <button
-                                            onClick={() => setView('flow')}
-                                            title="Flow Mode"
-                                            className="rounded-xl border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface-elevated))]/80 hover:bg-[hsl(var(--surface-elevated))] p-2.5 text-[hsl(var(--text-primary))] transition-all hover:text-[hsl(var(--primary))] shadow-sm"
-                                        >
-                                            <GitBranch className="w-[18px] h-[18px]" />
-                                        </button>
-                                    </div>
-                                    <div className="flex-grow overflow-hidden bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.03),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(15,23,42,0.04))]">
-                                        <div className="w-full h-full p-4 lg:p-6 overflow-y-auto">
-                                            <RulesBuilder
-                                                fields={allFieldsFlattened}
-                                                sections={sections.map(s => ({ id: s.id, title: s.title }))}
-                                                rules={formRules}
-                                                onRulesChange={(newRules) => setFormRules(newRules)}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         ) : null}
                         </div>
                     </main>
@@ -3560,145 +3425,327 @@ const FormBuilder: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* ─── SECTION TAB ─── */}
-                                                                        {activeSidebarTab === 'section' && (
-                                         <div className="flex-1 flex flex-col">
-                                             <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar">
-                                                 <div className="space-y-5 animate-in fade-in duration-200">
-                                                                                                            {/* Section Title */}
-                                                    <div>
-                                                        <h3 className="text-sm font-bold text-[hsl(var(--text-primary))] mb-4 flex items-center">
-                                                            Section Settings
-                                                        </h3>
-                                                        <label className="label">Section Title</label>
-                                                        <input
-                                                            value={sections.find(p => p.id === currentSectionId)?.title || ''}
-                                                            onChange={(e) => updateCurrentSectionTitle(e.target.value)}
-                                                            className="input"
-                                                            placeholder="Section Title"
-                                                        />
+                                    {activeSidebarTab === 'section' && (
+                                        <div className="flex-1 flex flex-col">
+                                            {/* Identity Summary Card */}
+                                            <div className="flex items-center gap-3 px-4 py-3 bg-[hsl(var(--surface-elevated))]/40 border-b border-[hsl(var(--border))]/40 select-none shrink-0">
+                                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-[hsl(var(--primary))]/20 shrink-0">
+                                                    <Layers className="w-4 h-4" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                            SECTION
+                                                        </span>
+                                                        <span className="text-[9px] font-mono text-[hsl(var(--text-tertiary))] truncate max-w-[100px]" title={currentSectionId}>
+                                                            {currentSectionId}
+                                                        </span>
                                                     </div>
+                                                    <h4 className="text-xs font-semibold text-[hsl(var(--text-primary))] truncate mt-0.5">
+                                                        {sections.find(p => p.id === currentSectionId)?.title || 'Untitled Section'}
+                                                    </h4>
+                                                </div>
+                                            </div>
 
-                                                    {/* Description */}
-                                                    <div>
-                                                        <label className="label">Section Description</label>
-                                                        <textarea
-                                                            value={sections.find(p => p.id === currentSectionId)?.properties.description || ''}
-                                                            onChange={(e) => updateCurrentSectionProperties({ description: e.target.value })}
-                                                            className="input resize-none"
-                                                            rows={3}
-                                                            placeholder="Optional intro text shown above this section's fields..."
-                                                        />
-                                                    </div>
+                                            <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar select-none flex flex-col justify-between">
+                                                <div className="space-y-4">
+                                                    {/* Properties Grid Grouped by Category */}
+                                                    {(() => {
+                                                        const sectionPropertyMetaDetails: Record<string, { name: string; description: string }> = {
+                                                            title: { name: 'Section Title', description: 'The title displayed at the top of this section/screen in the mobile app.' },
+                                                            description: { name: 'Section Description', description: 'An optional introductory text shown below the section title to guide form-fillers.' },
+                                                            render_mode: { name: 'Render Mode', description: 'Choose whether fields in this section display all at once (List) or one-by-one (Single field wizard).' },
+                                                            platforms: { name: 'Platforms', description: 'The platforms (Mobile, Web, USSD) where this section should be rendered and accessible.' },
+                                                            shuffle_options: { name: 'Shuffle Options', description: 'If enabled, the options of choices fields in this section will be randomized at runtime.' },
+                                                            is_repeatable: { name: 'Repeatable Section', description: 'Allows users to fill this section multiple times dynamically (e.g. adding multiple store inventory cards).' },
+                                                            max_repeats: { name: 'Max Repeats', description: 'The maximum number of times this repeatable section can be duplicated/filled.' },
+                                                        };
 
-                                                    {/* Render Mode */}
-                                                    <div>
-                                                        <label className="label mb-2">Render Mode</label>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            {(['list', 'single'] as RenderMode[]).map((mode) => {
-                                                                const currentProps = sections.find(p => p.id === currentSectionId)?.properties;
-                                                                const isActive = currentProps?.render_mode === mode;
-                                                                return (
-                                                                    <button
-                                                                        key={mode}
-                                                                        onClick={() => updateCurrentSectionProperties({ render_mode: mode })}
-                                                                        className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-xs font-semibold ${isActive
-                                                                            ? 'border-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/8 text-[hsl(var(--primary))] shadow-sm'
-                                                                            : 'border-transparent bg-[hsl(var(--surface-elevated))]/80 text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
-                                                                            }`}
-                                                                    >
-                                                                        {mode === 'list' ? (
-                                                                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h7.5M8.25 12h7.5m-7.5 5.25h7.5M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                                                                            </svg>
-                                                                        ) : (
-                                                                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-                                                                            </svg>
-                                                                        )}
-                                                                        <span>{mode === 'list' ? 'List' : 'Single'}</span>
-                                                                        <span className="text-[10px] font-normal opacity-70 text-center leading-tight">
-                                                                            {mode === 'list' ? 'All fields shown at once' : 'One field at a time'}
-                                                                        </span>
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
+                                                        const sectionPropRows = [
+                                                            {
+                                                                category: 'Appearance',
+                                                                key: 'title',
+                                                                label: 'Section Title',
+                                                                metaKey: 'title',
+                                                                visible: true,
+                                                                render: () => (
+                                                                    <input
+                                                                        value={sections.find(p => p.id === currentSectionId)?.title || ''}
+                                                                        onChange={(e) => updateCurrentSectionTitle(e.target.value)}
+                                                                        className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                        placeholder="Section Title"
+                                                                        onFocus={() => setHoveredProperty(sectionPropertyMetaDetails.title)}
+                                                                        onBlur={() => setHoveredProperty(null)}
+                                                                    />
+                                                                )
+                                                            },
+                                                            {
+                                                                category: 'Appearance',
+                                                                key: 'description',
+                                                                label: 'Description',
+                                                                metaKey: 'description',
+                                                                visible: true,
+                                                                render: () => (
+                                                                    <textarea
+                                                                        value={sections.find(p => p.id === currentSectionId)?.properties.description || ''}
+                                                                        onChange={(e) => updateCurrentSectionProperties({ description: e.target.value })}
+                                                                        className="w-full bg-transparent px-1.5 py-1 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))] resize-none"
+                                                                        rows={2}
+                                                                        placeholder="Optional description..."
+                                                                        onFocus={() => setHoveredProperty(sectionPropertyMetaDetails.description)}
+                                                                        onBlur={() => setHoveredProperty(null)}
+                                                                    />
+                                                                )
+                                                            },
+                                                            {
+                                                                category: 'Appearance',
+                                                                key: 'render_mode',
+                                                                label: 'Render Mode',
+                                                                metaKey: 'render_mode',
+                                                                visible: true,
+                                                                render: () => {
+                                                                    const currentProps = sections.find(p => p.id === currentSectionId)?.properties;
+                                                                    return (
+                                                                        <div className="flex gap-1 bg-[hsl(var(--surface-elevated))]/60 p-0.5 rounded-lg border border-[hsl(var(--border))]/25 w-full">
+                                                                            {(['list', 'single'] as RenderMode[]).map((mode) => {
+                                                                                const isActive = currentProps?.render_mode === mode;
+                                                                                return (
+                                                                                    <button
+                                                                                        key={mode}
+                                                                                        type="button"
+                                                                                        onClick={() => updateCurrentSectionProperties({ render_mode: mode })}
+                                                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold capitalize transition-all flex-1 ${isActive
+                                                                                            ? 'bg-[hsl(var(--primary))] text-white shadow-sm'
+                                                                                            : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]/80'
+                                                                                        }`}
+                                                                                    >
+                                                                                        {mode}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            },
+                                                            {
+                                                                category: 'Behavior',
+                                                                key: 'platforms',
+                                                                label: 'Platforms',
+                                                                metaKey: 'platforms',
+                                                                visible: true,
+                                                                render: () => {
+                                                                    const currentProps = sections.find(p => p.id === currentSectionId)?.properties;
+                                                                    return (
+                                                                        <div className="flex gap-1">
+                                                                            {(['mobile', 'web', 'ussd'] as Platform[]).map(platform => {
+                                                                                const isActive = currentProps?.platforms?.includes(platform) ?? true;
+                                                                                return (
+                                                                                    <button
+                                                                                        key={platform}
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const next = new Set(currentProps?.platforms || []);
+                                                                                            if (isActive) next.delete(platform);
+                                                                                            else next.add(platform);
+                                                                                            updateCurrentSectionProperties({ platforms: Array.from(next) });
+                                                                                        }}
+                                                                                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border transition-all ${
+                                                                                            isActive
+                                                                                                ? 'border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
+                                                                                                : 'border-[hsl(var(--border))] bg-transparent text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
+                                                                                        }`}
+                                                                                    >
+                                                                                        {platform}
+                                                                                    </button>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            },
+                                                            {
+                                                                category: 'Behavior',
+                                                                key: 'shuffle_options',
+                                                                label: 'Shuffle Options',
+                                                                metaKey: 'shuffle_options',
+                                                                visible: true,
+                                                                render: () => (
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!sections.find(p => p.id === currentSectionId)?.properties.shuffle_options}
+                                                                        onChange={(e) => updateCurrentSectionProperties({ shuffle_options: e.target.checked })}
+                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/30 cursor-pointer"
+                                                                        onFocus={() => setHoveredProperty(sectionPropertyMetaDetails.shuffle_options)}
+                                                                        onBlur={() => setHoveredProperty(null)}
+                                                                    />
+                                                                )
+                                                            },
+                                                            {
+                                                                category: 'Behavior',
+                                                                key: 'is_repeatable',
+                                                                label: 'Repeatable',
+                                                                metaKey: 'is_repeatable',
+                                                                visible: true,
+                                                                render: () => (
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={sections.find(p => p.id === currentSectionId)?.properties.is_repeatable || false}
+                                                                        onChange={(e) => updateCurrentSectionProperties({ is_repeatable: e.target.checked })}
+                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/30 cursor-pointer"
+                                                                        onFocus={() => setHoveredProperty(sectionPropertyMetaDetails.is_repeatable)}
+                                                                        onBlur={() => setHoveredProperty(null)}
+                                                                    />
+                                                                )
+                                                            },
+                                                            {
+                                                                category: 'Behavior',
+                                                                key: 'max_repeats',
+                                                                label: 'Max Repeats',
+                                                                metaKey: 'max_repeats',
+                                                                visible: sections.find(p => p.id === currentSectionId)?.properties.is_repeatable || false,
+                                                                render: () => (
+                                                                    <input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        value={sections.find(p => p.id === currentSectionId)?.properties.max_repeats || ''}
+                                                                        onChange={(e) => updateCurrentSectionProperties({ max_repeats: parseInt(e.target.value) || undefined })}
+                                                                        className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                        placeholder="No limit"
+                                                                        onFocus={() => setHoveredProperty(sectionPropertyMetaDetails.max_repeats)}
+                                                                        onBlur={() => setHoveredProperty(null)}
+                                                                    />
+                                                                )
+                                                            }
+                                                        ];
 
-                                                    {/* Section Platforms */}
-                                                    <div>
-                                                        <label className="label">Section Platforms</label>
-                                                        <div className="grid grid-cols-1 gap-2">
-                                                            {(['mobile', 'web', 'ussd'] as Platform[]).map((platform) => {
-                                                                const currentProps = sections.find(p => p.id === currentSectionId)?.properties;
-                                                                return (
-                                                                    <label key={platform} className="flex items-center space-x-3 p-3 bg-[hsl(var(--surface-elevated))]/60 rounded-xl border border-transparent cursor-pointer hover:bg-[hsl(var(--surface-elevated))] transition-all">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={currentProps?.platforms?.includes(platform) ?? true}
-                                                                            onChange={(e) => {
-                                                                                const next = new Set(currentProps?.platforms || []);
-                                                                                if (e.target.checked) next.add(platform);
-                                                                                else next.delete(platform);
-                                                                                updateCurrentSectionProperties({ platforms: Array.from(next) });
-                                                                            }}
-                                                                            className="h-4 w-4 text-[hsl(var(--primary))] rounded border-[hsl(var(--border))]"
-                                                                        />
-                                                                        <span className="text-sm font-medium capitalize">{platform}</span>
-                                                                    </label>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                    {/* Shuffle Options */}
-                                                    <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
-                                                        <div>
-                                                            <p className="text-sm font-semibold">Shuffle Options</p>
-                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Randomise choice order at runtime</p>
-                                                        </div>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!sections.find(p => p.id === currentSectionId)?.properties.shuffle_options}
-                                                            onChange={(e) => updateCurrentSectionProperties({ shuffle_options: e.target.checked })}
-                                                            className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                        />
-                                                    </div>
+                                                        const categories = ['Appearance', 'Logic & Events', 'Behavior'];
 
-                                                    {/* Repeatable */}
-                                                    <div className="space-y-3">
-                                                        <div className="flex items-center justify-between p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl">
-                                                            <div>
-                                                                <p className="text-sm font-semibold">Repeatable Section</p>
-                                                                <p className="text-xs text-[hsl(var(--text-tertiary))] mt-0.5">Allow filling this section multiple times</p>
+                                                        return (
+                                                            <div className="overflow-y-auto hide-scrollbar border border-[hsl(var(--border))]/25 rounded-xl bg-[hsl(var(--background))] select-none">
+                                                                {categories.map(categoryName => {
+                                                                    const isCollapsed = !!collapsedPropCategories[categoryName];
+
+                                                                    if (categoryName === 'Logic & Events') {
+                                                                        const preRulesCount = formRules.filter(r => r.trigger_id === currentSectionId && r.timing === 'pre').length;
+                                                                        const postRulesCount = formRules.filter(r => r.trigger_id === currentSectionId && r.timing === 'post').length;
+                                                                        return (
+                                                                            <div key={categoryName} className="border-b border-[hsl(var(--border))]/30 last:border-b-0">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
+                                                                                    className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                                >
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                                        <span>{categoryName}</span>
+                                                                                    </div>
+                                                                                    <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
+                                                                                        {preRulesCount + postRulesCount}
+                                                                                    </span>
+                                                                                </button>
+
+                                                                                {!isCollapsed && (
+                                                                                    <div className="p-4 bg-[hsl(var(--surface))] space-y-3 border-t border-[hsl(var(--border))]/20">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                const currentSection = sections.find(p => p.id === currentSectionId);
+                                                                                                setRulesModalContext({
+                                                                                                    triggerId: currentSectionId,
+                                                                                                    triggerType: 'section',
+                                                                                                    timing: 'pre',
+                                                                                                    label: currentSection?.title || currentSectionId
+                                                                                                });
+                                                                                                setIsRulesModalOpen(true);
+                                                                                            }}
+                                                                                            className="w-full flex items-center justify-between px-3 py-2 bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/20 rounded-xl transition-all"
+                                                                                        >
+                                                                                            <div className="flex flex-col items-start text-left">
+                                                                                                <span className="text-xs font-semibold text-[hsl(var(--text-primary))]">⚡ Pre-Render Logic (Pre)</span>
+                                                                                                <span className="text-[9px] text-[hsl(var(--text-tertiary))]">Triggered before section loads</span>
+                                                                                            </div>
+                                                                                            <span className="text-[10px] font-bold text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">
+                                                                                                {preRulesCount} Rules
+                                                                                            </span>
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                const currentSection = sections.find(p => p.id === currentSectionId);
+                                                                                                setRulesModalContext({
+                                                                                                    triggerId: currentSectionId,
+                                                                                                    triggerType: 'section',
+                                                                                                    timing: 'post',
+                                                                                                    label: currentSection?.title || currentSectionId
+                                                                                                });
+                                                                                                setIsRulesModalOpen(true);
+                                                                                            }}
+                                                                                            className="w-full flex items-center justify-between px-3 py-2 bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/20 rounded-xl transition-all"
+                                                                                        >
+                                                                                            <div className="flex flex-col items-start text-left">
+                                                                                                <span className="text-xs font-semibold text-[hsl(var(--text-primary))]">⚡ Post-Exit Logic (Post)</span>
+                                                                                                <span className="text-[9px] text-[hsl(var(--text-tertiary))]">Triggered on section exit</span>
+                                                                                            </div>
+                                                                                            <span className="text-[10px] font-bold text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">
+                                                                                                {postRulesCount} Rules
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    }
+
+                                                                    const categoryRows = sectionPropRows.filter(r => r.category === categoryName && r.visible);
+                                                                    if (categoryRows.length === 0) return null;
+
+                                                                    return (
+                                                                        <div key={categoryName} className="border-b border-[hsl(var(--border))]/30 last:border-b-0">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
+                                                                                className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                            >
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                                    <span>{categoryName}</span>
+                                                                                </div>
+                                                                                <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
+                                                                                    {categoryRows.length}
+                                                                                </span>
+                                                                            </button>
+
+                                                                            {!isCollapsed && (
+                                                                                <div className="divide-y divide-[hsl(var(--border))]/20 bg-[hsl(var(--surface))]">
+                                                                                    {categoryRows.map(row => (
+                                                                                        <div
+                                                                                            key={row.key}
+                                                                                            onMouseEnter={() => row.metaKey && sectionPropertyMetaDetails[row.metaKey] && setHoveredProperty(sectionPropertyMetaDetails[row.metaKey])}
+                                                                                            onMouseLeave={() => setHoveredProperty(null)}
+                                                                                            className="flex items-center min-h-[32px] hover:bg-[hsl(var(--surface-elevated))]/20 transition-colors"
+                                                                                        >
+                                                                                            <div className="w-[40%] px-3 truncate select-none border-r border-[hsl(var(--border))]/20 text-[hsl(var(--text-secondary))] font-medium text-[11px] flex items-center py-1 self-stretch">
+                                                                                                {row.label}
+                                                                                            </div>
+                                                                                            <div className="w-[60%] pl-2 pr-1.5 py-1 text-[11px] flex items-center min-w-0">
+                                                                                                {row.render()}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={sections.find(p => p.id === currentSectionId)?.properties.is_repeatable || false}
-                                                                onChange={(e) => updateCurrentSectionProperties({ is_repeatable: e.target.checked })}
-                                                                className="h-4 w-4 rounded-md border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                                                            />
-                                                        </div>
-                                                        {sections.find(p => p.id === currentSectionId)?.properties.is_repeatable && (
-                                                            <div className="animate-in slide-in-from-top-1 fade-in duration-200">
-                                                                <label className="label">Max Repeats</label>
-                                                                <input
-                                                                    type="number"
-                                                                    min={1}
-                                                                    value={sections.find(p => p.id === currentSectionId)?.properties.max_repeats || ''}
-                                                                    onChange={(e) => updateCurrentSectionProperties({ max_repeats: parseInt(e.target.value) || undefined })}
-                                                                    className="input"
-                                                                    placeholder="No limit"
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                        );
+                                                    })()}
 
                                                     {/* Save as Template */}
-                                                    <div className="pt-4">
+                                                    <div className="pt-2">
                                                         <button
                                                             onClick={() => setIsSaveTemplateModalOpen(true)}
-                                                            className="w-full py-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 border border-transparent text-[hsl(var(--primary))] font-semibold rounded-md transition-all flex items-center justify-center gap-2"
+                                                            className="w-full py-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 border border-transparent text-[hsl(var(--primary))] font-semibold rounded-md transition-all flex items-center justify-center gap-2 text-xs"
                                                         >
                                                             <Save className="w-4 h-4" />
                                                             Save as Template
@@ -3712,15 +3759,32 @@ const FormBuilder: React.FC = () => {
                                                                 Update Linked Template
                                                             </button>
                                                         )}
-                                                     </div>
+                                                    </div>
+                                                </div>
 
-                                                                                                         <p className="text-[hsl(var(--text-tertiary))] text-xs italic">Select a field in the canvas to see its individual properties.</p>
+                                                <p className="text-[hsl(var(--text-tertiary))] text-[10px] italic mt-4">Select a field in the canvas to see its individual properties.</p>
+                                            </div>
 
-                                                     </div>
-
-                                             </div>
-                                         </div>
-                                     )}
+                                            {/* Description Helper Panel */}
+                                            <div className="h-[100px] border-t border-[hsl(var(--border))]/45 bg-[hsl(var(--surface-elevated))]/40 p-3 select-none flex flex-col justify-between shrink-0">
+                                                {hoveredProperty ? (
+                                                    <div className="animate-in fade-in duration-150">
+                                                        <p className="text-xs font-bold text-[hsl(var(--text-primary))] flex items-center">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))] mr-1.5" />
+                                                            {hoveredProperty.name}
+                                                        </p>
+                                                        <p className="text-[10px] text-[hsl(var(--text-secondary))] mt-1 leading-normal line-clamp-3">
+                                                            {hoveredProperty.description}
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex h-full items-center justify-center text-[10px] text-[hsl(var(--text-tertiary))] italic">
+                                                        Hover over a property name to view description.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {activeSidebarTab === 'widget' && (
                                         <div className="flex-1 flex flex-col">
@@ -4538,15 +4602,16 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                     ];
 
-                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic Rules', 'Validation', 'Behavior', 'Matrix Setup', 'API Integration', 'Form Link', 'Navigation', 'System Settings'];
+                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'API Integration', 'Form Link', 'Navigation', 'System Settings'];
 
                                                                      return (
                                                                          <div className="flex-1 overflow-y-auto hide-scrollbar border border-[hsl(var(--border))]/25 rounded-xl bg-[hsl(var(--background))]">
                                                                              {categories.map(categoryName => {
                                                                                  const isCollapsed = !!collapsedPropCategories[categoryName];
 
-                                                                                 if (categoryName === 'Logic Rules') {
-                                                                                     const rulesCount = logic.filter(r => r.type === 'field_visibility' && r.target_id === selectedField.id).length;
+                                                                                 if (categoryName === 'Logic & Events') {
+                                                                                     const preRulesCount = formRules.filter(r => r.trigger_id === selectedField.id && r.timing === 'pre').length;
+                                                                                     const postRulesCount = formRules.filter(r => r.trigger_id === selectedField.id && r.timing === 'post').length;
                                                                                      return (
                                                                                          <div key={categoryName} className="border-b border-[hsl(var(--border))]/30 last:border-b-0">
                                                                                              <button
@@ -4559,113 +4624,54 @@ const FormBuilder: React.FC = () => {
                                                                                                      <span>{categoryName}</span>
                                                                                                  </div>
                                                                                                  <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
-                                                                                                     {rulesCount}
+                                                                                                     {preRulesCount + postRulesCount}
                                                                                                  </span>
                                                                                              </button>
 
                                                                                              {!isCollapsed && (
-                                                                                                 <div className="p-4 bg-[hsl(var(--surface))] space-y-4 border-t border-[hsl(var(--border))]/20">
-                                                                                                     <div className="space-y-4">
-                                                                                                         {logic.filter(r => r.type === 'field_visibility' && r.target_id === selectedField.id).map(rule => (
-                                                                                                             <div key={rule.id} className="p-4 bg-[hsl(var(--surface-elevated))]/60 rounded-xl space-y-4 relative group border border-[hsl(var(--border))]/30">
-                                                                                                                 <button
-                                                                                                                     type="button"
-                                                                                                                     onClick={() => removeLogicRule(rule.id)}
-                                                                                                                     className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 transition-all hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded-lg"
-                                                                                                                 >
-                                                                                                                     <Trash2 className="w-3.5 h-3.5" />
-                                                                                                                 </button>
-
-                                                                                                                 {/* Timing badge */}
-                                                                                                                 <div className="flex items-center justify-between">
-                                                                                                                     <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">IF</span>
-                                                                                                                     <div className="flex items-center bg-[hsl(var(--surface-elevated))]/40 p-0.5 gap-0.5 rounded-xl">
-                                                                                                                         {(['pre', 'post'] as const).map(t => (
-                                                                                                                             <button
-                                                                                                                                 type="button"
-                                                                                                                                 key={t}
-                                                                                                                                 onClick={() => updateLogicRule(rule.id, { timing: t })}
-                                                                                                                                 className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${rule.timing === t
-                                                                                                                                     ? 'bg-[hsl(var(--surface))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/20'
-                                                                                                                                     : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))]'
-                                                                                                                                     }`}
-                                                                                                                             >
-                                                                                                                                 {t}
-                                                                                                                             </button>
-                                                                                                                         ))}
-                                                                                                                     </div>
-                                                                                                                 </div>
-
-                                                                                                                 <div className="space-y-3">
-                                                                                                                     {rule.conditions.map((cond, cIdx) => (
-                                                                                                                         <div key={cIdx} className="space-y-2">
-                                                                                                                             <select
-                                                                                                                                 value={cond.field}
-                                                                                                                                 onChange={(e) => {
-                                                                                                                                     const newConds = [...rule.conditions];
-                                                                                                                                     newConds[cIdx].field = e.target.value;
-                                                                                                                                     updateLogicRule(rule.id, { conditions: newConds });
-                                                                                                                                 }}
-                                                                                                                                 className="input-sm w-full py-1.5"
-                                                                                                                             >
-                                                                                                                                 <option value="">Select Field...</option>
-                                                                                                                                 {sections.flatMap(p => p.fields).filter(f => f.id !== selectedField.id).map(f => (
-                                                                                                                                     <option key={f.id} value={f.id}>{f.label}</option>
-                                                                                                                                 ))}
-                                                                                                                             </select>
-
-                                                                                                                             <div className="flex space-x-2">
-                                                                                                                                 <select
-                                                                                                                                     value={cond.operator}
-                                                                                                                                     onChange={(e) => {
-                                                                                                                                         const newConds = [...rule.conditions];
-                                                                                                                                         newConds[cIdx].operator = e.target.value as any;
-                                                                                                                                         updateLogicRule(rule.id, { conditions: newConds });
-                                                                                                                                     }}
-                                                                                                                                     className="input-sm w-1/2 py-1.5"
-                                                                                                                                 >
-                                                                                                                                     <option value="eq">Equals</option>
-                                                                                                                                     <option value="neq">Not Equal</option>
-                                                                                                                                     <option value="contains">Contains</option>
-                                                                                                                                     <option value="gt">Greater Than</option>
-                                                                                                                                     <option value="lt">Less Than</option>
-                                                                                                                                 </select>
-                                                                                                                                 <input
-                                                                                                                                     value={cond.value}
-                                                                                                                                     onChange={(e) => {
-                                                                                                                                         const newConds = [...rule.conditions];
-                                                                                                                                         newConds[cIdx].value = e.target.value;
-                                                                                                                                         updateLogicRule(rule.id, { conditions: newConds });
-                                                                                                                                     }}
-                                                                                                                                     placeholder="Value"
-                                                                                                                                     className="input-sm w-1/2 py-1.5"
-                                                                                                                                 />
-                                                                                                                             </div>
-                                                                                                                         </div>
-                                                                                                                     ))}
-                                                                                                                 </div>
-
-                                                                                                                 <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
-                                                                                                                     <span className="bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded">THEN</span>
-                                                                                                                     <span>SHOW FIELD</span>
-                                                                                                                 </div>
-                                                                                                             </div>
-                                                                                                         ))}
-
-                                                                                                         <button
-                                                                                                             type="button"
-                                                                                                             onClick={() => addLogicRule({
-                                                                                                                 type: 'field_visibility',
+                                                                                                 <div className="p-4 bg-[hsl(var(--surface))] space-y-3 border-t border-[hsl(var(--border))]/20">
+                                                                                                     <button
+                                                                                                         type="button"
+                                                                                                         onClick={() => {
+                                                                                                             setRulesModalContext({
+                                                                                                                 triggerId: selectedField.id,
+                                                                                                                 triggerType: 'field',
                                                                                                                  timing: 'pre',
-                                                                                                                 target_id: selectedField.id,
-                                                                                                                 action: 'show',
-                                                                                                                 conditions: [{ field: '', operator: 'eq', value: '' }]
-                                                                                                             })}
-                                                                                                             className="w-full py-3 border border-dashed border-[hsl(var(--border))]/55 rounded-xl text-xs font-bold text-[hsl(var(--text-tertiary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40"
-                                                                                                         >
-                                                                                                             + Add Visibility Rule
-                                                                                                         </button>
-                                                                                                     </div>
+                                                                                                                 label: selectedField.label || selectedField.id
+                                                                                                             });
+                                                                                                             setIsRulesModalOpen(true);
+                                                                                                         }}
+                                                                                                         className="w-full flex items-center justify-between px-3 py-2.5 bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/20 rounded-xl transition-all"
+                                                                                                     >
+                                                                                                         <div className="flex flex-col items-start text-left">
+                                                                                                             <span className="text-xs font-semibold text-[hsl(var(--text-primary))]">⚡ Pre-Render Logic (Pre)</span>
+                                                                                                             <span className="text-[9px] text-[hsl(var(--text-tertiary))]">Triggered before field loads</span>
+                                                                                                         </div>
+                                                                                                         <span className="text-[10px] font-bold text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">
+                                                                                                             {preRulesCount} Rules
+                                                                                                         </span>
+                                                                                                     </button>
+                                                                                                     <button
+                                                                                                         type="button"
+                                                                                                         onClick={() => {
+                                                                                                             setRulesModalContext({
+                                                                                                                 triggerId: selectedField.id,
+                                                                                                                 triggerType: 'field',
+                                                                                                                 timing: 'post',
+                                                                                                                 label: selectedField.label || selectedField.id
+                                                                                                             });
+                                                                                                             setIsRulesModalOpen(true);
+                                                                                                         }}
+                                                                                                         className="w-full flex items-center justify-between px-3 py-2.5 bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/20 rounded-xl transition-all"
+                                                                                                     >
+                                                                                                         <div className="flex flex-col items-start text-left">
+                                                                                                             <span className="text-xs font-semibold text-[hsl(var(--text-primary))]">⚡ Post-Exit Logic (Post)</span>
+                                                                                                             <span className="text-[9px] text-[hsl(var(--text-tertiary))]">Triggered on navigation/exit</span>
+                                                                                                         </div>
+                                                                                                         <span className="text-[10px] font-bold text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-lg">
+                                                                                                             {postRulesCount} Rules
+                                                                                                         </span>
+                                                                                                     </button>
                                                                                                  </div>
                                                                                              )}
                                                                                          </div>
@@ -5048,6 +5054,49 @@ const FormBuilder: React.FC = () => {
                                     >
                                         Save Template
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                }
+
+                {/* Scoped Rules Builder Modal */}
+                {
+                    isRulesModalOpen && rulesModalContext && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+                            <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                                {/* Modal Header */}
+                                <div className="px-6 py-4 border-b border-[hsl(var(--border))] flex justify-between items-center bg-[hsl(var(--surface-elevated))]/65 shrink-0">
+                                    <div>
+                                        <span className="text-[10px] font-bold text-[hsl(var(--primary))] uppercase tracking-widest bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-md">
+                                            {rulesModalContext.timing === 'pre' ? 'Pre-Render Logic (Pre)' : 'Post-Exit Logic (Post)'}
+                                        </span>
+                                        <h2 className="text-lg font-bold text-[hsl(var(--text-primary))] mt-1">
+                                            Rules for: <span className="text-[hsl(var(--primary))] font-mono">{rulesModalContext.label}</span>
+                                        </h2>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setIsRulesModalOpen(false);
+                                            setRulesModalContext(null);
+                                        }}
+                                        className="h-8 w-8 rounded-lg bg-[hsl(var(--surface-elevated))]/50 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all flex items-center justify-center border border-[hsl(var(--border))]/20"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                {/* Modal Body */}
+                                <div className="flex-1 overflow-hidden p-6 bg-[radial-gradient(circle_at_top,rgba(14,116,144,0.02),transparent_32%)]">
+                                    <RulesBuilder
+                                        fields={allFieldsFlattened}
+                                        sections={sections.map(s => ({ id: s.id, title: s.title }))}
+                                        rules={formRules}
+                                        onRulesChange={(newRules) => setFormRules(newRules)}
+                                        triggerId={rulesModalContext.triggerId}
+                                        triggerType={rulesModalContext.triggerType}
+                                        timing={rulesModalContext.timing}
+                                    />
                                 </div>
                             </div>
                         </div>

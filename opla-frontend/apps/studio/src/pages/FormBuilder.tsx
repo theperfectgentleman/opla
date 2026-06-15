@@ -466,84 +466,244 @@ const ChoicesSetupInput: React.FC<{
     updateField: (id: string, patch: any) => void;
 }> = ({ selectedField, sections, updateField }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [isBulkOpen, setIsBulkOpen] = useState(false);
+    const [bulkText, setBulkText] = useState('');
+
+    const options = selectedField.options || [];
+
+    const handleAddChoice = () => {
+        const label = `Choice ${(options.length || 0) + 1}`;
+        updateField(selectedField.id, {
+            options: [...options, { label, value: toSmartValue(label) }]
+        });
+    };
+
+    const handleSaveBulk = () => {
+        const generateBulkKey = (str: string): string => {
+            return str
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_+|_+$/g, '');
+        };
+
+        const lines = bulkText.split('\n');
+        const parsedOptions = lines
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .map(line => {
+                const parts = line.split('|').map(p => p.trim());
+                const label = parts[0] || '';
+                const rawKey = parts[1] || label;
+                const value = generateBulkKey(rawKey);
+                const skip_to = parts[2] || undefined;
+                return { label, value, skip_to };
+            });
+        updateField(selectedField.id, { options: parsedOptions });
+        setIsBulkOpen(false);
+    };
+
+    const handleLabelKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (idx === options.length - 1) {
+                const label = `Choice ${options.length + 1}`;
+                updateField(selectedField.id, {
+                    options: [...options, { label, value: toSmartValue(label) }]
+                });
+            }
+        }
+    };
+
     return (
         <div className="w-full">
+            {/* Header Accordion Button */}
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center justify-between w-full"
+                className="w-full flex items-center justify-between px-4 py-2 hover:bg-[hsl(var(--surface-elevated))]/20 select-none transition-all border-b border-[hsl(var(--border))]/20"
             >
-                <span>{(selectedField.options || []).length} Choices</span>
-                <span className="text-[10px] text-[hsl(var(--text-tertiary))]">{isOpen ? 'Hide' : 'Configure...'}</span>
+                <div className="flex items-center gap-1.5">
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform text-[hsl(var(--text-tertiary))] ${isOpen ? '' : '-rotate-90'}`} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">Choices Setup</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded border border-[hsl(var(--border))]/40 font-semibold">
+                        {options.length} {options.length === 1 ? 'choice' : 'choices'}
+                    </span>
+                </div>
             </button>
+
             {isOpen && (
-                <div className="mt-2 space-y-2 border-t border-[hsl(var(--border))]/20 pt-2 w-full animate-in fade-in duration-100">
-                    {(selectedField.options || []).map((opt: any, idx: number) => (
-                        <div key={idx} className="flex flex-col gap-1 p-2 bg-[hsl(var(--surface-elevated))]/35 border border-[hsl(var(--border))]/20 rounded-lg text-[hsl(var(--text-primary))]">
-                            <div className="flex items-center gap-1">
-                                <input
-                                    value={opt.label}
-                                    onChange={(e) => {
-                                        const newOpts = [...(selectedField.options || [])];
-                                        newOpts[idx] = { ...opt, label: e.target.value };
-                                        updateField(selectedField.id, { options: newOpts });
-                                    }}
-                                    placeholder="Label"
-                                    className="flex-1 bg-[hsl(var(--surface))] px-1.5 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs outline-none focus:border-[hsl(var(--primary))]/60 text-[hsl(var(--text-primary))]"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const newOpts = (selectedField.options || []).filter((_: any, i: number) => i !== idx);
-                                        updateField(selectedField.id, { options: newOpts });
-                                    }}
-                                    className="p-1 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                <div className="w-full border-b border-[hsl(var(--border))]/20 animate-in fade-in duration-100 bg-[hsl(var(--surface))]">
+                    {options.length > 0 ? (
+                        <div className="w-full flex flex-col">
+                            {/* Table Header */}
+                            <div className="flex items-center text-[9px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider px-4 py-1.5 border-b border-[hsl(var(--border))]/15 select-none bg-[hsl(var(--surface-elevated))]/10">
+                                <div className="w-[45%]">Label</div>
+                                <div className="w-[20%] pl-2">Key</div>
+                                <div className="w-[28%] pl-2">Go To</div>
+                                <div className="w-[7%] text-center"></div>
                             </div>
-                            <div className="flex items-center gap-1.5 text-[10px]">
-                                <span className="text-[hsl(var(--text-tertiary))] font-mono">Key:</span>
-                                <input
-                                    value={opt.value}
-                                    onChange={(e) => {
-                                        const newOpts = [...(selectedField.options || [])];
-                                        newOpts[idx] = { ...opt, value: toSmartValue(e.target.value) };
-                                        updateField(selectedField.id, { options: newOpts });
-                                    }}
-                                    placeholder="value_key"
-                                    className="w-24 bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded font-mono text-[10px] outline-none text-[hsl(var(--text-primary))]"
-                                />
-                                <span className="text-[hsl(var(--text-tertiary))] ml-1">Go to:</span>
-                                <select
-                                    value={opt.skip_to || ''}
-                                    onChange={(e) => {
-                                        const newOpts = [...(selectedField.options || [])];
-                                        newOpts[idx] = { ...opt, skip_to: e.target.value || undefined };
-                                        updateField(selectedField.id, { options: newOpts });
-                                    }}
-                                    className="flex-1 bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[10px] outline-none text-[hsl(var(--text-primary))]"
-                                >
-                                    <option value="">Next Field</option>
-                                    {sections.map((s: any, i: number) => (
-                                        <option key={s.id} value={s.id}>S{i+1}: {s.title}</option>
-                                    ))}
-                                </select>
+
+                            {/* Table Body Rows */}
+                            <div className="divide-y divide-[hsl(var(--border))]/10 max-h-[320px] overflow-y-auto hide-scrollbar select-text">
+                                {options.map((opt: any, idx: number) => (
+                                    <div
+                                        key={idx}
+                                        className="flex items-center min-h-[30px] px-4 py-0.5 hover:bg-[hsl(var(--surface-elevated))]/10 transition-colors"
+                                    >
+                                        {/* Label Input */}
+                                        <div className="w-[45%] pr-1 flex items-center">
+                                            <input
+                                                value={opt.label}
+                                                onChange={(e) => {
+                                                    const newOpts = [...options];
+                                                    newOpts[idx] = { ...opt, label: e.target.value };
+                                                    updateField(selectedField.id, { options: newOpts });
+                                                }}
+                                                onKeyDown={(e) => handleLabelKeyDown(e, idx)}
+                                                placeholder="Label"
+                                                className="w-full bg-transparent px-1 py-0.5 border-0 focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-xs outline-none text-[hsl(var(--text-primary))]"
+                                            />
+                                        </div>
+
+                                        {/* Key Input */}
+                                        <div className="w-[20%] px-2 border-l border-[hsl(var(--border))]/10 flex items-center">
+                                            <input
+                                                value={opt.value}
+                                                onChange={(e) => {
+                                                    const newOpts = [...options];
+                                                    newOpts[idx] = { ...opt, value: toSmartValue(e.target.value) };
+                                                    updateField(selectedField.id, { options: newOpts });
+                                                }}
+                                                placeholder="key"
+                                                className="w-full bg-transparent px-1 py-0.5 border-0 focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded font-mono text-[10px] outline-none text-[hsl(var(--text-primary))]"
+                                            />
+                                        </div>
+
+                                        {/* Go To Skip Logic */}
+                                        <div className="w-[28%] px-2 border-l border-[hsl(var(--border))]/10 flex items-center">
+                                            <select
+                                                value={opt.skip_to || ''}
+                                                onChange={(e) => {
+                                                    const newOpts = [...options];
+                                                    newOpts[idx] = { ...opt, skip_to: e.target.value || undefined };
+                                                    updateField(selectedField.id, { options: newOpts });
+                                                }}
+                                                className="w-full bg-transparent px-1 py-0.5 border-0 focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[10px] outline-none text-[hsl(var(--text-primary))] cursor-pointer truncate"
+                                            >
+                                                <option value="" className="bg-[hsl(var(--surface))]">Next Field</option>
+                                                {sections.map((s: any, i: number) => (
+                                                    <option key={s.id} value={s.id} className="bg-[hsl(var(--surface))]">
+                                                        S{i + 1}: {s.title}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Delete Action */}
+                                        <div className="w-[7%] flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const newOpts = options.filter((_: any, i: number) => i !== idx);
+                                                    updateField(selectedField.id, { options: newOpts });
+                                                }}
+                                                className="p-1 hover:bg-[hsl(var(--error))]/10 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] rounded transition-all"
+                                                title="Delete Choice"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    ))}
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const label = `Choice ${(selectedField.options?.length || 0) + 1}`;
-                            updateField(selectedField.id, {
-                                options: [...(selectedField.options || []), { label, value: toSmartValue(label) }]
-                            });
-                        }}
-                        className="w-full py-1 text-center border border-dashed border-[hsl(var(--border))]/60 hover:border-[hsl(var(--primary))]/40 rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20"
-                    >
-                        + Add Choice
-                    </button>
+                    ) : (
+                        <div className="text-center py-4 text-xs text-[hsl(var(--text-tertiary))] italic select-none">
+                            No choices configured yet.
+                        </div>
+                    )}
+
+                    {/* Actions footer */}
+                    <div className="px-4 py-2 flex gap-2 border-t border-[hsl(var(--border))]/10 bg-[hsl(var(--surface-elevated))]/5">
+                        <button
+                            type="button"
+                            onClick={handleAddChoice}
+                            className="flex-1 py-1 text-center border border-dashed border-[hsl(var(--border))]/60 hover:border-[hsl(var(--primary))]/40 rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/20 shadow-sm"
+                        >
+                            + Add Choice
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setBulkText(
+                                    options
+                                        .map((o: any) => `${o.label}${o.value !== toSmartValue(o.label) ? ` | ${o.value}` : ''}${o.skip_to ? ` | ${o.skip_to}` : ''}`)
+                                        .join('\n')
+                                );
+                                setIsBulkOpen(true);
+                            }}
+                            className="px-3 py-1 text-center border border-[hsl(var(--border))]/60 hover:border-[hsl(var(--primary))]/40 rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-all bg-[hsl(var(--surface-elevated))]/10 shadow-sm"
+                        >
+                            Bulk Edit
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Edit Dialog */}
+            {isBulkOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 select-text">
+                    <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                        {/* Header */}
+                        <div className="px-5 py-3.5 border-b border-[hsl(var(--border))]/20 flex justify-between items-center bg-[hsl(var(--surface-elevated))]/40 shrink-0">
+                            <div>
+                                <h3 className="text-sm font-bold text-[hsl(var(--text-primary))]">Bulk Edit Choices</h3>
+                                <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-0.5">Enter one choice option per line.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsBulkOpen(false)}
+                                className="h-7 w-7 rounded-md bg-[hsl(var(--surface-elevated))]/50 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all flex items-center justify-center border border-[hsl(var(--border))]/20 text-xs"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        
+                        {/* Body */}
+                        <div className="p-4 flex-1 flex flex-col space-y-2">
+                            <textarea
+                                value={bulkText}
+                                onChange={(e) => setBulkText(e.target.value)}
+                                placeholder="Option A&#10;Option B&#10;Option C | custom_key&#10;Option D | key_d | section_skip_id"
+                                className="w-full flex-1 min-h-[220px] max-h-[350px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg p-2.5 font-mono text-xs text-[hsl(var(--text-primary))] outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] resize-none"
+                            />
+                            <div className="text-[9px] text-[hsl(var(--text-tertiary))] leading-relaxed bg-[hsl(var(--surface-elevated))]/20 p-2 rounded border border-[hsl(var(--border))]/25">
+                                <strong>Format:</strong> <code>Label</code> or <code>Label | Key</code> or <code>Label | Key | SkipToSectionId</code>.<br />
+                                Keys are generated automatically if left empty.
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="px-5 py-3 border-t border-[hsl(var(--border))]/20 bg-[hsl(var(--surface-elevated))]/30 flex justify-end gap-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setIsBulkOpen(false)}
+                                className="px-3 py-1.5 rounded-md text-xs font-semibold border border-[hsl(var(--border))]/40 hover:bg-[hsl(var(--surface-elevated))]/50 text-[hsl(var(--text-secondary))] transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveBulk}
+                                className="px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 transition-all shadow-md shadow-[hsl(var(--primary))]/10"
+                            >
+                                Apply Changes
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -861,10 +1021,14 @@ const FormBuilder: React.FC = () => {
     const [sectionSearchQuery, setSectionSearchQuery] = useState('');
     const [widgetSearchQuery, setWidgetSearchQuery] = useState('');
     const [isLeftPanelPinned, setIsLeftPanelPinned] = useState(false);
-    const [leftPanelWidth, setLeftPanelWidth] = useState(320);
+    const [leftPanelWidth, setLeftPanelWidth] = useState(560);
     const isResizingLeftPanel = useRef(false);
     const leftPanelStartX = useRef(0);
     const leftPanelStartW = useRef(0);
+    const [rightPanelWidth, setRightPanelWidth] = useState(560);
+    const isResizingRightPanel = useRef(false);
+    const rightPanelStartX = useRef(0);
+    const rightPanelStartW = useRef(0);
     const [isRightSidebarPinned, setIsRightSidebarPinned] = useState(true);
     const [view, setView] = useState<'flow' | 'section'>('flow');
     const [formRules, setFormRules] = useState<FormRule[]>([]);
@@ -1110,7 +1274,7 @@ const FormBuilder: React.FC = () => {
     }, [swipedFieldId]);
 
     // ─── Left panel resize drag handlers ───
-    const defaultWidthForTab = 320;
+    const defaultWidthForTab = 560;
 
     useEffect(() => {
         setLeftPanelWidth(defaultWidthForTab);
@@ -1140,6 +1304,31 @@ const FormBuilder: React.FC = () => {
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     }, [leftPanelWidth]);
+
+    const onRightResizeMouseDown = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        isResizingRightPanel.current = true;
+        rightPanelStartX.current = e.clientX;
+        rightPanelStartW.current = rightPanelWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (ev: MouseEvent) => {
+            if (!isResizingRightPanel.current) return;
+            const delta = ev.clientX - rightPanelStartX.current;
+            const newW = Math.max(280, Math.min(900, rightPanelStartW.current - delta));
+            setRightPanelWidth(newW);
+        };
+        const onMouseUp = () => {
+            isResizingRightPanel.current = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }, [rightPanelWidth]);
 
     const enterSection = (sectionId: string) => {
         setSlideDir('forward');
@@ -3268,10 +3457,19 @@ const FormBuilder: React.FC = () => {
                             <div
                                 className={`${
                                     isRightSidebarPinned
-                                        ? 'w-80 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden'
-                                        : 'absolute right-16 top-3 bottom-4 z-40 w-80 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-2xl shadow-2xl'
-                                } animate-in slide-in-from-right-4 fade-in duration-300`}
+                                        ? 'border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden'
+                                        : 'absolute right-16 top-3 bottom-4 z-40 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-2xl shadow-2xl'
+                                } animate-in slide-in-from-right-4 fade-in duration-300 relative`}
+                                style={{ width: isRightSidebarPinned ? rightPanelWidth : 560 }}
                             >
+                                {/* Drag resize handle (pinned only) */}
+                                {isRightSidebarPinned && (
+                                    <div
+                                        onMouseDown={onRightResizeMouseDown}
+                                        className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-50 hover:bg-[hsl(var(--primary))]/20 active:bg-[hsl(var(--primary))]/30 transition-colors"
+                                        title="Drag to resize"
+                                    />
+                                )}
                                 {/* Top Tab Bar */}
                                 <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-2 py-2 flex items-center justify-between gap-1 select-none">
                                     <div className="flex gap-1 flex-1">
@@ -3447,7 +3645,7 @@ const FormBuilder: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar select-none flex flex-col justify-between">
+                                            <div className="flex-1 px-0 py-0 overflow-y-auto hide-scrollbar select-none flex flex-col justify-between">
                                                 <div className="space-y-4">
                                                     {/* Properties Grid Grouped by Category */}
                                                     {(() => {
@@ -3621,7 +3819,7 @@ const FormBuilder: React.FC = () => {
                                                         const categories = ['Appearance', 'Logic & Events', 'Behavior'];
 
                                                         return (
-                                                            <div className="overflow-y-auto hide-scrollbar border border-[hsl(var(--border))]/25 rounded-xl bg-[hsl(var(--background))] select-none">
+                                                            <div className="overflow-y-auto hide-scrollbar border-b border-[hsl(var(--border))]/25 bg-[hsl(var(--background))] select-none">
                                                                 {categories.map(categoryName => {
                                                                     const isCollapsed = !!collapsedPropCategories[categoryName];
 
@@ -3633,15 +3831,12 @@ const FormBuilder: React.FC = () => {
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
-                                                                                    className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                                    className="w-full flex items-center justify-between px-4 py-2 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
                                                                                 >
                                                                                     <div className="flex items-center gap-1.5">
                                                                                         <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                                                                                         <span>{categoryName}</span>
                                                                                     </div>
-                                                                                    <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
-                                                                                        {preRulesCount + postRulesCount}
-                                                                                    </span>
                                                                                 </button>
 
                                                                                 {!isCollapsed && (
@@ -3704,15 +3899,12 @@ const FormBuilder: React.FC = () => {
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
-                                                                                className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                                className="w-full flex items-center justify-between px-4 py-2 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
                                                                             >
                                                                                 <div className="flex items-center gap-1.5">
                                                                                     <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                                                                                     <span>{categoryName}</span>
                                                                                 </div>
-                                                                                <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
-                                                                                    {categoryRows.length}
-                                                                                </span>
                                                                             </button>
 
                                                                             {!isCollapsed && (
@@ -3724,10 +3916,10 @@ const FormBuilder: React.FC = () => {
                                                                                             onMouseLeave={() => setHoveredProperty(null)}
                                                                                             className="flex items-center min-h-[32px] hover:bg-[hsl(var(--surface-elevated))]/20 transition-colors"
                                                                                         >
-                                                                                            <div className="w-[40%] px-3 truncate select-none border-r border-[hsl(var(--border))]/20 text-[hsl(var(--text-secondary))] font-medium text-[11px] flex items-center py-1 self-stretch">
+                                                                                            <div className="w-[40%] px-4 truncate select-none border-r border-[hsl(var(--border))]/20 text-[hsl(var(--text-secondary))] font-medium text-[11px] flex items-center py-1 self-stretch">
                                                                                                 {row.label}
                                                                                             </div>
-                                                                                            <div className="w-[60%] pl-2 pr-1.5 py-1 text-[11px] flex items-center min-w-0">
+                                                                                            <div className="w-[60%] pl-3 pr-4 py-1 text-[11px] flex items-center min-w-0">
                                                                                                 {row.render()}
                                                                                             </div>
                                                                                         </div>
@@ -3742,7 +3934,7 @@ const FormBuilder: React.FC = () => {
                                                     })()}
 
                                                     {/* Save as Template */}
-                                                    <div className="pt-2">
+                                                    <div className="pt-2 px-4">
                                                         <button
                                                             onClick={() => setIsSaveTemplateModalOpen(true)}
                                                             className="w-full py-2 bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 border border-transparent text-[hsl(var(--primary))] font-semibold rounded-md transition-all flex items-center justify-center gap-2 text-xs"
@@ -3762,7 +3954,7 @@ const FormBuilder: React.FC = () => {
                                                     </div>
                                                 </div>
 
-                                                <p className="text-[hsl(var(--text-tertiary))] text-[10px] italic mt-4">Select a field in the canvas to see its individual properties.</p>
+                                                <p className="text-[hsl(var(--text-tertiary))] text-[10px] italic mt-4 px-4">Select a field in the canvas to see its individual properties.</p>
                                             </div>
 
                                             {/* Description Helper Panel */}
@@ -3810,7 +4002,7 @@ const FormBuilder: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                                                                         <div className="flex-1 p-6 pt-4 overflow-y-auto hide-scrollbar select-none">
+                                                                                                         <div className="flex-1 px-0 py-0 overflow-y-auto hide-scrollbar select-none">
                                                                 {/* Properties Grid Grouped by Category */}
                                                                 {(() => {
                                                                     const allPropRows = [
@@ -4605,7 +4797,7 @@ const FormBuilder: React.FC = () => {
                                                                                                                                          const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'API Integration', 'Form Link', 'Navigation', 'System Settings'];
 
                                                                      return (
-                                                                         <div className="flex-1 overflow-y-auto hide-scrollbar border border-[hsl(var(--border))]/25 rounded-xl bg-[hsl(var(--background))]">
+                                                                         <div className="overflow-y-auto hide-scrollbar border-b border-[hsl(var(--border))]/25 bg-[hsl(var(--background))]">
                                                                              {categories.map(categoryName => {
                                                                                  const isCollapsed = !!collapsedPropCategories[categoryName];
 
@@ -4617,15 +4809,12 @@ const FormBuilder: React.FC = () => {
                                                                                              <button
                                                                                                  type="button"
                                                                                                  onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
-                                                                                                 className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                                                 className="w-full flex items-center justify-between px-4 py-2 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
                                                                                              >
                                                                                                  <div className="flex items-center gap-1.5">
                                                                                                      <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                                                                                                      <span>{categoryName}</span>
                                                                                                  </div>
-                                                                                                 <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
-                                                                                                     {preRulesCount + postRulesCount}
-                                                                                                 </span>
                                                                                              </button>
 
                                                                                              {!isCollapsed && (
@@ -4685,34 +4874,43 @@ const FormBuilder: React.FC = () => {
                                                                                     <div key={categoryName} className="border-b border-[hsl(var(--border))]/30 last:border-b-0">
                                                                                         <button
                                                                                             onClick={() => setCollapsedPropCategories(prev => ({ ...prev, [categoryName]: !prev[categoryName] }))}
-                                                                                            className="w-full flex items-center justify-between px-3 py-1.5 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
+                                                                                            className="w-full flex items-center justify-between px-4 py-2 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/45 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none border-b border-[hsl(var(--border))]/25 transition-all"
                                                                                         >
                                                                                             <div className="flex items-center gap-1.5">
                                                                                                 <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
                                                                                                 <span>{categoryName}</span>
                                                                                             </div>
-                                                                                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))]/80 px-1.5 py-0.5 rounded-md border border-[hsl(var(--border))]/40">
-                                                                                                {categoryRows.length}
-                                                                                            </span>
                                                                                         </button>
 
                                                                                         {!isCollapsed && (
                                                                                             <div className="divide-y divide-[hsl(var(--border))]/20 bg-[hsl(var(--surface))]">
-                                                                                                {categoryRows.map(row => (
-                                                                                                    <div
-                                                                                                        key={row.key}
-                                                                                                        onMouseEnter={() => row.metaKey && propertyMetaDetails[row.metaKey] && setHoveredProperty(propertyMetaDetails[row.metaKey])}
-                                                                                                        onMouseLeave={() => setHoveredProperty(null)}
-                                                                                                        className="flex items-center min-h-[32px] hover:bg-[hsl(var(--surface-elevated))]/20 transition-colors"
-                                                                                                    >
-                                                                                                        <div className="w-[40%] px-3 truncate select-none border-r border-[hsl(var(--border))]/20 text-[hsl(var(--text-secondary))] font-medium text-[11px] flex items-center py-1 self-stretch">
-                                                                                                            {row.label}
+                                                                                                {categoryRows.map(row => {
+                                                                                                    if (row.key === 'choices') {
+                                                                                                        return (
+                                                                                                            <div
+                                                                                                                key={row.key}
+                                                                                                                className="w-full flex flex-col bg-[hsl(var(--surface))] border-b border-[hsl(var(--border))]/20 last:border-b-0"
+                                                                                                            >
+                                                                                                                {row.render()}
+                                                                                                            </div>
+                                                                                                        );
+                                                                                                    }
+                                                                                                    return (
+                                                                                                        <div
+                                                                                                            key={row.key}
+                                                                                                            onMouseEnter={() => row.metaKey && propertyMetaDetails[row.metaKey] && setHoveredProperty(propertyMetaDetails[row.metaKey])}
+                                                                                                            onMouseLeave={() => setHoveredProperty(null)}
+                                                                                                            className="flex items-center min-h-[32px] hover:bg-[hsl(var(--surface-elevated))]/20 transition-colors"
+                                                                                                        >
+                                                                                                            <div className="w-[40%] px-4 truncate select-none border-r border-[hsl(var(--border))]/20 text-[hsl(var(--text-secondary))] font-medium text-[11px] flex items-center py-1 self-stretch">
+                                                                                                                {row.label}
+                                                                                                            </div>
+                                                                                                            <div className="w-[60%] pl-3 pr-4 py-1 text-[11px] flex items-center min-w-0">
+                                                                                                                {row.render()}
+                                                                                                            </div>
                                                                                                         </div>
-                                                                                                        <div className="w-[60%] pl-2 pr-1.5 py-1 text-[11px] flex items-center min-w-0">
-                                                                                                            {row.render()}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                ))}
+                                                                                                    );
+                                                                                                })}
                                                                                             </div>
                                                                                         )}
                                                                                     </div>

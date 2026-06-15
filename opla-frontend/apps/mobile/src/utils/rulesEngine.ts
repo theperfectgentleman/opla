@@ -233,10 +233,19 @@ export function isSectionVisibleByRules(
 /**
  * Get filtered options for a dropdown/lookup field if a FILTER_OPTIONS rule is active.
  */
+function normalizeForComparison(val: any): string {
+  if (val === undefined || val === null) return '';
+  return String(val)
+    .toLowerCase()
+    .replace(/[_\-\s]+/g, ' ')
+    .trim();
+}
+
 export function getFilteredOptionsByRules(
   fieldId: string,
   result: RulesEvaluationResult,
-  responses: Record<string, any>
+  responses: Record<string, any>,
+  options?: any[]
 ): any[] | null {
   const effects = result.fieldEffects[fieldId] || [];
   const filterEffect = effects.find(e => e.action.effect === 'FILTER_OPTIONS');
@@ -252,6 +261,40 @@ export function getFilteredOptionsByRules(
       return config.filter_map[parentValue];
     }
     return []; // Parent not selected yet — show nothing
+  }
+
+  // Dynamic column filter mapping
+  if (config.parent_column && config.parent_field_id && options) {
+    const parentValue = responses[config.parent_field_id];
+    if (parentValue === undefined || parentValue === null || parentValue === '') {
+      return []; // Parent not selected yet — show nothing
+    }
+
+    const parentCol = String(config.parent_column);
+    const targetVal = normalizeForComparison(parentValue);
+
+    return options.filter(opt => {
+      // 1. Check row_data if it exists (JSON and CSV-with-headers)
+      if (opt.row_data && typeof opt.row_data === 'object') {
+        if (opt.row_data[parentCol] !== undefined) {
+          return normalizeForComparison(opt.row_data[parentCol]) === targetVal;
+        }
+        const matchingKey = Object.keys(opt.row_data).find(k => k.toLowerCase() === parentCol.toLowerCase());
+        if (matchingKey !== undefined) {
+          return normalizeForComparison(opt.row_data[matchingKey]) === targetVal;
+        }
+      }
+
+      // 2. Check row_cols if it exists (CSV)
+      if (opt.row_cols && Array.isArray(opt.row_cols)) {
+        const colIdx = parseInt(parentCol, 10);
+        if (!isNaN(colIdx) && opt.row_cols[colIdx - 1] !== undefined) {
+          return normalizeForComparison(opt.row_cols[colIdx - 1]) === targetVal;
+        }
+      }
+
+      return false;
+    });
   }
 
   return null;

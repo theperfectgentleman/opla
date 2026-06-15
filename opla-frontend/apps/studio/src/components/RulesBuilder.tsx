@@ -10,6 +10,66 @@ import type {
 } from '@opla/types';
 import { RULE_OPERATORS_BY_FIELD_TYPE } from '@opla/types';
 
+interface ParsedCustomData {
+  type: 'csv' | 'json' | 'empty';
+  headers: string[];
+  rows: Array<Record<string, any>>;
+  error?: string;
+}
+
+function parseCustomLookupData(dataString: string, separator = ','): ParsedCustomData {
+  const trimmed = (dataString || '').trim();
+  if (!trimmed) {
+    return { type: 'empty', headers: [], rows: [] };
+  }
+
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        const keysSet = new Set<string>();
+        parsed.forEach(item => {
+          if (item && typeof item === 'object') {
+            Object.keys(item).forEach(k => keysSet.add(k));
+          }
+        });
+        const headers = Array.from(keysSet);
+        return {
+          type: 'json',
+          headers,
+          rows: parsed.filter(item => item && typeof item === 'object')
+        };
+      }
+    } catch (err: any) {
+      return { type: 'json', headers: [], rows: [], error: `JSON Parse Error: ${err.message}` };
+    }
+  }
+
+  try {
+    const lines = trimmed.split('\n').map(l => l.trim()).filter(l => l !== '');
+    if (lines.length === 0) {
+      return { type: 'csv', headers: [], rows: [] };
+    }
+
+    const firstLineCols = lines[0].split(separator).map(c => c.trim());
+    const headers = firstLineCols.length > 0 ? firstLineCols : ['Column 1'];
+    const dataLines = lines.slice(1);
+
+    const rows = dataLines.map((line) => {
+      const cols = line.split(separator).map(c => c.trim());
+      const rowObj: Record<string, any> = {};
+      headers.forEach((h, colIdx) => {
+        rowObj[h] = cols[colIdx] || '';
+      });
+      return rowObj;
+    });
+
+    return { type: 'csv', headers, rows };
+  } catch (err: any) {
+    return { type: 'csv', headers: [], rows: [], error: `CSV Parse Error: ${err.message}` };
+  }
+}
+
 interface RulesBuilderProps {
   fields: Array<{ id: string; label: string; type: string; options?: Array<{ label: string; value: string }> }>;
   sections: Array<{ id: string; title: string }>;
@@ -794,7 +854,7 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
                     <select
                       value={action.config?.parent_field_id || ''}
                       onChange={(e) => updateAction(idx, {
-                        config: { ...action.config, parent_field_id: e.target.value, filter_map: action.config?.filter_map || {} }
+                        config: { ...action.config, parent_field_id: e.target.value }
                       })}
                       className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
                     >
@@ -804,6 +864,97 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
                       ))}
                     </select>
                   </div>
+                )}
+
+                {isFilter && action.config?.parent_field_id && (
+                  <div className="flex flex-col gap-1 w-48">
+                    <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Filter Mode</label>
+                    <select
+                      value={action.config?.filter_mode || (action.config?.parent_column ? 'column' : 'visual')}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'column') {
+                          updateAction(idx, {
+                            config: {
+                              ...action.config,
+                              filter_mode: 'column',
+                              parent_column: action.config?.parent_column || '1',
+                              filter_map: undefined
+                            }
+                          });
+                        } else {
+                          updateAction(idx, {
+                            config: {
+                              ...action.config,
+                              filter_mode: 'visual',
+                              parent_column: undefined,
+                              filter_map: {}
+                            }
+                          });
+                        }
+                      }}
+                      className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full"
+                    >
+                      <option value="visual">Visual Mappings (Static Map)</option>
+                      <option value="column">Dynamic Column Match (CSV/JSON)</option>
+                    </select>
+                  </div>
+                )}
+
+                {isFilter && action.config?.parent_field_id && (action.config?.filter_mode === 'column' || action.config?.parent_column !== undefined) && (
+                  <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+                    <label className="text-[9px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider">Target Column / Key</label>
+                    {(() => {
+                      const targetField = fields.find(f => f.id === action.target_id) as any;
+                      const customData = targetField?.lookup_custom_data || '';
+                      const sep = targetField?.lookup_separator || ',';
+                      const parsed = parseCustomLookupData(customData, sep);
+
+                      return (
+                        <div className="flex gap-2 w-full">
+                          {parsed.headers.length > 0 ? (
+                            <select
+                              value={action.config?.parent_column || ''}
+                              onChange={(e) => updateAction(idx, {
+                                config: { ...action.config, parent_column: e.target.value }
+                              })}
+                              className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:border-[hsl(var(--primary))] outline-none w-full flex-1"
+                            >
+                              <option value="">Select column...</option>
+                              {parsed.headers.map(h => (
+                                <option key={h} value={h}>{h}</option>
+                              ))}
+                              {parsed.headers.map((_, i) => (
+                                <option key={`idx-${i}`} value={i + 1}>Column {i + 1}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={action.config?.parent_column || ''}
+                              onChange={(e) => updateAction(idx, {
+                                config: { ...action.config, parent_column: e.target.value }
+                              })}
+                              className="bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))] focus:border-[hsl(var(--primary))] rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] outline-none w-full flex-1"
+                              placeholder="e.g. region or 1 (index)"
+                            />
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {isFilter && action.config?.parent_field_id && (action.config?.filter_mode === 'visual' || (!action.config?.filter_mode && !action.config?.parent_column)) && (
+                  <FilterMapEditor
+                    parentFieldId={action.config.parent_field_id}
+                    targetFieldId={action.target_id}
+                    filterMap={action.config.filter_map || {}}
+                    onChange={(nextMap) => updateAction(idx, {
+                      config: { ...action.config, filter_map: nextMap }
+                    })}
+                    fields={fields}
+                  />
                 )}
 
                 {/* Extra configurations: set specific value for SET_VALUE */}
@@ -842,6 +993,137 @@ function ActionsListEditor({ actions = [], onChange, fields, sections }: Actions
       >
         + Add Action Consequence
       </button>
+    </div>
+  );
+}
+
+// ─── Filter Options Map Editor ──────────────────────────────────────────────
+
+interface FilterMapEditorProps {
+  parentFieldId: string;
+  targetFieldId: string;
+  filterMap: Record<string, any[]>;
+  onChange: (map: Record<string, any[]>) => void;
+  fields: Array<{ id: string; label: string; type: string; options?: Array<{ label: string; value: string }> }>;
+}
+
+function FilterMapEditor({
+  parentFieldId,
+  targetFieldId,
+  filterMap = {},
+  onChange,
+  fields,
+}: FilterMapEditorProps) {
+  const parentField = fields.find(f => f.id === parentFieldId);
+  const targetField = fields.find(f => f.id === targetFieldId);
+
+  const parentOptions = parentField?.options || [];
+  const targetOptions = targetField?.options || [];
+
+  const [expandedParentKey, setExpandedParentKey] = useState<string | null>(null);
+
+  // Fallback: If parent or target has no predefined options, render JSON editor
+  if (parentOptions.length === 0 || targetOptions.length === 0) {
+    const jsonString = JSON.stringify(filterMap, null, 2);
+    const handleTextChange = (val: string) => {
+      try {
+        const parsed = JSON.parse(val);
+        if (typeof parsed === 'object' && parsed !== null) {
+          onChange(parsed);
+        }
+      } catch (e) {
+        // ignore invalid JSON format during typing
+      }
+    };
+    return (
+      <div className="mt-3 p-3.5 border border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/20 rounded-xl w-full">
+        <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-bold uppercase tracking-wider mb-2 select-none">
+          Option Mapping (JSON Syntax)
+        </p>
+        <textarea
+          defaultValue={jsonString}
+          onChange={(e) => handleTextChange(e.target.value)}
+          className="w-full font-mono text-[11px] p-3 rounded-lg border border-[hsl(var(--border))]/70 bg-[hsl(var(--surface))] text-[hsl(var(--text-primary))] outline-none h-32 focus:ring-1 focus:ring-[hsl(var(--primary))]"
+          placeholder={`{\n  "greater_accra": [\n    { "label": "Makola Market", "value": "makola" }\n  ]\n}`}
+        />
+      </div>
+    );
+  }
+
+  // Visual subset checkbox editor
+  return (
+    <div className="mt-3 p-3.5 border border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/20 rounded-xl space-y-3 w-full">
+      <div className="flex flex-col select-none">
+        <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] uppercase tracking-wider">
+          Cascade Options Mapping
+        </span>
+        <span className="text-[9px] text-[hsl(var(--text-tertiary))]/80 mt-0.5">
+          Map each {parentField?.label || parentField?.id || parentFieldId} value to visible options in {targetField?.label || targetField?.id || targetFieldId}
+        </span>
+      </div>
+
+      <div className="divide-y divide-[hsl(var(--border))]/30 border border-[hsl(var(--border))]/40 rounded-xl overflow-hidden bg-[hsl(var(--surface))]">
+        {parentOptions.map(pOpt => {
+          const isExpanded = expandedParentKey === pOpt.value;
+          const currentMappings = filterMap[pOpt.value] || [];
+
+          return (
+            <div key={pOpt.value} className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => setExpandedParentKey(isExpanded ? null : pOpt.value)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[hsl(var(--surface-elevated))]/30 text-left text-xs font-semibold text-[hsl(var(--text-primary))] transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-[hsl(var(--text-tertiary))]">
+                    {isExpanded ? '▼' : '▶'}
+                  </span>
+                  <span>{pOpt.label}</span>
+                  <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))]/60">({pOpt.value})</span>
+                </div>
+                <span className="text-[9px] font-bold bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] px-2.5 py-0.5 rounded-lg border border-[hsl(var(--primary))]/20 shrink-0">
+                  {currentMappings.length} mapped
+                </span>
+              </button>
+
+              {isExpanded && (
+                <div className="p-4 bg-[hsl(var(--surface-elevated))]/10 border-t border-[hsl(var(--border))]/30 grid grid-cols-2 gap-x-4 gap-y-3 animate-in fade-in duration-150">
+                  {targetOptions.map(tOpt => {
+                    const isChecked = currentMappings.some((m: any) => m.value === tOpt.value);
+                    const handleToggle = () => {
+                      let nextMappings = [...currentMappings];
+                      if (isChecked) {
+                        nextMappings = nextMappings.filter((m: any) => m.value !== tOpt.value);
+                      } else {
+                        nextMappings.push({ label: tOpt.label, value: tOpt.value });
+                      }
+                      onChange({
+                        ...filterMap,
+                        [pOpt.value]: nextMappings,
+                      });
+                    };
+
+                    return (
+                      <label key={tOpt.value} className="flex items-center gap-2.5 text-xs text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] cursor-pointer select-none py-1">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={handleToggle}
+                          className="h-4 w-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer transition-all"
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium truncate">{tOpt.label}</span>
+                          <span className="text-[9px] font-mono text-[hsl(var(--text-tertiary))]/60 leading-none mt-0.5">({tOpt.value})</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -151,8 +151,8 @@ interface FormField {
     lookup_preset_id?: string;
     lookup_custom_data?: string;
     lookup_separator?: string;
-    lookup_label_column?: number;
-    lookup_value_column?: number;
+    lookup_label_column?: number | string;
+    lookup_value_column?: number | string;
     min_label?: string;
     max_label?: string;
 
@@ -962,29 +962,161 @@ const TableRowsInput: React.FC<{
     );
 };
 
+interface ParsedCustomData {
+    type: 'csv' | 'json' | 'empty';
+    headers: string[];
+    rows: Array<Record<string, any>>;
+    error?: string;
+}
+
+export function parseCustomLookupData(dataString: string, separator = ','): ParsedCustomData {
+    const trimmed = (dataString || '').trim();
+    if (!trimmed) {
+        return { type: 'empty', headers: [], rows: [] };
+    }
+
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) {
+                const keysSet = new Set<string>();
+                parsed.forEach(item => {
+                    if (item && typeof item === 'object') {
+                        Object.keys(item).forEach(k => keysSet.add(k));
+                    }
+                });
+                const headers = Array.from(keysSet);
+                return {
+                    type: 'json',
+                    headers,
+                    rows: parsed.filter(item => item && typeof item === 'object')
+                };
+            }
+        } catch (err: any) {
+            return { type: 'json', headers: [], rows: [], error: `JSON Parse Error: ${err.message}` };
+        }
+    }
+
+    // Default to CSV
+    try {
+        const lines = trimmed.split('\n').map(l => l.trim()).filter(l => l !== '');
+        if (lines.length === 0) {
+            return { type: 'csv', headers: [], rows: [] };
+        }
+
+        const firstLineCols = lines[0].split(separator).map(c => c.trim());
+        const headers = firstLineCols.length > 0 ? firstLineCols : ['Column 1'];
+        const dataLines = lines.slice(1);
+
+        const rows = dataLines.map((line) => {
+            const cols = line.split(separator).map(c => c.trim());
+            const rowObj: Record<string, any> = {};
+            headers.forEach((h, colIdx) => {
+                rowObj[h] = cols[colIdx] || '';
+            });
+            return rowObj;
+        });
+
+        return { type: 'csv', headers, rows };
+    } catch (err: any) {
+        return { type: 'csv', headers: [], rows: [], error: `CSV Parse Error: ${err.message}` };
+    }
+}
+
 const LookupCustomDataInput: React.FC<{
     selectedField: any;
     updateField: (id: string, patch: any) => void;
 }> = ({ selectedField, updateField }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const linesCount = selectedField.lookup_custom_data ? selectedField.lookup_custom_data.split('\n').filter(Boolean).length : 0;
+    const dataString = selectedField.lookup_custom_data || '';
+    const separator = selectedField.lookup_separator || ',';
+    const parsed = useMemo(() => parseCustomLookupData(dataString, separator), [dataString, separator]);
+
+    const displayRowsCount = parsed.type === 'csv' ? Math.max(0, parsed.rows.length) : parsed.rows.length;
+
     return (
-        <div className="w-full space-y-1.5 py-1">
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center justify-between w-full"
-            >
-                <span>{linesCount} Rows in CSV</span>
-                <span className="text-[10px] text-[hsl(var(--text-tertiary))]">{isOpen ? 'Hide' : 'Edit CSV data...'}</span>
-            </button>
+        <div className="w-full space-y-3 py-1">
+            <div className="flex items-center justify-between">
+                <button
+                    type="button"
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline flex items-center gap-1.5"
+                >
+                    <span>
+                        {parsed.type === 'empty' ? 'No Data Configured' : `${displayRowsCount} Rows (${parsed.type.toUpperCase()})`}
+                    </span>
+                    <span className="text-[10px] text-[hsl(var(--text-tertiary))]">
+                        {isOpen ? 'Hide Editor' : 'Edit CSV/JSON...'}
+                    </span>
+                </button>
+
+                {parsed.type !== 'empty' && (
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        parsed.error
+                            ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                            : 'bg-green-500/15 text-green-400 border border-green-500/30'
+                    }`}>
+                        {parsed.error ? 'Format Error' : 'Valid'}
+                    </span>
+                )}
+            </div>
+
+            {parsed.error && (
+                <div className="p-2 rounded bg-red-500/10 border border-red-500/20 text-[10px] text-red-400 font-mono whitespace-pre-wrap">
+                    {parsed.error}
+                </div>
+            )}
+
             {isOpen && (
-                <textarea
-                    value={selectedField.lookup_custom_data || ''}
-                    onChange={(e) => updateField(selectedField.id, { lookup_custom_data: e.target.value })}
-                    className="w-full min-h-[100px] bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded p-1.5 font-mono text-[10px] outline-none text-[hsl(var(--text-primary))]"
-                    placeholder="code,name\n01,Accra\n02,Kumasi"
-                />
+                <div className="space-y-2">
+                    <textarea
+                        value={dataString}
+                        onChange={(e) => updateField(selectedField.id, { lookup_custom_data: e.target.value })}
+                        className="w-full min-h-[120px] bg-[hsl(var(--surface-elevated))]/60 border border-[hsl(var(--border))]/60 focus:border-[hsl(var(--primary))]/60 rounded-lg p-2 font-mono text-[10px] outline-none text-[hsl(var(--text-primary))] transition-all focus:ring-1 focus:ring-[hsl(var(--primary))]/20 shadow-inner"
+                        placeholder={`CSV:\nregion,market_id,market_name\ngreater_accra,makola,Makola\n\nOr JSON:\n[\n  {"region": "greater_accra", "market_id": "makola", "market_name": "Makola"}\n]`}
+                    />
+                </div>
+            )}
+
+            {!parsed.error && parsed.headers.length > 0 && (
+                <div className="border border-[hsl(var(--border))]/40 rounded-lg overflow-hidden bg-[hsl(var(--surface-elevated))]/20 shadow-sm">
+                    <div className="px-2.5 py-1.5 border-b border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/30 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] uppercase tracking-wider">Preview Table</span>
+                        <span className="text-[9px] text-[hsl(var(--text-tertiary))]">Showing first 5 rows</span>
+                    </div>
+                    <div className="overflow-x-auto max-h-[180px] overflow-y-auto">
+                        <table className="w-full text-[10px] text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/40">
+                                    {parsed.headers.map((header) => (
+                                        <th key={header} className="px-2 py-1.5 font-bold text-[hsl(var(--text-secondary))] border-r border-[hsl(var(--border))]/20 last:border-0">
+                                            {header}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {parsed.rows.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={parsed.headers.length} className="px-2 py-3 text-center text-[hsl(var(--text-tertiary))] font-medium italic">
+                                            {parsed.type === 'csv' ? 'No data rows (only header row present)' : 'Empty array'}
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    parsed.rows.slice(0, 5).map((row, rIdx) => (
+                                        <tr key={rIdx} className="border-b border-[hsl(var(--border))]/20 last:border-0 hover:bg-[hsl(var(--surface-elevated))]/30 transition-colors">
+                                            {parsed.headers.map((header) => (
+                                                <td key={header} className="px-2 py-1.5 text-[hsl(var(--text-primary))] font-mono truncate max-w-[120px] border-r border-[hsl(var(--border))]/20 last:border-0">
+                                                    {String(row[header] ?? '')}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -1013,7 +1145,7 @@ const FormBuilder: React.FC = () => {
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
     const [rulesModalContext, setRulesModalContext] = useState<{ triggerId: string; triggerType: 'field' | 'section'; timing: 'pre' | 'post'; label: string } | null>(null);
-        const [, setIsSaving] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [activeLeftTab, setActiveLeftTab] = useState<'sections' | 'widgets'>('sections');
     const [hoveredProperty, setHoveredProperty] = useState<{ name: string; description: string } | null>(null);
     const [collapsedPropCategories, setCollapsedPropCategories] = useState<Record<string, boolean>>({});
@@ -1037,6 +1169,7 @@ const FormBuilder: React.FC = () => {
 
     const allFieldsFlattened = useMemo(() => {
         return sections.flatMap(s => s.fields.map(f => ({
+            ...f,
             id: f.id,
             label: f.label || f.id,
             type: f.type,
@@ -1235,6 +1368,7 @@ const FormBuilder: React.FC = () => {
     const [catalogItems, setCatalogItems] = useState<ProjectCatalogItem[]>([]);
 
     const multiActionMenuRef = React.useRef<HTMLDivElement | null>(null);
+    const consoleWindowRef = React.useRef<HTMLDivElement | null>(null);
 
     const computeHash = (t: string, s: any[], r: any[]) => JSON.stringify({ t, s, r });
 
@@ -1246,7 +1380,7 @@ const FormBuilder: React.FC = () => {
     }, [title, sections, formRules, initialHash]);
 
     useEffect(() => {
-        const handleOutsideClick = (event: MouseEvent) => {
+        const handleOutsideClick = (event: PointerEvent) => {
             if (multiActionMenuRef.current && !multiActionMenuRef.current.contains(event.target as Node)) {
                 setShowMultiActionMenu(false);
                 setShowBackupTools(false);
@@ -1267,11 +1401,14 @@ const FormBuilder: React.FC = () => {
                     closeVariableSwipe();
                 }
             }
+            if (isConsoleOpen && consoleWindowRef.current && !consoleWindowRef.current.contains(event.target as Node)) {
+                setIsConsoleOpen(false);
+            }
         };
 
-        document.addEventListener('mousedown', handleOutsideClick);
-        return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }, [swipedFieldId]);
+        document.addEventListener('pointerdown', handleOutsideClick);
+        return () => document.removeEventListener('pointerdown', handleOutsideClick);
+    }, [swipedFieldId, isLeftPanelPinned, isConsoleOpen]);
 
     // ─── Left panel resize drag handlers ───
     const defaultWidthForTab = 560;
@@ -4584,9 +4721,9 @@ const FormBuilder: React.FC = () => {
                                                                                 )
                                                                         },
 
-                                                                        // --- API Integration ---
+                                                                        // --- Data Source ---
                                                                         {
-                                                                            category: 'API Integration',
+                                                                            category: 'Data Source',
                                                                             key: 'lookup_source_type',
                                                                             label: 'Lookup Source',
                                                                             metaKey: 'lookup_source',
@@ -4603,7 +4740,7 @@ const FormBuilder: React.FC = () => {
                                                                             )
                                                                         },
                                                                         {
-                                                                            category: 'API Integration',
+                                                                            category: 'Data Source',
                                                                             key: 'lookup_preset_id',
                                                                             label: 'Dataset Preset',
                                                                             metaKey: 'lookup_source',
@@ -4623,7 +4760,7 @@ const FormBuilder: React.FC = () => {
                                                                             )
                                                                         },
                                                                         {
-                                                                            category: 'API Integration',
+                                                                            category: 'Data Source',
                                                                             key: 'lookup_custom_data',
                                                                             label: 'CSV Custom Data',
                                                                             metaKey: 'lookup_source',
@@ -4636,7 +4773,7 @@ const FormBuilder: React.FC = () => {
                                                                                 )
                                                                         },
                                                                         {
-                                                                            category: 'API Integration',
+                                                                            category: 'Data Source',
                                                                             key: 'lookup_separator',
                                                                             label: 'CSV Separator',
                                                                             metaKey: 'lookup_source',
@@ -4651,36 +4788,54 @@ const FormBuilder: React.FC = () => {
                                                                             )
                                                                         },
                                                                         {
-                                                                            category: 'API Integration',
+                                                                            category: 'Data Source',
                                                                             key: 'lookup_label_column',
                                                                             label: 'CSV Label Col',
                                                                             metaKey: 'lookup_source',
                                                                             visible: selectedField.type === 'lookup_list' && selectedField.lookup_source_type === 'custom',
-                                                                            render: () => (
-                                                                                <input
-                                                                                    type="number"
-                                                                                    value={selectedField.lookup_label_column ?? 0}
-                                                                                    onChange={(e) => updateField(selectedField.id, { lookup_label_column: parseInt(e.target.value) || 0 })}
-                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
-                                                                                    placeholder="0"
-                                                                                />
-                                                                            )
+                                                                            render: () => {
+                                                                                const parsed = parseCustomLookupData(selectedField.lookup_custom_data || '', selectedField.lookup_separator || ',');
+                                                                                return (
+                                                                                    <select
+                                                                                        value={selectedField.lookup_label_column ?? ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { lookup_label_column: e.target.value })}
+                                                                                        className="w-full h-full bg-transparent px-1 py-0.5 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        <option value="">Select label...</option>
+                                                                                        {parsed.headers.map((h) => (
+                                                                                            <option key={h} value={h}>{h}</option>
+                                                                                        ))}
+                                                                                        {parsed.headers.map((_, idx) => (
+                                                                                            <option key={`idx-${idx}`} value={idx + 1}>Column {idx + 1}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                );
+                                                                            }
                                                                         },
                                                                         {
-                                                                            category: 'API Integration',
+                                                                            category: 'Data Source',
                                                                             key: 'lookup_value_column',
                                                                             label: 'CSV Value Col',
                                                                             metaKey: 'lookup_source',
                                                                             visible: selectedField.type === 'lookup_list' && selectedField.lookup_source_type === 'custom',
-                                                                            render: () => (
-                                                                                <input
-                                                                                    type="number"
-                                                                                    value={selectedField.lookup_value_column ?? 0}
-                                                                                    onChange={(e) => updateField(selectedField.id, { lookup_value_column: parseInt(e.target.value) || 0 })}
-                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
-                                                                                    placeholder="0"
-                                                                                />
-                                                                            )
+                                                                            render: () => {
+                                                                                const parsed = parseCustomLookupData(selectedField.lookup_custom_data || '', selectedField.lookup_separator || ',');
+                                                                                return (
+                                                                                    <select
+                                                                                        value={selectedField.lookup_value_column ?? ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { lookup_value_column: e.target.value })}
+                                                                                        className="w-full h-full bg-transparent px-1 py-0.5 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        <option value="">Select value...</option>
+                                                                                        {parsed.headers.map((h) => (
+                                                                                            <option key={h} value={h}>{h}</option>
+                                                                                        ))}
+                                                                                        {parsed.headers.map((_, idx) => (
+                                                                                            <option key={`idx-${idx}`} value={idx + 1}>Column {idx + 1}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                );
+                                                                            }
                                                                         },
 
                                                                         // --- System Settings ---
@@ -4794,7 +4949,7 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                     ];
 
-                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'API Integration', 'Form Link', 'Navigation', 'System Settings'];
+                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'Data Source', 'Form Link', 'Navigation', 'System Settings'];
 
                                                                      return (
                                                                          <div className="overflow-y-auto hide-scrollbar border-b border-[hsl(var(--border))]/25 bg-[hsl(var(--background))]">
@@ -4958,8 +5113,8 @@ const FormBuilder: React.FC = () => {
 
                         {/* ─── FLOATING CONSOLE WINDOW ─── */}
                         {isConsoleOpen && (
-                            <div className="absolute bottom-4 right-20 z-50 w-96 max-h-[70vh] border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-300">
-                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-4 py-3">
+                            <div ref={consoleWindowRef} className="absolute top-3 bottom-4 right-20 z-50 w-96 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-300">
+                                <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 px-4 py-3 shrink-0">
                                     <div className="flex items-center justify-between gap-3">
                                         <div>
                                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(var(--text-tertiary))]">Builder Panel</p>
@@ -4980,7 +5135,7 @@ const FormBuilder: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm">
+                                <div className="p-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]/90 backdrop-blur-sm shrink-0">
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center gap-2">
                                             <div className={`h-2.5 w-2.5 rounded-full ${hasUnsavedChanges ? 'bg-[hsl(var(--warning))] animate-pulse' : 'bg-[hsl(var(--success))]'}`} />
@@ -4998,37 +5153,120 @@ const FormBuilder: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Simulate Buttons */}
-                                <div className="p-4 space-y-2 border-b border-[hsl(var(--border))]">
-                                    <button
-                                        onClick={() => navigate(`/simulator/${formId}`)}
-                                        className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors rounded-lg flex items-center space-x-2 border border-[hsl(var(--border))]/40"
-                                    >
-                                        <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                        <span>Run From Beginning</span>
-                                    </button>
-                                    {view === 'section' && (
+                                <div className="flex-1 overflow-y-auto hide-scrollbar divide-y divide-[hsl(var(--border))]/40">
+                                    {/* Form Actions (Save & Publish) */}
+                                    <div className="p-4 space-y-3 bg-[hsl(var(--surface-elevated))]/10">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))] mb-1 select-none">Form Actions</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={handleSave}
+                                                disabled={isSaving}
+                                                className={`py-2 px-3 rounded-lg border font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+                                                    hasUnsavedChanges
+                                                        ? 'bg-[hsl(var(--primary))] text-white border-transparent hover:bg-[hsl(var(--primary))]/90 hover:scale-[1.01] active:scale-[0.99]'
+                                                        : 'bg-[hsl(var(--surface-elevated))]/50 text-[hsl(var(--text-tertiary))] border-[hsl(var(--border))]/60 hover:text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]/80'
+                                                } disabled:opacity-50 disabled:pointer-events-none`}
+                                                title="Save working draft to cloud"
+                                            >
+                                                {isSaving ? (
+                                                    <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    <Save className="w-3.5 h-3.5" />
+                                                )}
+                                                <span>{hasUnsavedChanges ? 'Save Changes' : 'Saved'}</span>
+                                            </button>
+
+                                            <button
+                                                onClick={_handlePublish}
+                                                disabled={isPublishing || isSaving}
+                                                className="py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white border border-transparent font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none"
+                                                title="Publish current draft live"
+                                            >
+                                                {isPublishing ? (
+                                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    <Globe className="w-3.5 h-3.5" />
+                                                )}
+                                                <span>Publish Live</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Simulate Buttons */}
+                                    <div className="p-4 space-y-2">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))] mb-1 select-none">Simulation</p>
                                         <button
-                                            onClick={() => navigate(`/simulator/${formId}?section=${currentSectionId}`)}
+                                            onClick={() => navigate(`/simulator/${formId}`)}
                                             className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors rounded-lg flex items-center space-x-2 border border-[hsl(var(--border))]/40"
                                         >
-                                            <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                            <span>Run Current Section</span>
+                                            <Play className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                            <span>Run From Beginning</span>
                                         </button>
-                                    )}
-                                </div>
+                                        {view === 'section' && (
+                                            <button
+                                                onClick={() => navigate(`/simulator/${formId}?section=${currentSectionId}`)}
+                                                className="w-full text-left px-4 py-3 text-sm font-medium text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors rounded-lg flex items-center space-x-2 border border-[hsl(var(--border))]/40"
+                                            >
+                                                <Layers className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                                <span>Run Current Section</span>
+                                            </button>
+                                        )}
+                                    </div>
 
-                                {/* Summary Stats */}
-                                <div className="flex-1 overflow-y-auto p-4 text-xs text-[hsl(var(--text-tertiary))] space-y-2">
-                                    <p className="font-semibold uppercase tracking-[0.18em]">Summary</p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/50 px-3 py-2">
-                                            <p className="text-[10px] uppercase tracking-wider">Sections</p>
-                                            <p className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">{sections.length}</p>
+                                    {/* Backup Slots */}
+                                    <div className="p-4 space-y-2.5">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))] mb-1 select-none">Backup & Restore</p>
+                                        <div className="space-y-2">
+                                            {([2, 3] as const).map(slot => {
+                                                const slotName = slot === 2 ? 'Slot A' : 'Slot B';
+                                                const version = getSlotVersion(slot);
+                                                const hasBackup = !!version;
+                                                return (
+                                                    <div key={slot} className="flex items-center justify-between p-2 rounded-lg border border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/20">
+                                                        <div className="min-w-0">
+                                                            <span className="font-semibold text-[hsl(var(--text-primary))] text-xs">{slotName}</span>
+                                                            <span className="block text-[9px] text-[hsl(var(--text-tertiary))] truncate mt-0.5">
+                                                                {hasBackup 
+                                                                    ? `Saved v${version.version_number} • ${new Date(version.created_at || '').toLocaleTimeString()}` 
+                                                                    : 'Empty slot'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            <button
+                                                                onClick={() => _handleSaveToBackup(slot)}
+                                                                disabled={isSaving}
+                                                                className="px-2 py-1 text-[10px] font-semibold rounded bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] border border-[hsl(var(--border))]/60 transition-colors disabled:opacity-50"
+                                                                title={`Save current state to ${slotName}`}
+                                                            >
+                                                                Backup
+                                                            </button>
+                                                            <button
+                                                                onClick={() => _handleRestoreBackupToDraft(slot)}
+                                                                disabled={!hasBackup || isSaving}
+                                                                className="px-2 py-1 text-[10px] font-semibold rounded bg-[hsl(var(--primary))]/10 hover:bg-[hsl(var(--primary))]/20 text-[hsl(var(--primary))] border border-transparent transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                                                                title={`Restore ${slotName} to draft`}
+                                                            >
+                                                                Restore
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/50 px-3 py-2">
-                                            <p className="text-[10px] uppercase tracking-wider">Fields</p>
-                                            <p className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">{sections.reduce((acc, s) => acc + s.fields.length, 0)}</p>
+                                    </div>
+
+                                    {/* Summary Stats */}
+                                    <div className="p-4 space-y-2">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))] mb-1 select-none">Summary</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/50 px-3 py-2">
+                                                <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Sections</p>
+                                                <p className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">{sections.length}</p>
+                                            </div>
+                                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/50 px-3 py-2">
+                                                <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Fields</p>
+                                                <p className="mt-1 text-sm font-semibold text-[hsl(var(--text-primary))]">{sections.reduce((acc, s) => acc + s.fields.length, 0)}</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

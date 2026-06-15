@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView, TextInput,
 import { FormField } from '@opla/types';
 import { loadLookupOptions, LookupContext, LookupOption, resolveStaticLookupOptions } from '../../utils/lookupCache';
 import { fmtDateTime } from '../../utils/dateFormat';
+import { RulesEvaluationResult, getFilteredOptionsByRules } from '../../utils/rulesEngine';
 
 interface Props {
     field: FormField;
@@ -11,9 +12,10 @@ interface Props {
     error?: string;
     lookupContext: LookupContext;
     responses?: Record<string, any>;
+    rulesResult?: RulesEvaluationResult;
 }
 
-export function LookupListField({ field, value, onChange, error, lookupContext, responses = {} }: Props) {
+export function LookupListField({ field, value, onChange, error, lookupContext, responses = {}, rulesResult }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [options, setOptions] = useState<LookupOption[]>([]);
@@ -84,8 +86,22 @@ export function LookupListField({ field, value, onChange, error, lookupContext, 
         }
     }, [field.lookup_preset_id, field.lookup_source_type]);
 
+    // Resolve rules-filtered options if any FILTER_OPTIONS rule is active
+    const rulesFilteredOptions = useMemo(() => {
+        if (rulesResult) {
+            const rulesFiltered = getFilteredOptionsByRules(field.id, rulesResult, responses, options);
+            if (rulesFiltered !== null) {
+                return rulesFiltered;
+            }
+        }
+        return null;
+    }, [options, field.id, rulesResult, responses]);
+
     // Resolve cascading options
     const cascadeFilteredOptions = useMemo(() => {
+        if (rulesFilteredOptions !== null) {
+            return rulesFilteredOptions;
+        }
         if (field.cascade_parent_field_id && field.cascade_options_map && responses) {
             const parentValue = responses[field.cascade_parent_field_id];
             if (parentValue && field.cascade_options_map[parentValue]) {
@@ -94,7 +110,7 @@ export function LookupListField({ field, value, onChange, error, lookupContext, 
             return []; // Parent not selected yet — show nothing
         }
         return options;
-    }, [options, field.cascade_parent_field_id, field.cascade_options_map, responses]);
+    }, [options, rulesFilteredOptions, field.cascade_parent_field_id, field.cascade_options_map, responses]);
 
     // Clear value if parent changes and current value is no longer valid
     useEffect(() => {

@@ -265,7 +265,7 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         );
     }
 
-    const filteredOptions = rulesResult ? getFilteredOptionsByRules(field.id, rulesResult, responses) : null;
+    const filteredOptions = rulesResult ? getFilteredOptionsByRules(field.id, rulesResult, responses, field.options) : null;
     const effectiveField = filteredOptions
         ? { ...field, options: filteredOptions }
         : field;
@@ -291,7 +291,7 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         case 'matrix_table':
             return <MatrixTableField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'lookup_list':
-            return <LookupListField field={effectiveField} value={value} onChange={onChange} error={error} lookupContext={lookupContext} responses={responses} />;
+            return <LookupListField field={effectiveField} value={value} onChange={onChange} error={error} lookupContext={lookupContext} responses={responses} rulesResult={rulesResult} />;
         case 'rating_scale':
             return <RatingScaleField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'toggle':

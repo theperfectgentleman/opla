@@ -12,6 +12,8 @@ export type LookupContext = {
 export type LookupOption = {
   label: string;
   value: string;
+  row_cols?: string[];
+  row_data?: Record<string, any>;
 };
 
 const cacheKey = (context: LookupContext, field: FormField) => [
@@ -34,18 +36,134 @@ export function resolveStaticLookupOptions(field: FormField): LookupOption[] {
   if (field.lookup_source_type === 'custom') {
     const dataString = field.lookup_custom_data || '';
     const separator = field.lookup_separator || ',';
-    const labelCol = field.lookup_label_column || 1;
-    const valueCol = field.lookup_value_column || 1;
 
-    return dataString
-      .split('\n')
-      .filter(row => row.trim() !== '')
-      .map((row, index) => {
-        const cols = row.split(separator);
-        const rowLabel = cols[labelCol - 1] || `Row ${index}`;
-        const rowValue = cols[valueCol - 1] || rowLabel;
-        return { label: rowLabel.trim(), value: rowValue.trim() };
+    const trimmed = dataString.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          const labelKey = String(field.lookup_label_column || '');
+          const valueKey = String(field.lookup_value_column || '');
+
+          return parsed.map((item, index) => {
+            let label = '';
+            let value = '';
+            let row_data: Record<string, any> = {};
+
+            if (item && typeof item === 'object') {
+              row_data = item;
+              if (labelKey && item[labelKey] !== undefined) {
+                label = String(item[labelKey]);
+              } else {
+                const keys = Object.keys(item);
+                const labelIdx = parseInt(labelKey, 10);
+                if (!isNaN(labelIdx) && keys[labelIdx - 1] !== undefined) {
+                  label = String(item[keys[labelIdx - 1]]);
+                } else {
+                  label = String(item[keys[0]] || `Row ${index}`);
+                }
+              }
+
+              if (valueKey && item[valueKey] !== undefined) {
+                value = String(item[valueKey]);
+              } else {
+                const keys = Object.keys(item);
+                const valueIdx = parseInt(valueKey, 10);
+                if (!isNaN(valueIdx) && keys[valueIdx - 1] !== undefined) {
+                  value = String(item[keys[valueIdx - 1]]);
+                } else {
+                  value = label;
+                }
+              }
+            } else {
+              label = String(item);
+              value = String(item);
+              row_data = { value: item };
+            }
+
+            return {
+              label: label.trim(),
+              value: value.trim(),
+              row_data,
+            };
+          });
+        }
+      } catch {
+        // Fallback to CSV
+      }
+    }
+
+    const lines = dataString.split('\n').map(l => l.trim()).filter(l => l !== '');
+    if (lines.length === 0) return [];
+
+    const firstLineCols = lines[0].split(separator).map(c => c.trim());
+    const labelColVal = String(field.lookup_label_column || '1');
+    const valueColVal = String(field.lookup_value_column || '1');
+
+    const isLabelColNumeric = /^\d+$/.test(labelColVal);
+    const isValueColNumeric = /^\d+$/.test(valueColVal);
+
+    let hasHeader = false;
+    const normalizedFirstLine = firstLineCols.map(c => c.toLowerCase());
+    if (
+      (!isLabelColNumeric && labelColVal !== '') ||
+      (!isValueColNumeric && valueColVal !== '') ||
+      normalizedFirstLine.includes(labelColVal.toLowerCase()) ||
+      normalizedFirstLine.includes(valueColVal.toLowerCase())
+    ) {
+      hasHeader = true;
+    }
+
+    const headers = hasHeader
+      ? firstLineCols
+      : firstLineCols.map((_, idx) => `Column ${idx + 1}`);
+
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+
+    return dataLines.map((row, index) => {
+      const cols = row.split(separator).map(c => c.trim());
+
+      let label = '';
+      let value = '';
+      const row_data: Record<string, any> = {};
+
+      headers.forEach((header, idx) => {
+        row_data[header] = cols[idx] || '';
       });
+
+      if (hasHeader) {
+        const labelIdx = headers.findIndex(h => h.toLowerCase() === labelColVal.toLowerCase());
+        if (labelIdx >= 0) {
+          label = cols[labelIdx] || '';
+        } else {
+          const idx = parseInt(labelColVal, 10);
+          label = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : (cols[0] || `Row ${index}`);
+        }
+      } else {
+        const idx = parseInt(labelColVal, 10);
+        label = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : (cols[0] || `Row ${index}`);
+      }
+
+      if (hasHeader) {
+        const valueIdx = headers.findIndex(h => h.toLowerCase() === valueColVal.toLowerCase());
+        if (valueIdx >= 0) {
+          value = cols[valueIdx] || '';
+        } else {
+          const idx = parseInt(valueColVal, 10);
+          value = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : label;
+        }
+      } else {
+        const idx = parseInt(valueColVal, 10);
+        value = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : label;
+      }
+
+      return {
+        label: label.trim(),
+        value: value.trim(),
+        row_cols: cols,
+        row_data,
+      };
+    });
   }
 
   return [];

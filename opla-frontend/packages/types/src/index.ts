@@ -175,8 +175,8 @@ export interface FormField {
   lookup_allow_stale_cache?: boolean;
   lookup_custom_data?: string;
   lookup_separator?: string;
-  lookup_label_column?: number;
-  lookup_value_column?: number;
+  lookup_label_column?: number | string;
+  lookup_value_column?: number | string;
   // rating scale
   min_label?: string;
   max_label?: string;

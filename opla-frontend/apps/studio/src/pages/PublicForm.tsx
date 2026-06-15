@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { submissionAPI } from '../lib/api';
 import {
     Send, CheckCircle2, AlertCircle, MapPin,
-    Camera as CameraIcon, Layout, ShieldCheck
+    Camera as CameraIcon, Layout, ShieldCheck, Scan
 } from 'lucide-react';
 
 interface PublicFormBlueprint {
@@ -55,14 +55,24 @@ const PublicForm: React.FC = () => {
         handleInputChange(key, next);
     };
 
-    const captureGPS = () => {
+    const captureGPS = (bindKey: string) => {
         if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition((position) => {
-                handleInputChange('location', {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                });
-            });
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    handleInputChange(bindKey, {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    });
+                },
+                (error) => {
+                    console.error("GPS capture failed:", error);
+                    alert("Unable to capture GPS: " + error.message);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            alert("Geolocation is not supported by your browser.");
         }
     };
 
@@ -147,18 +157,39 @@ const PublicForm: React.FC = () => {
                                 </label>
 
                                 {field.type === 'gps_capture' ? (
-                                    <button
-                                        type="button"
-                                        onClick={captureGPS}
-                                        className={`w-full flex items-center justify-between px-6 py-5 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-600 hover:bg-slate-100'}`}
-                                    >
-                                        <div className="flex items-center space-x-4">
-                                            <MapPin className={`w-6 h-6 ${formData[field.bind] ? 'text-emerald-500' : 'text-slate-400'}`} />
-                                            <span className="font-bold text-lg">
-                                                {formData[field.bind] ? `Location Captured` : `Share Current Location`}
-                                            </span>
-                                        </div>
-                                    </button>
+                                    <div className="space-y-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => captureGPS(field.bind)}
+                                            className={`w-full flex items-center justify-between px-6 py-5 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-600 hover:bg-slate-100'}`}
+                                        >
+                                            <div className="flex items-center space-x-4">
+                                                <MapPin className={`w-6 h-6 ${formData[field.bind] ? 'text-emerald-500' : 'text-slate-400'}`} />
+                                                <span className="font-bold text-lg">
+                                                    {formData[field.bind] ? `Location Captured` : `Share Current Location`}
+                                                </span>
+                                            </div>
+                                            {formData[field.bind] && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+                                        </button>
+                                        {formData[field.bind] && (
+                                            <div className="p-4 bg-slate-50 rounded-md border border-slate-100 space-y-1.5 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-500 font-medium">Latitude</span>
+                                                    <span className="font-mono text-slate-800 font-semibold">{formData[field.bind].lat?.toFixed(6)}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-slate-500 font-medium">Longitude</span>
+                                                    <span className="font-mono text-slate-800 font-semibold">{formData[field.bind].lng?.toFixed(6)}</span>
+                                                </div>
+                                                {formData[field.bind].accuracy !== undefined && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-slate-500 font-medium">Accuracy</span>
+                                                        <span className="text-slate-800 font-semibold">±{formData[field.bind].accuracy?.toFixed(1)}m</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 ) : field.type === 'photo_capture' ? (
                                     <div className="relative group">
                                         <input
@@ -274,6 +305,54 @@ const PublicForm: React.FC = () => {
                                         placeholder={field.placeholder || 'Type your answer here...'}
                                         required
                                     />
+                                ) : field.type === 'time_range' ? (
+                                    <div className="flex gap-4">
+                                        <div className="flex-1 space-y-2">
+                                            <span className="text-sm font-bold text-slate-400 uppercase tracking-wide">Opens</span>
+                                            <input
+                                                type="time"
+                                                value={formData[field.bind]?.open || ''}
+                                                onChange={(e) => {
+                                                    const current = formData[field.bind] || {};
+                                                    handleInputChange(field.bind, { ...current, open: e.target.value });
+                                                }}
+                                                className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all outline-none"
+                                            />
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                            <span className="text-sm font-bold text-slate-400 uppercase tracking-wide">Closes</span>
+                                            <input
+                                                type="time"
+                                                value={formData[field.bind]?.close || ''}
+                                                onChange={(e) => {
+                                                    const current = formData[field.bind] || {};
+                                                    handleInputChange(field.bind, { ...current, close: e.target.value });
+                                                }}
+                                                className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : field.type === 'barcode_scanner' ? (
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={formData[field.bind] || ''}
+                                            placeholder={field.placeholder || "Click Scan button to simulate"}
+                                            className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-md px-6 py-5 text-slate-900 text-lg transition-all outline-none cursor-not-allowed"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const mockCodes = ['610294719401', '7501031311309', 'OPLA-QR-9831', '9780201896831'];
+                                                const randomCode = mockCodes[Math.floor(Math.random() * mockCodes.length)];
+                                                handleInputChange(field.bind, randomCode);
+                                            }}
+                                            className="px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md flex items-center justify-center transition-all active:scale-95 shadow-md shadow-emerald-200"
+                                        >
+                                            <Scan className="w-6 h-6" />
+                                        </button>
+                                    </div>
                                 ) : (
                                     <input
                                         type={field.type === 'input_number' ? 'number' : field.type === 'email_input' ? 'email' : field.type === 'phone_input' ? 'tel' : field.type === 'date_picker' ? 'date' : field.type === 'time_picker' ? 'time' : 'text'}

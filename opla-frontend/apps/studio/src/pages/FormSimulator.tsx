@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { formAPI, submissionAPI } from '../lib/api';
 import {
     Smartphone, ChevronLeft, Send, RotateCcw,
-    MapPin, Camera as CameraIcon, CheckCircle2, AlertCircle
+    MapPin, Camera as CameraIcon, CheckCircle2, AlertCircle, Scan
 } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
+import {
+    evaluateAllRules,
+    isFieldVisibleByRules,
+    getFilteredOptionsByRules
+} from '../../../mobile/src/utils/rulesEngine';
 
 interface UIField {
     type: string;
@@ -24,8 +29,8 @@ interface UIField {
     lookup_preset_id?: string;
     lookup_custom_data?: string;
     lookup_separator?: string;
-    lookup_label_column?: number;
-    lookup_value_column?: number;
+    lookup_label_column?: number | string;
+    lookup_value_column?: number | string;
     min_label?: string;
     max_label?: string;
 }
@@ -57,6 +62,7 @@ interface FormBlueprint {
         render_mode?: string;
     }>;
     logic?: LogicRule[];
+    rules?: any[];
 }
 
 const getOptionValue = (opt: any) => typeof opt === 'object' && opt !== null ? opt.value : opt;
@@ -97,32 +103,161 @@ const applyMask = (value: string, mask: string) => {
     return formattedValue;
 };
 
-const LookupFieldRenderer = ({ field, value, onChange }: any) => {
+const LookupFieldRenderer = ({ field, value, onChange, rulesResult, responses }: any) => {
     const [search, setSearch] = useState('');
     const [isOpen, setIsOpen] = useState(false);
 
     const parsedData = React.useMemo(() => {
+        let options: any[] = [];
         if (field.lookup_source_type === 'preset') {
-            if (field.lookup_preset_id === 'global_countries') return [{ label: 'Ghana', value: 'gh' }, { label: 'Nigeria', value: 'ng' }, { label: 'USA', value: 'us' }, { label: 'United Kingdom', value: 'uk' }];
-            if (field.lookup_preset_id === 'african_countries') return [{ label: 'Ghana', value: 'gh' }, { label: 'Nigeria', value: 'ng' }, { label: 'Kenya', value: 'ke' }];
-            if (field.lookup_preset_id === 'us_states') return [{ label: 'California', value: 'ca' }, { label: 'New York', value: 'ny' }, { label: 'Texas', value: 'tx' }];
-            return [];
+            if (field.lookup_preset_id === 'global_countries') options = [{ label: 'Ghana', value: 'gh' }, { label: 'Nigeria', value: 'ng' }, { label: 'USA', value: 'us' }, { label: 'United Kingdom', value: 'uk' }];
+            else if (field.lookup_preset_id === 'african_countries') options = [{ label: 'Ghana', value: 'gh' }, { label: 'Nigeria', value: 'ng' }, { label: 'Kenya', value: 'ke' }];
+            else if (field.lookup_preset_id === 'us_states') options = [{ label: 'California', value: 'ca' }, { label: 'New York', value: 'ny' }, { label: 'Texas', value: 'tx' }];
+        } else if (field.lookup_source_type === 'custom' && field.lookup_custom_data) {
+            const dataString = field.lookup_custom_data || '';
+            const separator = field.lookup_separator || ',';
+
+            const trimmed = dataString.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) {
+                        const labelKey = String(field.lookup_label_column || '');
+                        const valueKey = String(field.lookup_value_column || '');
+
+                        options = parsed.map((item, index) => {
+                            let label = '';
+                            let value = '';
+                            let row_data: Record<string, any> = {};
+
+                            if (item && typeof item === 'object') {
+                                row_data = item;
+                                if (labelKey && item[labelKey] !== undefined) {
+                                    label = String(item[labelKey]);
+                                } else {
+                                    const keys = Object.keys(item);
+                                    const labelIdx = parseInt(labelKey, 10);
+                                    if (!isNaN(labelIdx) && keys[labelIdx - 1] !== undefined) {
+                                        label = String(item[keys[labelIdx - 1]]);
+                                    } else {
+                                        label = String(item[keys[0]] || `Row ${index}`);
+                                    }
+                                }
+
+                                if (valueKey && item[valueKey] !== undefined) {
+                                    value = String(item[valueKey]);
+                                } else {
+                                    const keys = Object.keys(item);
+                                    const valueIdx = parseInt(valueKey, 10);
+                                    if (!isNaN(valueIdx) && keys[valueIdx - 1] !== undefined) {
+                                        value = String(item[keys[valueIdx - 1]]);
+                                    } else {
+                                        value = label;
+                                    }
+                                }
+                            } else {
+                                label = String(item);
+                                value = String(item);
+                                row_data = { value: item };
+                            }
+
+                            return {
+                                label: label.trim(),
+                                value: value.trim(),
+                                row_data,
+                            };
+                        });
+                    }
+                } catch {
+                    // Fallback to CSV
+                }
+            }
+
+            if (options.length === 0) {
+                const lines = dataString.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== '');
+                if (lines.length === 0) return [];
+
+                const firstLineCols = lines[0].split(separator).map((c: string) => c.trim());
+                const labelColVal = String(field.lookup_label_column || '1');
+                const valueColVal = String(field.lookup_value_column || '1');
+
+                const isLabelColNumeric = /^\d+$/.test(labelColVal);
+                const isValueColNumeric = /^\d+$/.test(valueColVal);
+
+                let hasHeader = false;
+                const normalizedFirstLine = firstLineCols.map((c: string) => c.toLowerCase());
+                if (
+                    (!isLabelColNumeric && labelColVal !== '') ||
+                    (!isValueColNumeric && valueColVal !== '') ||
+                    normalizedFirstLine.includes(labelColVal.toLowerCase()) ||
+                    normalizedFirstLine.includes(valueColVal.toLowerCase())
+                ) {
+                    hasHeader = true;
+                }
+
+                const headers = hasHeader
+                    ? firstLineCols
+                    : firstLineCols.map((_: string, idx: number) => `Column ${idx + 1}`);
+
+                const dataLines = hasHeader ? lines.slice(1) : lines;
+
+                options = dataLines.map((row: string, index: number) => {
+                    const cols = row.split(separator).map((c: string) => c.trim());
+
+                    let label = '';
+                    let value = '';
+                    const row_data: Record<string, any> = {};
+
+                    headers.forEach((header: string, idx: number) => {
+                        row_data[header] = cols[idx] || '';
+                    });
+
+                    if (hasHeader) {
+                        const labelIdx = headers.findIndex((h: string) => h.toLowerCase() === labelColVal.toLowerCase());
+                        if (labelIdx >= 0) {
+                            label = cols[labelIdx] || '';
+                        } else {
+                            const idx = parseInt(labelColVal, 10);
+                            label = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : (cols[0] || `Row ${index}`);
+                        }
+                    } else {
+                        const idx = parseInt(labelColVal, 10);
+                        label = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : (cols[0] || `Row ${index}`);
+                    }
+
+                    if (hasHeader) {
+                        const valueIdx = headers.findIndex((h: string) => h.toLowerCase() === valueColVal.toLowerCase());
+                        if (valueIdx >= 0) {
+                            value = cols[valueIdx] || '';
+                        } else {
+                            const idx = parseInt(valueColVal, 10);
+                            value = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : label;
+                        }
+                    } else {
+                        const idx = parseInt(valueColVal, 10);
+                        value = (!isNaN(idx) && cols[idx - 1] !== undefined) ? cols[idx - 1] : label;
+                    }
+
+                    return {
+                        label: label.trim(),
+                        value: value.trim(),
+                        row_cols: cols,
+                        row_data,
+                    };
+                });
+            }
         }
-        if (field.lookup_source_type === 'custom' && field.lookup_custom_data) {
-            const sep = field.lookup_separator || ',';
-            const lines = field.lookup_custom_data.split('\n').filter(Boolean);
-            return lines.map((line: string) => {
-                const cols = line.split(sep);
-                const lCol = field.lookup_label_column ?? 0;
-                const vCol = field.lookup_value_column ?? 0;
-                return {
-                    label: (cols[lCol] || cols[0])?.trim(),
-                    value: (cols[vCol] || cols[0])?.trim()
-                };
-            });
+
+        // Apply rules engine option filtering
+        if (rulesResult && responses) {
+            const filtered = getFilteredOptionsByRules(field.bind, rulesResult, responses, options);
+            if (filtered !== null) {
+                return filtered;
+            }
         }
-        return [];
-    }, [field]);
+
+        return options;
+    }, [field, rulesResult, responses]);
 
     useEffect(() => {
         if (field.default_value && parsedData.length > 0 && !value) {
@@ -188,6 +323,10 @@ const FormSimulator: React.FC = () => {
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
     const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+
+    const rulesResult = useMemo(() => {
+        return evaluateAllRules(blueprint?.rules || [], formData);
+    }, [blueprint?.rules, formData]);
 
     // Sync activeFieldId for single-variable-at-a-time mode
     useEffect(() => {
@@ -288,27 +427,37 @@ const FormSimulator: React.FC = () => {
         handleInputChange(key, next);
     };
 
-    const captureGPS = () => {
+    const captureGPS = (bindKey: string) => {
         if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition((position) => {
-                handleInputChange('location', {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    accuracy: position.coords.accuracy
-                });
-            }, (error) => {
-                alert("Error capturing location: " + error.message);
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    handleInputChange(bindKey, {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    });
+                },
+                (error) => {
+                    console.warn("Geolocation failed, using mock data:", error.message);
+                    handleInputChange(bindKey, {
+                        lat: 5.6037,
+                        lng: -0.1870,
+                        accuracy: 15.0
+                    });
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        } else {
+            console.warn("Geolocation not supported, using mock data");
+            handleInputChange(bindKey, {
+                lat: 5.6037,
+                lng: -0.1870,
+                accuracy: 15.0
             });
         }
     };
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, bind: string) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            // Mocking photo capture as a string for now
-            handleInputChange(bind, `file://${file.name} (uploaded)`);
-        }
-    };
+
 
     const evaluateRule = (rule: LogicRule) => {
         if (!rule.conditions.length) return true;
@@ -332,6 +481,10 @@ const FormSimulator: React.FC = () => {
     };
 
     const isFieldVisible = (fieldId: string) => {
+        if (rulesResult) {
+            const ruleVis = isFieldVisibleByRules(fieldId, rulesResult);
+            if (ruleVis !== null) return ruleVis;
+        }
         const rules = (blueprint?.logic || []).filter(r => r.type === 'field_visibility' && r.target_id === fieldId);
         if (rules.length === 0) return true;
         // If any visibility rule matches, show it
@@ -494,42 +647,116 @@ const FormSimulator: React.FC = () => {
                                 {(blueprint?.ui[currentSectionIndex]?.children || [])
                                     .filter(field => isFieldVisible(field.bind))
                                     .filter(field => !activeFieldId || field.bind === activeFieldId)
-                                    .map((field, idx) => (
-                                        <div key={idx} className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                    .map((field, idx) => {
+                                        const displayOptions = (field.options || []).filter((opt: any) => {
+                                            if (rulesResult && formData) {
+                                                const filtered = getFilteredOptionsByRules(field.bind, rulesResult, formData, field.options || []);
+                                                if (filtered !== null) {
+                                                    return filtered.some((fOpt: any) => getOptionValue(fOpt) === getOptionValue(opt));
+                                                }
+                                            }
+                                            return true;
+                                        });
+
+                                        return (
+                                            <div key={idx} className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                             <label className="text-sm font-bold text-[hsl(var(--text-secondary))] block">
                                                 {field.label}
                                             </label>
 
                                             {field.type === 'gps_capture' ? (
-                                                <button
-                                                    onClick={captureGPS}
-                                                    className={`w-full flex items-center justify-between px-5 py-4 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--success))]/10 border-[hsl(var(--success))] text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}
-                                                >
-                                                    <div className="flex items-center space-x-3">
-                                                        <MapPin className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
-                                                        <span className="font-semibold text-sm">
-                                                            {formData[field.bind] ? `Location Captured` : `Click to capture GPS`}
-                                                        </span>
-                                                    </div>
-                                                    {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />}
-                                                </button>
+                                                 <div className="space-y-2">
+                                                     <button
+                                                         onClick={() => captureGPS(field.bind)}
+                                                         className={`w-full flex items-center justify-between px-5 py-4 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--success))]/10 border-[hsl(var(--success))] text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}
+                                                     >
+                                                         <div className="flex items-center space-x-3">
+                                                             <MapPin className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--success))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
+                                                             <span className="font-semibold text-sm">
+                                                                 {formData[field.bind] ? `Location Captured` : `Click to capture GPS`}
+                                                             </span>
+                                                         </div>
+                                                         {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />}
+                                                     </button>
+                                                     {formData[field.bind] && (
+                                                         <div className="p-3 bg-[hsl(var(--surface-elevated))] rounded-md border border-[hsl(var(--border))] space-y-1 text-xs">
+                                                             <div className="flex justify-between">
+                                                                 <span className="text-[hsl(var(--text-tertiary))]">Latitude</span>
+                                                                 <span className="font-mono text-[hsl(var(--text-secondary))] font-semibold">{formData[field.bind].lat?.toFixed(6)}</span>
+                                                             </div>
+                                                             <div className="flex justify-between">
+                                                                 <span className="text-[hsl(var(--text-tertiary))]">Longitude</span>
+                                                                 <span className="font-mono text-[hsl(var(--text-secondary))] font-semibold">{formData[field.bind].lng?.toFixed(6)}</span>
+                                                             </div>
+                                                             {formData[field.bind].accuracy !== undefined && (
+                                                                 <div className="flex justify-between">
+                                                                     <span className="text-[hsl(var(--text-tertiary))]">Accuracy</span>
+                                                                     <span className="text-[hsl(var(--text-secondary))] font-semibold">±{formData[field.bind].accuracy?.toFixed(1)}m</span>
+                                                                 </div>
+                                                             )}
+                                                         </div>
+                                                     )}
+                                                 </div>
                                             ) : field.type === 'photo_capture' ? (
-                                                <div className="relative">
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        onChange={(e) => handlePhotoUpload(e, field.bind)}
-                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                                    />
-                                                    <div className={`w-full flex items-center justify-between px-5 py-4 rounded-md border-2 transition-all ${formData[field.bind] ? 'bg-[hsl(var(--info))]/10 border-[hsl(var(--info))] text-[hsl(var(--info))]' : 'bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))]'}`}>
-                                                        <div className="flex items-center space-x-3">
-                                                            <CameraIcon className={`w-5 h-5 ${formData[field.bind] ? 'text-[hsl(var(--info))]' : 'text-[hsl(var(--text-tertiary))]'}`} />
-                                                            <span className="font-semibold text-sm">
-                                                                {formData[field.bind] ? `Photo Attached` : `Tap to take photo`}
-                                                            </span>
+                                                <div className="space-y-2">
+                                                    {formData[field.bind] ? (
+                                                        <div className="space-y-2">
+                                                            <div className="relative rounded-lg overflow-hidden border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] aspect-[4/3] group/preview">
+                                                                <img
+                                                                    src={formData[field.bind]}
+                                                                    alt="Captured store front"
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/preview:opacity-100 transition-opacity flex items-center justify-center">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleInputChange(field.bind, null)}
+                                                                        className="px-4 py-2 bg-red-600 text-white rounded-md text-xs font-bold hover:bg-red-700 transition-all shadow-md active:scale-95"
+                                                                    >
+                                                                        Retake Photo
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between px-5 py-4 rounded-md border-2 bg-[hsl(var(--success))]/10 border-[hsl(var(--success))] text-[hsl(var(--success))]">
+                                                                <div className="flex items-center space-x-3">
+                                                                    <CheckCircle2 className="w-5 h-5 text-[hsl(var(--success))]" />
+                                                                    <span className="font-semibold text-sm">Photo Captured (Simulated)</span>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        {formData[field.bind] && <CheckCircle2 className="w-5 h-5 text-[hsl(var(--info))]" />}
-                                                    </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleInputChange(field.bind, 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=500')}
+                                                            className="w-full flex items-center justify-between px-5 py-4 rounded-md border-2 bg-[hsl(var(--surface-elevated))] border-transparent text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface))] transition-all active:scale-[0.98]"
+                                                        >
+                                                            <div className="flex items-center space-x-3">
+                                                                <CameraIcon className="w-5 h-5 text-[hsl(var(--text-tertiary))]" />
+                                                                <span className="font-semibold text-sm">Tap to take photo</span>
+                                                            </div>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ) : field.type === 'barcode_scanner' ? (
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        readOnly
+                                                        value={formData[field.bind] || ''}
+                                                        placeholder={field.placeholder || "Tap Scan button to simulate"}
+                                                        className="flex-1 bg-[hsl(var(--surface-elevated))] border-2 border-transparent rounded-md px-5 py-4 text-[hsl(var(--text-primary))] font-medium cursor-not-allowed"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const mockCodes = ['610294719401', '7501031311309', 'OPLA-QR-9831', '9780201896831'];
+                                                            const randomCode = mockCodes[Math.floor(Math.random() * mockCodes.length)];
+                                                            handleInputChange(field.bind, randomCode);
+                                                        }}
+                                                        className="px-5 bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/80 text-white rounded-md flex items-center justify-center transition-all active:scale-95 shadow-md shadow-[hsl(var(--success))]/20"
+                                                    >
+                                                        <Scan className="w-5 h-5" />
+                                                    </button>
                                                 </div>
                                             ) : field.type === 'file_upload' || field.type === 'audio_recorder' ? (
                                                 <input
@@ -555,7 +782,7 @@ const FormSimulator: React.FC = () => {
                                                         className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all"
                                                     >
                                                         <option value="" disabled>Select an option</option>
-                                                        {(field.options || []).map((opt, i) => (
+                                                        {displayOptions.map((opt: any, i: number) => (
                                                             <option key={`${getOptionValue(opt)}-${i}`} value={getOptionValue(opt)}>{getOptionLabel(opt)}</option>
                                                         ))}
                                                     </select>
@@ -571,7 +798,7 @@ const FormSimulator: React.FC = () => {
                                                 </div>
                                             ) : field.type === 'radio_group' ? (
                                                 <div className="space-y-2">
-                                                    {(field.options || []).map((opt, i) => (
+                                                    {displayOptions.map((opt: any, i: number) => (
                                                         <label key={`${getOptionValue(opt)}-${i}`} className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
                                                             <input
                                                                 type="radio"
@@ -621,7 +848,7 @@ const FormSimulator: React.FC = () => {
                                                 </div>
                                             ) : field.type === 'checkbox_group' ? (
                                                 <div className="space-y-2">
-                                                    {(field.options || []).map((opt, i) => (
+                                                    {displayOptions.map((opt: any, i: number) => (
                                                         <label key={`${getOptionValue(opt)}-${i}`} className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
                                                             <input
                                                                 type="checkbox"
@@ -676,6 +903,8 @@ const FormSimulator: React.FC = () => {
                                                     field={field}
                                                     value={formData[field.bind]}
                                                     onChange={(val: any) => handleInputChange(field.bind, val)}
+                                                    rulesResult={rulesResult}
+                                                    responses={formData}
                                                 />
                                             ) : field.type === 'matrix_table' ? (
                                                 <div className="w-full max-h-[500px] overflow-auto hide-scrollbar rounded-md border border-[hsl(var(--border))] relative relative-z-0">
@@ -759,6 +988,33 @@ const FormSimulator: React.FC = () => {
                                                         </tbody>
                                                     </table>
                                                 </div>
+                                            ) : field.type === 'time_range' ? (
+                                                <div className="flex gap-4">
+                                                    <div className="flex-1 space-y-1">
+                                                        <span className="text-xs font-bold text-[hsl(var(--text-tertiary))] uppercase">Opens</span>
+                                                        <input
+                                                            type="time"
+                                                            value={formData[field.bind]?.open || ''}
+                                                            onChange={(e) => {
+                                                                const current = formData[field.bind] || {};
+                                                                handleInputChange(field.bind, { ...current, open: e.target.value });
+                                                            }}
+                                                            className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all font-medium"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 space-y-1">
+                                                        <span className="text-xs font-bold text-[hsl(var(--text-tertiary))] uppercase">Closes</span>
+                                                        <input
+                                                            type="time"
+                                                            value={formData[field.bind]?.close || ''}
+                                                            onChange={(e) => {
+                                                                const current = formData[field.bind] || {};
+                                                                handleInputChange(field.bind, { ...current, close: e.target.value });
+                                                            }}
+                                                            className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all font-medium"
+                                                        />
+                                                    </div>
+                                                </div>
                                             ) : (
                                                 <input
                                                     type={field.type === 'input_number' ? 'number' : field.type === 'email_input' ? 'email' : field.type === 'phone_input' ? 'tel' : field.type === 'date_picker' ? 'date' : field.type === 'time_picker' ? 'time' : 'text'}
@@ -771,7 +1027,8 @@ const FormSimulator: React.FC = () => {
                                                 />
                                             )}
                                         </div>
-                                    ))}
+                                        );
+                                    })}
 
                                 {/* Pagination Controls */}
                                 <div className="pt-6 flex gap-3">

@@ -36,23 +36,30 @@ export function BarcodeScannerField({ field, value, onChange, error }: Props) {
     return (
         <View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TextInput
-                    value={value || ''}
-                    onChangeText={onChange}
-                    placeholder={field.placeholder || 'Scan or enter code'}
-                    placeholderTextColor="#64748b"
-                    style={{
-                        flex: 1,
-                        backgroundColor: '#1e293b',
-                        borderColor: error ? '#ef4444' : '#334155',
-                        borderWidth: 1.5,
-                        borderRadius: 8,
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        color: '#f1f5f9',
-                        fontSize: 14,
-                    }}
-                />
+                <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleOpenScanner}
+                    style={{ flex: 1 }}
+                >
+                    <View pointerEvents="none">
+                        <TextInput
+                            value={value || ''}
+                            editable={false}
+                            placeholder={field.placeholder || 'Tap to scan code'}
+                            placeholderTextColor="#64748b"
+                            style={{
+                                backgroundColor: '#1e293b',
+                                borderColor: error ? '#ef4444' : '#334155',
+                                borderWidth: 1.5,
+                                borderRadius: 8,
+                                paddingHorizontal: 12,
+                                paddingVertical: 10,
+                                color: '#f1f5f9',
+                                fontSize: 14,
+                            }}
+                        />
+                    </View>
+                </TouchableOpacity>
                 <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={handleOpenScanner}

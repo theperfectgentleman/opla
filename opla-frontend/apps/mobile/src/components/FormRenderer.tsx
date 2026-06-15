@@ -304,6 +304,8 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
             return <DatePickerField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'time_picker':
             return <TimePickerField field={effectiveField} value={value} onChange={onChange} error={error} />;
+        case 'time_range':
+            return <TimeRangeField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'gps_capture':
             return <GPSCaptureField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'photo_capture':

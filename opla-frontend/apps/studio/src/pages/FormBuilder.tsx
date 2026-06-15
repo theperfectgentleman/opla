@@ -1932,6 +1932,10 @@ const FormBuilder: React.FC = () => {
                 placeholder: child.placeholder,
                 options: Array.isArray(child.options) ? normaliseOptions(child.options) : undefined,
                 platforms: child.platforms,
+                min: child.min,
+                max: child.max,
+                minLength: child.minLength,
+                maxLength: child.maxLength,
                 default_value: child.default_value,
                 is_sensitive: !!child.is_sensitive,
                 exclude_from_export: !!child.exclude_from_export,
@@ -1939,6 +1943,15 @@ const FormBuilder: React.FC = () => {
                 table_rows: child.table_rows,
                 table_cell_type: child.table_cell_type,
                 table_allow_multiple: !!child.table_allow_multiple,
+                mask: child.mask,
+                lookup_source_type: child.lookup_source_type,
+                lookup_preset_id: child.lookup_preset_id,
+                lookup_custom_data: child.lookup_custom_data,
+                lookup_separator: child.lookup_separator,
+                lookup_label_column: child.lookup_label_column,
+                lookup_value_column: child.lookup_value_column,
+                min_label: child.min_label,
+                max_label: child.max_label,
                 object_schema_key: child.object_schema_key,
                 object_definition: child.object_definition,
                 collection_layout: child.collection_layout,
@@ -2002,53 +2015,7 @@ const FormBuilder: React.FC = () => {
 
                 const blueprint = data.blueprint_draft || data.blueprint_live;
                 if (blueprint?.ui?.length) {
-                    const normaliseOptions = (raw: any[]): FieldOption[] =>
-                        raw.map(o => typeof o === 'string'
-                            ? { label: o, value: toSmartValue(o) }
-                            : { label: o.label ?? o, value: o.value ?? toSmartValue(o.label ?? o), skip_to: o.skip_to }
-                        );
-
-                    const loadedSections: FormSection[] = blueprint.ui.map((screen: any, idx: number) => ({
-                        id: screen.id || `screen_${idx + 1}`,
-                        title: screen.title || `Section ${idx + 1}`,
-                        layout: ensureSectionLayout(screen.layout, idx),
-                        properties: {
-                            render_mode: screen.render_mode || 'list',
-                            description: screen.description,
-                            platforms: screen.platforms || ['mobile', 'web'],
-                            is_repeatable: !!screen.is_repeatable,
-                            max_repeats: screen.max_repeats,
-                            shuffle_options: !!screen.shuffle_options,
-                        },
-                        fields: screen.children ? screen.children.map((child: any) => ({
-                            id: child.bind,
-                            type: child.type as FieldType,
-                            label: child.label || 'Untitled Field',
-                            required: !!child.required,
-                            formula: child.formula,
-                            placeholder: child.placeholder,
-                            options: Array.isArray(child.options) ? normaliseOptions(child.options) : undefined,
-                            platforms: child.platforms,
-                            default_value: child.default_value,
-                            is_sensitive: !!child.is_sensitive,
-                            exclude_from_export: !!child.exclude_from_export,
-                            table_columns: child.table_columns,
-                            table_rows: child.table_rows,
-                            table_cell_type: child.table_cell_type,
-                            table_allow_multiple: !!child.table_allow_multiple,
-                            object_schema_key: child.object_schema_key,
-                            object_definition: child.object_definition,
-                            collection_layout: child.collection_layout,
-                            allow_add_items: child.allow_add_items,
-                            allow_remove_items: child.allow_remove_items,
-                            catalog_source_type: child.catalog_source_type,
-                        })) : []
-                    }));
-                    setSections(loadedSections);
-                    setCurrentSectionId(loadedSections[0].id);
-                    const loadedRules = blueprint.rules || [];
-                    setFormRules(loadedRules);
-                    setInitialHash(computeHash(data.title || 'Untitled Form', loadedSections, loadedRules));
+                    applyBlueprintToBuilder(blueprint, data.title || 'Untitled Form');
                 } else {
                     const defaultSecs: FormSection[] = [{ id: 'screen_1', title: 'Section 1', fields: [], properties: { render_mode: 'list', platforms: ['mobile', 'web'] }, layout: ensureSectionLayout(undefined, 0) }];
                     setSections(defaultSecs);
@@ -2276,6 +2243,8 @@ const FormBuilder: React.FC = () => {
         lookup_separator: field.lookup_separator,
         lookup_label_column: field.lookup_label_column,
         lookup_value_column: field.lookup_value_column,
+        min_label: field.min_label,
+        max_label: field.max_label,
         object_schema_key: field.object_schema_key,
         object_definition: hydrateCatalogReferences(field.object_definition, field),
         collection_layout: field.collection_layout,

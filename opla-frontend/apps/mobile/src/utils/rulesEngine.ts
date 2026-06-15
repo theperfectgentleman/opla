@@ -1,10 +1,9 @@
-import {
+import type {
   FormRule,
   RuleNode,
   RuleConditionNode,
   RuleGroupNode,
   RuleAction,
-  RuleActionEffect,
 } from '@opla/types';
 
 // ─── Types for evaluation results ───────────────────────────────────────────

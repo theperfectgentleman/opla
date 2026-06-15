@@ -26,6 +26,7 @@ type FieldType =
     | 'date_picker'
     | 'time_picker'
     | 'time_range'
+    | 'generic_range'
     | 'dropdown'
     | 'radio_group'
     | 'checkbox_group'
@@ -187,6 +188,14 @@ interface FormField {
     // Input parameter annotations
     is_input_param?: boolean;
     input_param_readonly?: boolean;
+
+    // Generic Range properties
+    range_type?: 'NUMBER' | 'INTEGER' | 'DATE' | 'DATETIME' | 'TIME' | 'WEEKDAY' | 'MONTH' | 'INDEX';
+    step_value?: string;
+    step_unit?: 'NONE' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'MINUTE' | 'HOUR';
+    is_inclusive?: boolean;
+    has_no_min?: boolean;
+    has_no_max?: boolean;
 }
 
 interface SectionProperties {
@@ -259,6 +268,7 @@ const widgetLibrary: Array<{ type: FieldType; label: string; icon: React.ReactNo
     { type: 'date_picker', label: 'Date Picker', icon: <Calendar className="w-4 h-4" /> },
     { type: 'time_picker', label: 'Time Picker', icon: <Clock className="w-4 h-4" /> },
     { type: 'time_range', label: 'Time Range', icon: <Clock className="w-4 h-4" /> },
+    { type: 'generic_range', label: 'Generic Range', icon: <Sliders className="w-4 h-4" />, defaults: { range_type: 'NUMBER', is_inclusive: true } },
     { type: 'dropdown', label: 'Dropdown', icon: <List className="w-4 h-4" /> },
     { type: 'radio_group', label: 'Radio Group', icon: <CheckSquare className="w-4 h-4" /> },
     { type: 'checkbox_group', label: 'Checkbox Group', icon: <CheckSquare className="w-4 h-4" /> },
@@ -288,6 +298,7 @@ const widgetCategoryMap: Record<FieldType, string> = {
     date_picker: 'Time & Date',
     time_picker: 'Time & Date',
     time_range: 'Time & Date',
+    generic_range: 'Time & Date',
     dropdown: 'Selection Fields',
     radio_group: 'Selection Fields',
     checkbox_group: 'Selection Fields',
@@ -315,6 +326,7 @@ const widgetHints: Record<FieldType, string> = {
     date_picker: 'Calendar dropdown select widget to stamp standard format dates',
     time_picker: 'Clock dial select interface to stamp standard format times',
     time_range: 'Compound open and close time selection for business hours and schedules',
+    generic_range: 'Flexible boundary ranges for integers, decimals, dates, times, and scales',
     dropdown: 'Compact select dropdown containing customizable choices',
     radio_group: 'Radio-button choices layout. Single option select only',
     checkbox_group: 'Multi-checkbox list selector. Allows multiple options',
@@ -1965,6 +1977,13 @@ const FormBuilder: React.FC = () => {
                 // Input param annotations
                 is_input_param: child.is_input_param,
                 input_param_readonly: child.input_param_readonly,
+                // Generic Range properties
+                range_type: child.range_type,
+                step_value: child.step_value,
+                step_unit: child.step_unit,
+                is_inclusive: child.is_inclusive,
+                has_no_min: child.has_no_min,
+                has_no_max: child.has_no_max,
             })) : []
         }));
 
@@ -2185,6 +2204,7 @@ const FormBuilder: React.FC = () => {
         if (type === 'matrix_table') return 'object';
         if (type === 'object_collection') return 'array';
         if (type === 'object_instance') return 'object';
+        if (type === 'generic_range') return 'object';
         return 'string';
     };
 
@@ -2211,6 +2231,14 @@ const FormBuilder: React.FC = () => {
             entry.object_schema_key = field.object_schema_key;
             entry.item_definition = hydrateCatalogReferences(field.object_definition, field);
             entry.catalog_source_type = field.catalog_source_type;
+        }
+        if (field.type === 'generic_range') {
+            entry.range_type = field.range_type;
+            entry.step_value = field.step_value;
+            entry.step_unit = field.step_unit;
+            entry.is_inclusive = field.is_inclusive;
+            entry.has_no_min = field.has_no_min;
+            entry.has_no_max = field.has_no_max;
         }
 
         return entry;
@@ -2258,6 +2286,13 @@ const FormBuilder: React.FC = () => {
         // Input param annotations
         is_input_param: field.is_input_param,
         input_param_readonly: field.input_param_readonly,
+        // Generic Range properties
+        range_type: field.range_type,
+        step_value: field.step_value,
+        step_unit: field.step_unit,
+        is_inclusive: field.is_inclusive,
+        has_no_min: field.has_no_min,
+        has_no_max: field.has_no_max,
     });
 
     const handleSave = async () => {
@@ -2657,6 +2692,19 @@ const FormBuilder: React.FC = () => {
                         <span className="text-xs text-[hsl(var(--text-secondary))] font-medium">
                             {field.options?.find(o => o.value === 'true')?.label ?? 'Yes'}
                         </span>
+                    </div>
+                );
+            case 'generic_range':
+                return (
+                    <div className="flex items-center gap-2 select-none w-full">
+                        <div className="flex-1 px-3 py-2 bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded-lg text-left">
+                            <span className="text-[10px] text-[hsl(var(--text-tertiary))] font-bold block leading-none">START BOUND</span>
+                            <span className="text-xs text-[hsl(var(--text-secondary))] block mt-1 leading-none">{field.has_no_min ? 'None (-∞)' : (field.range_type || 'NUMBER')}</span>
+                        </div>
+                        <div className="flex-1 px-3 py-2 bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded-lg text-left">
+                            <span className="text-[10px] text-[hsl(var(--text-tertiary))] font-bold block leading-none">END BOUND</span>
+                            <span className="text-xs text-[hsl(var(--text-secondary))] block mt-1 leading-none">{field.has_no_max ? 'None (+∞)' : (field.range_type || 'NUMBER')}</span>
+                        </div>
                     </div>
                 );
             case 'rating_scale': {
@@ -4313,6 +4361,99 @@ const FormBuilder: React.FC = () => {
                                                                                     <option value="table">Table Rows</option>
                                                                                 </select>
                                                                             )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'range_type',
+                                                                            label: 'Range Type',
+                                                                            metaKey: 'range_type',
+                                                                            visible: selectedField.type === 'generic_range',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.range_type || 'NUMBER'}
+                                                                                    onChange={(e) => {
+                                                                                        const newRangeType = e.target.value as any;
+                                                                                        const isNewTemporal = ['DATE', 'DATETIME', 'TIME'].includes(newRangeType);
+                                                                                        const updates: any = { range_type: newRangeType };
+                                                                                        if (!isNewTemporal) {
+                                                                                            updates.step_unit = 'NONE';
+                                                                                        } else if (newRangeType === 'DATE' && ['MINUTE', 'HOUR'].includes(selectedField.step_unit || '')) {
+                                                                                            updates.step_unit = 'NONE';
+                                                                                        }
+                                                                                        updateField(selectedField.id, updates);
+                                                                                    }}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="NUMBER">Number</option>
+                                                                                    <option value="INTEGER">Integer</option>
+                                                                                    <option value="DATE">Date</option>
+                                                                                    <option value="DATETIME">Datetime</option>
+                                                                                    <option value="TIME">Time (HH:MM)</option>
+                                                                                    <option value="WEEKDAY">Weekday</option>
+                                                                                    <option value="MONTH">Month</option>
+                                                                                    <option value="INDEX">Index Scale</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'step_value',
+                                                                            label: 'Step Value',
+                                                                            metaKey: 'step_value',
+                                                                            visible: selectedField.type === 'generic_range',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.step_value || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { step_value: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="e.g. 1"
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'step_unit',
+                                                                            label: 'Step Unit',
+                                                                            metaKey: 'step_unit',
+                                                                            visible: selectedField.type === 'generic_range',
+                                                                            render: () => {
+                                                                                const rt = selectedField.range_type || 'NUMBER';
+                                                                                const allowedUnits = (() => {
+                                                                                    if (!['DATE', 'DATETIME', 'TIME'].includes(rt)) {
+                                                                                        return [{ value: 'NONE', label: 'None' }];
+                                                                                    }
+                                                                                    if (rt === 'DATE') {
+                                                                                        return [
+                                                                                            { value: 'NONE', label: 'None' },
+                                                                                            { value: 'DAY', label: 'Day' },
+                                                                                            { value: 'WEEK', label: 'Week' },
+                                                                                            { value: 'MONTH', label: 'Month' },
+                                                                                            { value: 'YEAR', label: 'Year' },
+                                                                                        ];
+                                                                                    }
+                                                                                    return [
+                                                                                        { value: 'NONE', label: 'None' },
+                                                                                        { value: 'MINUTE', label: 'Minute' },
+                                                                                        { value: 'HOUR', label: 'Hour' },
+                                                                                        { value: 'DAY', label: 'Day' },
+                                                                                        { value: 'WEEK', label: 'Week' },
+                                                                                        { value: 'MONTH', label: 'Month' },
+                                                                                        { value: 'YEAR', label: 'Year' },
+                                                                                    ];
+                                                                                })();
+
+                                                                                return (
+                                                                                    <select
+                                                                                        value={selectedField.step_unit || 'NONE'}
+                                                                                        onChange={(e) => updateField(selectedField.id, { step_unit: e.target.value as any })}
+                                                                                        className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        {allowedUnits.map(unit => (
+                                                                                            <option key={unit.value} value={unit.value}>{unit.label}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                );
+                                                                            }
                                                                         },
                                                                         {
                                                                             category: 'Data',

@@ -33,6 +33,12 @@ interface UIField {
     lookup_value_column?: number | string;
     min_label?: string;
     max_label?: string;
+    range_type?: string;
+    step_value?: string;
+    step_unit?: string;
+    is_inclusive?: boolean;
+    has_no_min?: boolean;
+    has_no_max?: boolean;
 }
 
 interface LogicCondition {
@@ -325,8 +331,8 @@ const FormSimulator: React.FC = () => {
     const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
 
     const rulesResult = useMemo(() => {
-        return evaluateAllRules(blueprint?.rules || [], formData);
-    }, [blueprint?.rules, formData]);
+        return evaluateAllRules(blueprint?.rules || [], formData, blueprint);
+    }, [blueprint, formData]);
 
     // Sync activeFieldId for single-variable-at-a-time mode
     useEffect(() => {
@@ -1013,6 +1019,165 @@ const FormSimulator: React.FC = () => {
                                                             }}
                                                             className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all font-medium"
                                                         />
+                                                    </div>
+                                                </div>
+                                            ) : field.type === 'generic_range' ? (
+                                                <div className="space-y-3">
+                                                    <div className="flex gap-4">
+                                                        {!field.has_no_min && (
+                                                            <div className="flex-1 space-y-1">
+                                                                <span className="text-xs font-bold text-[hsl(var(--text-tertiary))] uppercase">
+                                                                    {field.range_type === 'DATE' || field.range_type === 'DATETIME' ? 'From Date' : field.range_type === 'TIME' ? 'Opens' : 'Start Value'}
+                                                                </span>
+                                                                {field.range_type === 'WEEKDAY' ? (
+                                                                    <select
+                                                                        value={formData[field.bind]?.start_value || ''}
+                                                                        onChange={(e) => {
+                                                                            const current = formData[field.bind] || {};
+                                                                            handleInputChange(field.bind, {
+                                                                                ...current,
+                                                                                variable_id: field.bind,
+                                                                                range_type: field.range_type || 'NUMBER',
+                                                                                step_value: field.step_value || null,
+                                                                                step_unit: field.step_unit || 'NONE',
+                                                                                is_inclusive: field.is_inclusive !== false,
+                                                                                has_no_min: !!field.has_no_min,
+                                                                                has_no_max: !!field.has_no_max,
+                                                                                start_value: e.target.value || null
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] text-sm transition-all"
+                                                                    >
+                                                                        <option value="">Select Day</option>
+                                                                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                                                            <option key={day} value={day}>{day}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                ) : field.range_type === 'MONTH' ? (
+                                                                    <select
+                                                                        value={formData[field.bind]?.start_value || ''}
+                                                                        onChange={(e) => {
+                                                                            const current = formData[field.bind] || {};
+                                                                            handleInputChange(field.bind, {
+                                                                                ...current,
+                                                                                variable_id: field.bind,
+                                                                                range_type: field.range_type || 'NUMBER',
+                                                                                step_value: field.step_value || null,
+                                                                                step_unit: field.step_unit || 'NONE',
+                                                                                is_inclusive: field.is_inclusive !== false,
+                                                                                has_no_min: !!field.has_no_min,
+                                                                                has_no_max: !!field.has_no_max,
+                                                                                start_value: e.target.value || null
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] text-sm transition-all"
+                                                                    >
+                                                                        <option value="">Select Month</option>
+                                                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
+                                                                            <option key={month} value={month}>{month}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                ) : (
+                                                                    <input
+                                                                        type={field.range_type === 'DATE' ? 'date' : field.range_type === 'DATETIME' ? 'datetime-local' : field.range_type === 'TIME' ? 'time' : 'number'}
+                                                                        value={formData[field.bind]?.start_value || ''}
+                                                                        onChange={(e) => {
+                                                                            const current = formData[field.bind] || {};
+                                                                            handleInputChange(field.bind, {
+                                                                                ...current,
+                                                                                variable_id: field.bind,
+                                                                                range_type: field.range_type || 'NUMBER',
+                                                                                step_value: field.step_value || null,
+                                                                                step_unit: field.step_unit || 'NONE',
+                                                                                is_inclusive: field.is_inclusive !== false,
+                                                                                has_no_min: !!field.has_no_min,
+                                                                                has_no_max: !!field.has_no_max,
+                                                                                start_value: e.target.value || null
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all font-medium"
+                                                                        placeholder="Start"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {!field.has_no_max && (
+                                                            <div className="flex-1 space-y-1">
+                                                                <span className="text-xs font-bold text-[hsl(var(--text-tertiary))] uppercase">
+                                                                    {field.range_type === 'DATE' || field.range_type === 'DATETIME' ? 'To Date' : field.range_type === 'TIME' ? 'Closes' : 'End Value'}
+                                                                </span>
+                                                                {field.range_type === 'WEEKDAY' ? (
+                                                                    <select
+                                                                        value={formData[field.bind]?.end_value || ''}
+                                                                        onChange={(e) => {
+                                                                            const current = formData[field.bind] || {};
+                                                                            handleInputChange(field.bind, {
+                                                                                ...current,
+                                                                                variable_id: field.bind,
+                                                                                range_type: field.range_type || 'NUMBER',
+                                                                                step_value: field.step_value || null,
+                                                                                step_unit: field.step_unit || 'NONE',
+                                                                                is_inclusive: field.is_inclusive !== false,
+                                                                                has_no_min: !!field.has_no_min,
+                                                                                has_no_max: !!field.has_no_max,
+                                                                                end_value: e.target.value || null
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] text-sm transition-all"
+                                                                    >
+                                                                        <option value="">Select Day</option>
+                                                                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                                                            <option key={day} value={day}>{day}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                ) : field.range_type === 'MONTH' ? (
+                                                                    <select
+                                                                        value={formData[field.bind]?.end_value || ''}
+                                                                        onChange={(e) => {
+                                                                            const current = formData[field.bind] || {};
+                                                                            handleInputChange(field.bind, {
+                                                                                ...current,
+                                                                                variable_id: field.bind,
+                                                                                range_type: field.range_type || 'NUMBER',
+                                                                                step_value: field.step_value || null,
+                                                                                step_unit: field.step_unit || 'NONE',
+                                                                                is_inclusive: field.is_inclusive !== false,
+                                                                                has_no_min: !!field.has_no_min,
+                                                                                has_no_max: !!field.has_no_max,
+                                                                                end_value: e.target.value || null
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] text-sm transition-all"
+                                                                    >
+                                                                        <option value="">Select Month</option>
+                                                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
+                                                                            <option key={month} value={month}>{month}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                ) : (
+                                                                    <input
+                                                                        type={field.range_type === 'DATE' ? 'date' : field.range_type === 'DATETIME' ? 'datetime-local' : field.range_type === 'TIME' ? 'time' : 'number'}
+                                                                        value={formData[field.bind]?.end_value || ''}
+                                                                        onChange={(e) => {
+                                                                            const current = formData[field.bind] || {};
+                                                                            handleInputChange(field.bind, {
+                                                                                ...current,
+                                                                                variable_id: field.bind,
+                                                                                range_type: field.range_type || 'NUMBER',
+                                                                                step_value: field.step_value || null,
+                                                                                step_unit: field.step_unit || 'NONE',
+                                                                                is_inclusive: field.is_inclusive !== false,
+                                                                                has_no_min: !!field.has_no_min,
+                                                                                has_no_max: !!field.has_no_max,
+                                                                                end_value: e.target.value || null
+                                                                            });
+                                                                        }}
+                                                                        className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all font-medium"
+                                                                        placeholder="End"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ) : (

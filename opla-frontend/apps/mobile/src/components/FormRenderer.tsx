@@ -35,6 +35,7 @@ import { AudioRecorderField } from './fields/AudioRecorderField';
 import { TimeRangeField } from './fields/TimeRangeField';
 import { MultiSelectDropdownField } from './fields/MultiSelectDropdownField';
 import { FormLinkField } from './fields/FormLinkField';
+import { GenericRangeField } from './fields/GenericRangeField';
 import { deskFormAPI, publicFormAPI } from '../../services/api';
 import { syncAllLookupDatasets } from '../utils/lookupCache';
 
@@ -144,6 +145,24 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
     // Check if rules engine overrides required status
     const rulesRequired = rulesResult ? isFieldRequiredByRules(field.id, rulesResult) : null;
     const isRequired = rulesRequired !== null ? rulesRequired : field.required;
+
+    if (field.type === 'generic_range') {
+        const rangeVal = value as any;
+        const startFilled = rangeVal?.start_value !== undefined && rangeVal?.start_value !== null && rangeVal?.start_value !== '';
+        const endFilled = rangeVal?.end_value !== undefined && rangeVal?.end_value !== null && rangeVal?.end_value !== '';
+        if (isRequired) {
+            if (field.has_no_min && !endFilled) {
+                return 'End boundary value is required';
+            }
+            if (field.has_no_max && !startFilled) {
+                return 'Start boundary value is required';
+            }
+            if (!field.has_no_min && !field.has_no_max && (!startFilled || !endFilled)) {
+                return 'Both start and end values are required';
+            }
+        }
+        return undefined;
+    }
 
     if (!isRequired && (field.type !== 'object_collection' && field.type !== 'object_instance')) {
         // Run format/pattern validation even if optional, but only if a value exists
@@ -306,6 +325,8 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
             return <TimePickerField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'time_range':
             return <TimeRangeField field={effectiveField} value={value} onChange={onChange} error={error} />;
+        case 'generic_range':
+            return <GenericRangeField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'gps_capture':
             return <GPSCaptureField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'photo_capture':
@@ -440,8 +461,8 @@ export function FormRenderer({
 
     // Evaluate centralized rules on every response change
     const rulesResult = useMemo(
-        () => evaluateAllRules(blueprint.rules || [], responses),
-        [blueprint.rules, responses]
+        () => evaluateAllRules(blueprint.rules || [], responses, blueprint),
+        [blueprint, responses]
     );
 
     // Apply SET_VALUE effects from rules engine

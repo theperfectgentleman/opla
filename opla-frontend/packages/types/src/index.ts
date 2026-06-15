@@ -37,6 +37,7 @@ export type FieldType =
   | 'date_picker'
   | 'time_picker'
   | 'time_range'
+  | 'generic_range'
   | 'dropdown'
   | 'radio_group'
   | 'checkbox_group'
@@ -212,6 +213,14 @@ export interface FormField {
   // Input parameter annotations (for fields that receive data from a parent form)
   is_input_param?: boolean;
   input_param_readonly?: boolean;
+
+  // Generic Range properties
+  range_type?: RangeType;
+  step_value?: string;
+  step_unit?: RangeStepUnit;
+  is_inclusive?: boolean;
+  has_no_min?: boolean;
+  has_no_max?: boolean;
 }
 
 export type RenderMode = 'single' | 'list';
@@ -277,6 +286,8 @@ export interface RuleConditionNode {
   operator: RuleOperator;
   /** The target value to compare against. For 'between', use "min,max" string. For 'empty'/'not_empty', this is ignored. */
   value: any;
+  /** Compare by value or label (default: 'value') */
+  compare_by?: 'value' | 'label';
 }
 
 /**
@@ -427,5 +438,21 @@ export interface DraftSubmission {
   metadata: SubmissionMetadata;
   created_at: string;
   synced: boolean;
+}
+
+// ─── Generic Range Variable ────────────────────────────────────────────────
+export type RangeType = 'NUMBER' | 'INTEGER' | 'DATE' | 'DATETIME' | 'TIME' | 'WEEKDAY' | 'MONTH' | 'INDEX';
+export type RangeStepUnit = 'NONE' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'MINUTE' | 'HOUR';
+
+export interface GenericRangeValue {
+  variable_id: string;
+  range_type: RangeType;
+  start_value: string | null;
+  end_value: string | null;
+  step_value?: string | null;
+  step_unit: RangeStepUnit;
+  is_inclusive: boolean;
+  has_no_min: boolean;
+  has_no_max: boolean;
 }
 

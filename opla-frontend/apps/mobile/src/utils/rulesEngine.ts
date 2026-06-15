@@ -27,6 +27,116 @@ export interface RulesEvaluationResult {
   navigationBlockMessage?: string;
 }
 
+// ─── Helper Functions for Label & Range Comparisons ──────────────────────────
+
+function findFieldInBlueprint(blueprint: any, fieldId: string): any {
+  if (!blueprint || !blueprint.ui) return null;
+  for (const section of blueprint.ui) {
+    if (section.children) {
+      for (const field of section.children) {
+        if (field.id === fieldId || field.bind === fieldId) {
+          return field;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function getComparisonValue(
+  fieldId: string,
+  currentVal: any,
+  compareBy: 'value' | 'label' | undefined,
+  blueprint: any
+): any {
+  if (compareBy === 'label' && blueprint) {
+    const field = findFieldInBlueprint(blueprint, fieldId);
+    if (field && field.options) {
+      const option = field.options.find((opt: any) => {
+        const optVal = typeof opt === 'object' && opt !== null ? opt.value : opt;
+        return String(optVal) === String(currentVal);
+      });
+      if (option && typeof option === 'object' && option.label) {
+        return option.label;
+      }
+    }
+  }
+  return currentVal;
+}
+
+function isValInRangeWithOperator(val: any, range: any, operator: string): boolean {
+  const startFilled = range.start_value !== undefined && range.start_value !== null && range.start_value !== '';
+  const endFilled = range.end_value !== undefined && range.end_value !== null && range.end_value !== '';
+
+  const type = range.range_type || 'NUMBER';
+  
+  const compare = (a: any, b: any, op: string): boolean => {
+    if (type === 'NUMBER' || type === 'INTEGER' || type === 'INDEX') {
+      const numA = Number(a), numB = Number(b);
+      if (isNaN(numA) || isNaN(numB)) return false;
+      if (op === '>') return numA > numB;
+      if (op === '>=') return numA >= numB;
+      if (op === '<') return numA < numB;
+      if (op === '<=') return numA <= numB;
+      return numA === numB;
+    }
+    
+    if (type === 'WEEKDAY' || type === 'MONTH') {
+      const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const list = type === 'WEEKDAY' ? weekdays : months;
+      const idxA = list.indexOf(String(a));
+      const idxB = list.indexOf(String(b));
+      if (idxA === -1 || idxB === -1) return false;
+      if (op === '>') return idxA > idxB;
+      if (op === '>=') return idxA >= idxB;
+      if (op === '<') return idxA < idxB;
+      if (op === '<=') return idxA <= idxB;
+      return idxA === idxB;
+    }
+    
+    // Date/Time/Datetime
+    const strA = String(a), strB = String(b);
+    if (op === '>') return strA > strB;
+    if (op === '>=') return strA >= strB;
+    if (op === '<') return strA < strB;
+    if (op === '<=') return strA <= strB;
+    return strA === strB;
+  };
+
+  if (operator === '==' || operator === 'between' || operator === 'contains') {
+    if (!range.has_no_min && startFilled) {
+      const passMin = range.is_inclusive 
+        ? compare(val, range.start_value, '>=')
+        : compare(val, range.start_value, '>');
+      if (!passMin) return false;
+    }
+    if (!range.has_no_max && endFilled) {
+      const passMax = range.is_inclusive
+        ? compare(val, range.end_value, '<=')
+        : compare(val, range.end_value, '<');
+      if (!passMax) return false;
+    }
+    return true;
+  }
+
+  if (operator === '!=') {
+    return !isValInRangeWithOperator(val, range, '==');
+  }
+
+  if (operator === '>' || operator === '>=') {
+    if (range.has_no_max || !endFilled) return false;
+    return compare(val, range.end_value, operator);
+  }
+
+  if (operator === '<' || operator === '<=') {
+    if (range.has_no_min || !startFilled) return false;
+    return compare(val, range.start_value, operator);
+  }
+
+  return false;
+}
+
 // ─── Condition Evaluator (recursive) ────────────────────────────────────────
 
 /**
@@ -35,9 +145,11 @@ export interface RulesEvaluationResult {
  */
 function evaluateConditionNode(
   node: RuleConditionNode,
-  responses: Record<string, any>
+  responses: Record<string, any>,
+  blueprint?: any
 ): boolean {
-  const currentVal = responses[node.field];
+  const rawCurrentVal = responses[node.field];
+  const currentVal = getComparisonValue(node.field, rawCurrentVal, node.compare_by, blueprint);
   const targetVal = node.value;
 
   // Handle empty/not_empty operators first — they ignore the value
@@ -48,6 +160,20 @@ function evaluateConditionNode(
   if (node.operator === 'not_empty') {
     if (Array.isArray(currentVal)) return currentVal.length > 0;
     return currentVal !== undefined && currentVal !== null && String(currentVal).trim() !== '';
+  }
+
+  // Support comparing generic range fields/values
+  const isCurrentRange = currentVal && typeof currentVal === 'object' && currentVal.range_type !== undefined;
+  const targetRangeVal = typeof targetVal === 'string' ? responses[targetVal] : null;
+  const isTargetRange = targetRangeVal && typeof targetRangeVal === 'object' && targetRangeVal.range_type !== undefined;
+  const directTargetRange = targetVal && typeof targetVal === 'object' && targetVal.range_type !== undefined;
+
+  const rangeObj = isCurrentRange ? currentVal : (isTargetRange ? targetRangeVal : (directTargetRange ? targetVal : null));
+  if (rangeObj) {
+    const scalarVal = isCurrentRange 
+      ? (typeof targetVal === 'string' && responses[targetVal] !== undefined ? responses[targetVal] : targetVal)
+      : currentVal;
+    return isValInRangeWithOperator(scalarVal, rangeObj, node.operator);
   }
 
   // Handle array operators (for multi-select, checkbox_group)
@@ -104,10 +230,11 @@ function evaluateConditionNode(
  */
 function evaluateNode(
   node: RuleNode,
-  responses: Record<string, any>
+  responses: Record<string, any>,
+  blueprint?: any
 ): boolean {
   if (node.type === 'rule') {
-    return evaluateConditionNode(node as RuleConditionNode, responses);
+    return evaluateConditionNode(node as RuleConditionNode, responses, blueprint);
   }
 
   const group = node as RuleGroupNode;
@@ -116,9 +243,9 @@ function evaluateNode(
   if (children.length === 0) return true; // Empty group = always true
 
   if (group.combinator === 'AND') {
-    return children.every(child => evaluateNode(child, responses));
+    return children.every(child => evaluateNode(child, responses, blueprint));
   } else {
-    return children.some(child => evaluateNode(child, responses));
+    return children.some(child => evaluateNode(child, responses, blueprint));
   }
 }
 
@@ -130,7 +257,8 @@ function evaluateNode(
  */
 export function evaluateAllRules(
   rules: FormRule[],
-  responses: Record<string, any>
+  responses: Record<string, any>,
+  blueprint?: any
 ): RulesEvaluationResult {
   const activeEffects: ActiveEffect[] = [];
   const fieldEffects: Record<string, ActiveEffect[]> = {};
@@ -144,7 +272,7 @@ export function evaluateAllRules(
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
 
   for (const rule of sortedRules) {
-    const conditionMet = evaluateNode(rule.condition, responses);
+    const conditionMet = evaluateNode(rule.condition, responses, blueprint);
 
     if (conditionMet) {
       for (const action of rule.actions) {

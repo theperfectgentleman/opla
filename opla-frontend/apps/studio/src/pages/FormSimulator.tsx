@@ -54,6 +54,7 @@ interface FormBlueprint {
         id: string;
         title: string;
         children: UIField[];
+        render_mode?: string;
     }>;
     logic?: LogicRule[];
 }
@@ -186,6 +187,23 @@ const FormSimulator: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+    const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+
+    // Sync activeFieldId for single-variable-at-a-time mode
+    useEffect(() => {
+        if (!blueprint) return;
+        const currentSection = blueprint.ui[currentSectionIndex];
+        const isSingleMode = currentSection?.render_mode === 'single';
+        const visibleFields = (currentSection?.children || []).filter(field => isFieldVisible(field.bind));
+        
+        if (isSingleMode && visibleFields.length > 0) {
+            if (!activeFieldId || !visibleFields.some(f => f.bind === activeFieldId)) {
+                setActiveFieldId(visibleFields[0].bind);
+            }
+        } else {
+            setActiveFieldId(null);
+        }
+    }, [currentSectionIndex, blueprint, formData]);
 
     const isOtherSelected = (val: any) => {
         if (!val) return false;
@@ -325,7 +343,18 @@ const FormSimulator: React.FC = () => {
 
     const handleNext = () => {
         if (!blueprint) return;
-        const currentSectionId = blueprint.ui[currentSectionIndex].id;
+        const currentSection = blueprint.ui[currentSectionIndex];
+
+        if (currentSection?.render_mode === 'single' && activeFieldId) {
+            const visibleFields = (currentSection.children || []).filter(field => isFieldVisible(field.bind));
+            const currentIndex = visibleFields.findIndex(f => f.bind === activeFieldId);
+            if (currentIndex >= 0 && currentIndex < visibleFields.length - 1) {
+                setActiveFieldId(visibleFields[currentIndex + 1].bind);
+                return;
+            }
+        }
+
+        const currentSectionId = currentSection.id;
         const jumpRule = (blueprint.logic || []).find(r => r.type === 'section_jump' && r.source_id === currentSectionId && evaluateRule(r));
 
         if (jumpRule) {
@@ -336,12 +365,57 @@ const FormSimulator: React.FC = () => {
             const targetIndex = blueprint.ui.findIndex(p => p.id === jumpRule.target_id);
             if (targetIndex !== -1) {
                 setCurrentSectionIndex(targetIndex);
+                const targetSection = blueprint.ui[targetIndex];
+                if (targetSection?.render_mode === 'single') {
+                    const targetVisibleFields = (targetSection.children || []).filter(field => isFieldVisible(field.bind));
+                    if (targetVisibleFields.length > 0) {
+                        setActiveFieldId(targetVisibleFields[0].bind);
+                    }
+                }
                 return;
             }
         }
 
         // Default next
-        setCurrentSectionIndex(prev => prev + 1);
+        if (currentSectionIndex < blueprint.ui.length - 1) {
+            const nextIdx = currentSectionIndex + 1;
+            setCurrentSectionIndex(nextIdx);
+            const nextSection = blueprint.ui[nextIdx];
+            if (nextSection?.render_mode === 'single') {
+                const nextVisibleFields = (nextSection.children || []).filter(field => isFieldVisible(field.bind));
+                if (nextVisibleFields.length > 0) {
+                    setActiveFieldId(nextVisibleFields[0].bind);
+                }
+            }
+        } else {
+            handleSubmit();
+        }
+    };
+
+    const handleBack = () => {
+        if (!blueprint) return;
+        const currentSection = blueprint.ui[currentSectionIndex];
+
+        if (currentSection?.render_mode === 'single' && activeFieldId) {
+            const visibleFields = (currentSection.children || []).filter(field => isFieldVisible(field.bind));
+            const currentIndex = visibleFields.findIndex(f => f.bind === activeFieldId);
+            if (currentIndex > 0) {
+                setActiveFieldId(visibleFields[currentIndex - 1].bind);
+                return;
+            }
+        }
+
+        if (currentSectionIndex > 0) {
+            const prevSectionIdx = currentSectionIndex - 1;
+            setCurrentSectionIndex(prevSectionIdx);
+            const prevSection = blueprint.ui[prevSectionIdx];
+            if (prevSection?.render_mode === 'single') {
+                const prevVisibleFields = (prevSection.children || []).filter(field => isFieldVisible(field.bind));
+                if (prevVisibleFields.length > 0) {
+                    setActiveFieldId(prevVisibleFields[prevVisibleFields.length - 1].bind);
+                }
+            }
+        }
     };
 
     const handleSubmit = async () => {
@@ -369,6 +443,18 @@ const FormSimulator: React.FC = () => {
     const handleShellNavSelect = (key: 'projects' | 'tasks' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
         navigate(`/dashboard?tab=${key}`);
     };
+
+    const currentSection = blueprint?.ui[currentSectionIndex];
+    const isLastSection = currentSectionIndex === (blueprint?.ui?.length || 1) - 1;
+    let hasNextStep = !isLastSection;
+
+    if (currentSection?.render_mode === 'single' && activeFieldId) {
+        const visibleFields = (currentSection.children || []).filter(field => isFieldVisible(field.bind));
+        const currentIndex = visibleFields.findIndex(f => f.bind === activeFieldId);
+        if (currentIndex >= 0 && currentIndex < visibleFields.length - 1) {
+            hasNextStep = true;
+        }
+    }
 
     return (
         <StudioLayout
@@ -407,6 +493,7 @@ const FormSimulator: React.FC = () => {
                             <div className="p-6 space-y-6">
                                 {(blueprint?.ui[currentSectionIndex]?.children || [])
                                     .filter(field => isFieldVisible(field.bind))
+                                    .filter(field => !activeFieldId || field.bind === activeFieldId)
                                     .map((field, idx) => (
                                         <div key={idx} className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                             <label className="text-sm font-bold text-[hsl(var(--text-secondary))] block">
@@ -688,16 +775,20 @@ const FormSimulator: React.FC = () => {
 
                                 {/* Pagination Controls */}
                                 <div className="pt-6 flex gap-3">
-                                    {currentSectionIndex > 0 && (
+                                    {(currentSectionIndex > 0 || (blueprint?.ui[currentSectionIndex]?.render_mode === 'single' && activeFieldId && (() => {
+                                        const currentSection = blueprint.ui[currentSectionIndex];
+                                        const visibleFields = (currentSection.children || []).filter(field => isFieldVisible(field.bind));
+                                        return visibleFields.findIndex(f => f.bind === activeFieldId) > 0;
+                                    })())) && (
                                         <button
-                                            onClick={() => setCurrentSectionIndex(prev => prev - 1)}
+                                            onClick={handleBack}
                                             className="flex-1 font-bold py-4 rounded-md shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-primary))] border border-[hsl(var(--border))] hover:bg-[hsl(var(--surface))]"
                                         >
                                             <span>Back</span>
                                         </button>
                                     )}
 
-                                    {currentSectionIndex < (blueprint?.ui.length || 1) - 1 ? (
+                                    {hasNextStep ? (
                                         <button
                                             onClick={handleNext}
                                             className="flex-1 font-bold py-4 rounded-md shadow-xl transition-all flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white shadow-[hsl(var(--primary))]/30"

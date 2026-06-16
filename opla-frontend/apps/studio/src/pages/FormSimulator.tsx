@@ -74,6 +74,36 @@ interface FormBlueprint {
 const getOptionValue = (opt: any) => typeof opt === 'object' && opt !== null ? opt.value : opt;
 const getOptionLabel = (opt: any) => typeof opt === 'object' && opt !== null ? opt.label : opt;
 
+const getHtmlInputStep = (rangeType?: string, stepValue?: string, stepUnit?: string) => {
+    if (rangeType === 'NUMBER') {
+        return stepValue || 'any';
+    }
+    if (rangeType === 'INTEGER' || rangeType === 'INDEX') {
+        return stepValue || '1';
+    }
+    if (!stepValue) return undefined;
+    
+    const num = parseFloat(stepValue);
+    if (isNaN(num)) return undefined;
+
+    if (rangeType === 'TIME' || rangeType === 'DATETIME') {
+        const unit = stepUnit || 'NONE';
+        if (unit === 'MINUTE') return String(num * 60);
+        if (unit === 'HOUR') return String(num * 3600);
+        if (unit === 'DAY') return String(num * 86400);
+        if (unit === 'WEEK') return String(num * 604800);
+        return stepValue;
+    }
+
+    if (rangeType === 'DATE') {
+        const unit = stepUnit || 'NONE';
+        if (unit === 'WEEK') return String(num * 7);
+        return stepValue;
+    }
+
+    return undefined;
+};
+
 const applyMask = (value: string, mask: string) => {
     if (!mask) return value;
     const rawValue = value.replace(/[^a-zA-Z0-9]/g, '');
@@ -1097,6 +1127,7 @@ const FormSimulator: React.FC = () => {
                                                                         }}
                                                                         className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all font-medium"
                                                                         placeholder="Start"
+                                                                        step={getHtmlInputStep(field.range_type, field.step_value, field.step_unit)}
                                                                     />
                                                                 )}
                                                             </div>
@@ -1174,6 +1205,7 @@ const FormSimulator: React.FC = () => {
                                                                         }}
                                                                         className="w-full bg-[hsl(var(--surface-elevated))] border-2 border-transparent focus:border-[hsl(var(--primary))] focus:bg-[hsl(var(--surface))] rounded-md px-5 py-4 text-[hsl(var(--text-primary))] transition-all font-medium"
                                                                         placeholder="End"
+                                                                        step={getHtmlInputStep(field.range_type, field.step_value, field.step_unit)}
                                                                     />
                                                                 )}
                                                             </div>

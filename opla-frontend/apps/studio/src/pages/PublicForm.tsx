@@ -31,6 +31,36 @@ interface PublicFormBlueprint {
     }>;
 }
 
+const getHtmlInputStep = (rangeType?: string, stepValue?: string, stepUnit?: string) => {
+    if (rangeType === 'NUMBER') {
+        return stepValue || 'any';
+    }
+    if (rangeType === 'INTEGER' || rangeType === 'INDEX') {
+        return stepValue || '1';
+    }
+    if (!stepValue) return undefined;
+    
+    const num = parseFloat(stepValue);
+    if (isNaN(num)) return undefined;
+
+    if (rangeType === 'TIME' || rangeType === 'DATETIME') {
+        const unit = stepUnit || 'NONE';
+        if (unit === 'MINUTE') return String(num * 60);
+        if (unit === 'HOUR') return String(num * 3600);
+        if (unit === 'DAY') return String(num * 86400);
+        if (unit === 'WEEK') return String(num * 604800);
+        return stepValue;
+    }
+
+    if (rangeType === 'DATE') {
+        const unit = stepUnit || 'NONE';
+        if (unit === 'WEEK') return String(num * 7);
+        return stepValue;
+    }
+
+    return undefined;
+};
+
 const PublicForm: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
     const [blueprint, setBlueprint] = useState<PublicFormBlueprint | null>(null);
@@ -387,6 +417,7 @@ const PublicForm: React.FC = () => {
                                                             }}
                                                             className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all outline-none"
                                                             placeholder="Start"
+                                                            step={getHtmlInputStep(field.range_type, field.step_value, field.step_unit)}
                                                         />
                                                     )}
                                                 </div>
@@ -464,6 +495,7 @@ const PublicForm: React.FC = () => {
                                                             }}
                                                             className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-600 focus:bg-white rounded-md px-6 py-5 text-slate-900 text-lg transition-all outline-none"
                                                             placeholder="End"
+                                                            step={getHtmlInputStep(field.range_type, field.step_value, field.step_unit)}
                                                         />
                                                     )}
                                                 </div>

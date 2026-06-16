@@ -161,6 +161,64 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
                 return 'Both start and end values are required';
             }
         }
+
+        // Validate step increments if configured
+        if (field.step_value) {
+            const stepNum = parseFloat(field.step_value);
+            if (!isNaN(stepNum) && stepNum > 0) {
+                if (field.range_type === 'NUMBER' || field.range_type === 'INTEGER' || field.range_type === 'INDEX') {
+                    if (startFilled) {
+                        const startNum = parseFloat(rangeVal.start_value);
+                        if (!isNaN(startNum)) {
+                            const remainder = Math.abs(startNum % stepNum);
+                            const tolerance = 0.00001;
+                            const isDivisible = remainder < tolerance || Math.abs(remainder - stepNum) < tolerance;
+                            if (!isDivisible) {
+                                return `Start value must be a multiple of ${field.step_value}`;
+                            }
+                        }
+                    }
+                    if (endFilled) {
+                        const endNum = parseFloat(rangeVal.end_value);
+                        if (!isNaN(endNum)) {
+                            const remainder = Math.abs(endNum % stepNum);
+                            const tolerance = 0.00001;
+                            const isDivisible = remainder < tolerance || Math.abs(remainder - stepNum) < tolerance;
+                            if (!isDivisible) {
+                                return `End value must be a multiple of ${field.step_value}`;
+                            }
+                        }
+                    }
+                } else if (field.range_type === 'TIME') {
+                    const checkTimeValue = (val: string) => {
+                        const parts = val.split(':');
+                        if (parts.length >= 2) {
+                            const hrs = parseInt(parts[0], 10);
+                            const mins = parseInt(parts[1], 10);
+                            if (!isNaN(hrs) && !isNaN(mins)) {
+                                const totalMins = hrs * 60 + mins;
+                                const stepMins = field.step_unit === 'HOUR' ? stepNum * 60 : stepNum;
+                                const remainder = totalMins % stepMins;
+                                if (remainder !== 0) {
+                                    return false;
+                                }
+                            }
+                        }
+                        return true;
+                    };
+
+                    if (startFilled && !checkTimeValue(rangeVal.start_value)) {
+                        const unitName = field.step_unit === 'HOUR' ? 'hour(s)' : 'minute(s)';
+                        return `Start time must be in increments of ${field.step_value} ${unitName}`;
+                    }
+                    if (endFilled && !checkTimeValue(rangeVal.end_value)) {
+                        const unitName = field.step_unit === 'HOUR' ? 'hour(s)' : 'minute(s)';
+                        return `End time must be in increments of ${field.step_value} ${unitName}`;
+                    }
+                }
+            }
+        }
+
         return undefined;
     }
 

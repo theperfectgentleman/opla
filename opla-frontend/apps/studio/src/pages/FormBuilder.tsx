@@ -2477,6 +2477,36 @@ const FormBuilder: React.FC = () => {
         }
     };
 
+    const getTypeIconStyle = (type: FieldType) => {
+        switch (type) {
+            case 'audio_recorder':
+                return 'bg-rose-50 text-rose-500 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30';
+            case 'gps_capture':
+                return 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30';
+            case 'photo_capture':
+                return 'bg-teal-50 text-teal-600 dark:bg-teal-950/30 dark:text-teal-400 border border-teal-100 dark:border-teal-900/30';
+            case 'input_text':
+            case 'input_number':
+            case 'email_input':
+            case 'phone_input':
+            case 'textarea':
+                return 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30';
+            case 'date_picker':
+            case 'time_picker':
+            case 'time_range':
+            case 'generic_range':
+                return 'bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30';
+            case 'dropdown':
+            case 'radio_group':
+            case 'checkbox_group':
+            case 'multi_select_dropdown':
+            case 'toggle':
+                return 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30';
+            default:
+                return 'bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 border border-slate-100 dark:border-slate-800/30';
+        }
+    };
+
     const renderWidgetPreview = (field: FormField) => {
         const borderStyle = "border-[hsl(var(--border))]/80";
         const surfaceColor = "bg-[hsl(var(--surface))]";
@@ -2526,21 +2556,26 @@ const FormBuilder: React.FC = () => {
                 );
             case 'gps_capture':
                 return (
-                    <div className="flex items-center gap-3 justify-between">
-                        <div className="bg-[hsl(var(--primary))]/5 border border-[hsl(var(--primary))]/10 rounded-lg px-2.5 py-1 text-[11px] text-[hsl(var(--primary))] font-mono flex items-center gap-1 truncate select-none">
-                            <MapPin className="w-3 h-3 text-[hsl(var(--primary))] shrink-0" />
-                            <span className="truncate">Lat: 5.6037°, Lon: -0.1870°</span>
-                        </div>
-                        <button className="bg-[hsl(var(--primary))] text-white text-[10px] font-bold px-2.5 py-1 rounded-lg shadow-sm shrink-0" disabled>Capture</button>
+                    <div className="flex items-center gap-2 select-none w-full">
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-100 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 px-2 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                            <MapPin className="w-3.5 h-3.5" />
+                            <span>GPS Location Lock</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))] truncate">
+                            [5.6037° N, 0.1870° W]
+                        </span>
                     </div>
                 );
             case 'photo_capture':
                 return (
-                    <div className={`flex items-center gap-2.5 border border-dashed border-[hsl(var(--border))]/80 bg-[hsl(var(--surface))]/50 px-3 py-1.5 rounded-xl text-[hsl(var(--text-tertiary))] select-none`}>
-                        <Camera className="w-4 h-4 text-[hsl(var(--text-tertiary))] shrink-0" />
+                    <div className="flex items-center gap-3 select-none w-full">
+                        <div className="w-12 h-8 rounded-lg bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))]/40 flex items-center justify-center text-[hsl(var(--text-tertiary))] shrink-0 overflow-hidden relative">
+                            <Camera className="w-4 h-4 opacity-50" />
+                            <div className="absolute inset-0 bg-gradient-to-tr from-[hsl(var(--primary))]/5 to-transparent pointer-events-none" />
+                        </div>
                         <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block leading-none">No camera feed active</span>
-                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] block mt-0.5 leading-none">Click to initialize system lens</span>
+                            <span className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block leading-tight">Camera Placeholder</span>
+                            <span className="text-[9px] text-[hsl(var(--text-tertiary))] block leading-none">Click to snap photo</span>
                         </div>
                     </div>
                 );
@@ -2570,16 +2605,20 @@ const FormBuilder: React.FC = () => {
                 );
             case 'audio_recorder':
                 return (
-                    <div className="flex items-center gap-2.5">
-                        <button className="bg-rose-500/10 hover:bg-rose-500/15 text-rose-500 rounded-full w-7 h-7 flex items-center justify-center text-sm border border-rose-500/20 outline-none shrink-0" disabled>
+                    <div className="flex items-center gap-2.5 w-full">
+                        <button className="bg-rose-500/10 hover:bg-rose-500/15 text-rose-500 rounded-full w-8 h-8 flex items-center justify-center text-sm border border-rose-500/20 outline-none shrink-0" disabled>
                             <Mic className="w-3.5 h-3.5 text-rose-500" />
                         </button>
                         <div className="flex-1 h-3.5 bg-[hsl(var(--surface-elevated))] rounded-full overflow-hidden flex items-center gap-0.5 px-2">
                             <span className="h-1.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
                             <span className="h-2.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
                             <span className="h-1 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
-                            <span className="h-2 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-3 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
                             <span className="h-0.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
+                            <span className="h-2 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded animate-pulse"></span>
+                            <span className="h-1.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded animate-pulse delay-75"></span>
+                            <span className="h-2.5 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded animate-pulse delay-100"></span>
+                            <span className="h-1 w-0.5 bg-[hsl(var(--primary))]/60 inline-block rounded"></span>
                         </div>
                         <span className="text-[10px] font-mono text-[hsl(var(--text-tertiary))] select-none shrink-0">0:00</span>
                     </div>
@@ -3409,111 +3448,171 @@ const FormBuilder: React.FC = () => {
                                                     e.stopPropagation();
                                                     setSelectedFieldId(field.id);
                                                 }}
-                                                className={`p-4 rounded-xl group relative transition-all shadow-sm cursor-pointer border ${selectedFieldId === field.id
-                                                    ? 'border-[hsl(var(--primary))] ring-2 ring-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/4 shadow-md shadow-[hsl(var(--primary))]/5'
-                                                    : dragOverFieldId === field.id
-                                                        ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/3 border-dashed'
-                                                        : 'border-transparent bg-[hsl(var(--surface))] shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.05)] hover:bg-[hsl(var(--surface-elevated))]/20 hover:border-transparent'
-                                                    }`}
+                                                className={`group relative flex transition-all duration-200 cursor-pointer border rounded-2xl p-4 pl-10 pr-10 ${
+                                                    selectedFieldId === field.id
+                                                        ? 'border-[hsl(var(--primary))] ring-2 ring-[hsl(var(--primary))]/45 bg-[hsl(var(--primary))]/4 shadow-md shadow-[hsl(var(--primary))]/5'
+                                                        : dragOverFieldId === field.id
+                                                            ? 'border-[hsl(var(--primary))]/40 bg-[hsl(var(--primary))]/3 border-dashed'
+                                                            : 'border-[hsl(var(--border))]/60 hover:border-emerald-500/40 bg-[hsl(var(--surface))] shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.05)]'
+                                                }`}
                                             >
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="flex items-center space-x-3 w-full">
-                                                        {/* Drag handle */}
-                                                        <span
-                                                            onMouseEnter={() => setDragEnabledFieldId(field.id)}
-                                                            onMouseLeave={() => setDragEnabledFieldId(null)}
-                                                            className="text-[hsl(var(--text-tertiary))] cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-all px-1 select-none"
-                                                        >
-                                                            ⠿
-                                                        </span>
-                                                        <div className="p-2 bg-[hsl(var(--surface-elevated))] rounded-lg text-[hsl(var(--text-tertiary))]">
-                                                            {getWidget(field.type)?.icon || <Smartphone className="w-4 h-4" />}
-                                                        </div>
-                                                        <input
-                                                            value={field.label}
-                                                            onChange={(e) => updateFieldLabel(field.id, e.target.value)}
-                                                            className="bg-transparent border-none text-lg font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--border-hover))] rounded px-2 w-full"
-                                                        />
-                                                        <label
-                                                            className="flex items-center space-x-1.5 cursor-pointer select-none text-[10px] text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] shrink-0 mr-2 bg-[hsl(var(--surface-elevated))]/40 hover:bg-[hsl(var(--surface-elevated))]/80 px-2 py-1 rounded-lg border border-[hsl(var(--border))]/30 transition-colors"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        >
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={!!field.required}
-                                                                onChange={() => updateField(field.id, { required: !field.required })}
-                                                                className="rounded border-[hsl(var(--border))]/80 h-3.5 w-3.5 cursor-pointer accent-[hsl(var(--primary))]"
-                                                            />
-                                                            <span className="font-semibold uppercase tracking-wider">Required</span>
-                                                        </label>
-                                                    </div>
-                                                    {/* Action buttons */}
-                                                    <div className={`flex items-center gap-1 transition-all ${selectedFieldId === field.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                                        {/* Copy */}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); copyField(field.id); }}
-                                                            title="Duplicate field"
-                                                            className="text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] p-2 transition-all"
-                                                        >
-                                                            <Copy className="w-4 h-4" />
-                                                        </button>
-                                                        {/* Move to section */}
-                                                        {sections.length > 1 && (
-                                                            <div className="relative">
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); setMoveMenuFieldId(moveMenuFieldId === field.id ? null : field.id); }}
-                                                                    title="Move to section"
-                                                                    className="text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] p-2 transition-all"
-                                                                >
-                                                                    <MoveRight className="w-4 h-4" />
-                                                                </button>
-                                                                {moveMenuFieldId === field.id && (
-                                                                    <div className="absolute right-0 top-8 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-lg z-50 min-w-40 py-1">
-                                                                        {sections.filter(s => s.id !== currentSectionId).map(s => (
-                                                                            <button
-                                                                                key={s.id}
-                                                                                onClick={(e) => { e.stopPropagation(); moveField(field.id, s.id); setMoveMenuFieldId(null); }}
-                                                                                className="w-full text-left px-3 py-2 text-sm hover:bg-[hsl(var(--surface-elevated))] transition-all"
-                                                                            >
-                                                                                → {s.title}
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {/* Delete */}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); removeField(field.id); }}
-                                                            className="text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] p-2 transition-all"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                {/* LEFT DRAG AFFORDANCE */}
+                                                <div
+                                                    onMouseEnter={() => setDragEnabledFieldId(field.id)}
+                                                    onMouseLeave={() => setDragEnabledFieldId(null)}
+                                                    className="absolute left-3 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 cursor-grab text-slate-300 dark:text-slate-700 hover:text-emerald-500 dark:hover:text-emerald-400 py-3 px-1 transition-colors duration-200"
+                                                >
+                                                    <div className="grid grid-cols-2 gap-x-[3px] gap-y-[4px]">
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
                                                     </div>
                                                 </div>
-                                                {/* Field preview */}
-                                                {field.type === 'rating_scale' ? (
-                                                    <div className="flex items-center justify-between gap-4 py-1.5">
-                                                        <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider truncate max-w-[120px] select-none">
-                                                            {field.min_label || 'Min label'}
-                                                        </span>
-                                                        <div className="flex items-center gap-1.5 flex-1 justify-center max-w-[240px] flex-wrap">
-                                                            {Array.from({ length: (Number(field.max) || 5) - (Number(field.min) || 1) + 1 }).map((_, i) => (
-                                                                <div
-                                                                    key={i}
-                                                                    className="w-7 h-7 rounded-lg bg-[hsl(var(--surface-elevated))]/70 border border-[hsl(var(--border))]/40 flex items-center justify-center text-xs font-semibold text-[hsl(var(--text-secondary))] select-none"
-                                                                >
-                                                                    {(Number(field.min) || 1) + i}
-                                                                </div>
-                                                            ))}
+
+                                                {/* Core Content Stack */}
+                                                <div className="flex-1 flex flex-col gap-3.5 min-w-0">
+                                                    
+                                                    {/* TOP ROW */}
+                                                    <div className="flex items-center gap-3">
+                                                        {/* Type Icon */}
+                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${getTypeIconStyle(field.type)}`}>
+                                                            {getWidget(field.type)?.icon || <Smartphone className="w-[18px] h-[18px]" />}
                                                         </div>
-                                                        <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider text-right truncate max-w-[120px] select-none">
-                                                            {field.max_label || 'Max label'}
-                                                        </span>
+                                                        {/* Name Input */}
+                                                        <input
+                                                            type="text"
+                                                            value={field.label}
+                                                            onChange={(e) => updateFieldLabel(field.id, e.target.value)}
+                                                            className="text-[15px] font-bold text-[hsl(var(--text-primary))] bg-transparent border-b border-transparent focus:outline-none flex-1 w-full"
+                                                        />
                                                     </div>
-                                                ) : (
-                                                    renderWidgetPreview(field)
-                                                )}
+
+                                                    {/* BOTTOM ROW */}
+                                                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border-t border-[hsl(var(--border))]/30 pt-3.5">
+                                                        
+                                                        {/* Bottom Left: Dynamic Visuals */}
+                                                        <div className="flex items-center gap-3 flex-1 w-full overflow-hidden">
+                                                            {field.type === 'rating_scale' ? (
+                                                                <div className="flex items-center justify-between gap-4 py-1.5 w-full">
+                                                                    <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider truncate max-w-[120px] select-none">
+                                                                        {field.min_label || 'Min label'}
+                                                                    </span>
+                                                                    <div className="flex items-center gap-1.5 flex-1 justify-center max-w-[240px] flex-wrap">
+                                                                        {Array.from({ length: (Number(field.max) || 5) - (Number(field.min) || 1) + 1 }).map((_, i) => (
+                                                                            <div
+                                                                                key={i}
+                                                                                className="w-7 h-7 rounded-lg bg-[hsl(var(--surface-elevated))]/70 border border-[hsl(var(--border))]/40 flex items-center justify-center text-xs font-semibold text-[hsl(var(--text-secondary))] select-none"
+                                                                            >
+                                                                                {(Number(field.min) || 1) + i}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    <span className="text-[10px] font-bold text-[hsl(var(--text-tertiary))] uppercase tracking-wider text-right truncate max-w-[120px] select-none">
+                                                                        {field.max_label || 'Max label'}
+                                                                    </span>
+                                                                </div>
+                                                            ) : (
+                                                                renderWidgetPreview(field)
+                                                            )}
+                                                        </div>
+
+                                                        {/* Bottom Right: Action Cluster */}
+                                                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 relative">
+                                                            {/* Required Toggle */}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    updateField(field.id, { required: !field.required });
+                                                                }}
+                                                                className={`flex items-center gap-1.5 font-bold tracking-wider text-[10px] uppercase py-1.5 px-3 rounded-lg border transition-all ${
+                                                                    field.required
+                                                                        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
+                                                                        : 'border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))] bg-transparent'
+                                                                }`}
+                                                            >
+                                                                Required
+                                                            </button>
+
+                                                            {/* Duplicate Button */}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    copyField(field.id);
+                                                                }}
+                                                                title="Duplicate field"
+                                                                className="w-8 h-8 rounded-lg flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))]/30 transition-all bg-transparent"
+                                                            >
+                                                                <Copy className="w-4 h-4" />
+                                                            </button>
+
+                                                            {/* Move to section */}
+                                                            {sections.length > 1 && (
+                                                                <div className="relative">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setMoveMenuFieldId(moveMenuFieldId === field.id ? null : field.id);
+                                                                        }}
+                                                                        title="Move to section"
+                                                                        className="w-8 h-8 rounded-lg flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))]/30 transition-all bg-transparent"
+                                                                    >
+                                                                        <MoveRight className="w-4 h-4" />
+                                                                    </button>
+                                                                    {moveMenuFieldId === field.id && (
+                                                                        <div className="absolute right-0 bottom-10 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md shadow-lg z-50 min-w-40 py-1">
+                                                                            {sections.filter(s => s.id !== currentSectionId).map(s => (
+                                                                                <button
+                                                                                    key={s.id}
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        moveField(field.id, s.id);
+                                                                                        setMoveMenuFieldId(null);
+                                                                                    }}
+                                                                                    className="w-full text-left px-3 py-2 text-sm hover:bg-[hsl(var(--surface-elevated))] transition-all"
+                                                                                >
+                                                                                    → {s.title}
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Delete Button */}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    removeField(field.id);
+                                                                }}
+                                                                title="Delete field"
+                                                                className="w-8 h-8 rounded-lg flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] hover:border-[hsl(var(--error))]/30 transition-all bg-transparent"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+
+                                                    </div>
+
+                                                </div>
+
+                                                {/* RIGHT DRAG AFFORDANCE */}
+                                                <div
+                                                    onMouseEnter={() => setDragEnabledFieldId(field.id)}
+                                                    onMouseLeave={() => setDragEnabledFieldId(null)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 cursor-grab text-slate-300 dark:text-slate-700 hover:text-emerald-500 dark:hover:text-emerald-400 py-3 px-1 transition-colors duration-200"
+                                                >
+                                                    <div className="grid grid-cols-2 gap-x-[3px] gap-y-[4px]">
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                        <span className="w-1 h-1 bg-current rounded-full"></span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         ))
                                     )}

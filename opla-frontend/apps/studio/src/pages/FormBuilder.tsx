@@ -4798,7 +4798,49 @@ const FormBuilder: React.FC = () => {
                                                                                     value={selectedField.catalog_source_type || ''}
                                                                                     onChange={(e) => {
                                                                                         const nextValue = e.target.value === 'project_catalog' ? 'project_catalog' : undefined;
-                                                                                        updateField(selectedField.id, { catalog_source_type: nextValue });
+                                                                                        let patch: any = { catalog_source_type: nextValue };
+                                                                                        if (nextValue === 'project_catalog') {
+                                                                                            const currentDef: any = selectedField.object_definition || {};
+                                                                                            const currentProps = currentDef.properties || [];
+                                                                                            if (currentProps.length === 0) {
+                                                                                                patch.object_definition = {
+                                                                                                    ...currentDef,
+                                                                                                    properties: [
+                                                                                                        {
+                                                                                                            key: 'product',
+                                                                                                            label: 'Product',
+                                                                                                            type: 'select',
+                                                                                                            edit_mode: 'editable',
+                                                                                                            required: true,
+                                                                                                            reference: {
+                                                                                                                source_type: 'catalog',
+                                                                                                                field_mappings: {}
+                                                                                                            }
+                                                                                                        },
+                                                                                                        {
+                                                                                                            key: 'quantity',
+                                                                                                            label: 'Quantity',
+                                                                                                            type: 'integer',
+                                                                                                            edit_mode: 'editable',
+                                                                                                            default_value: 0
+                                                                                                        },
+                                                                                                        {
+                                                                                                            key: 'unit_price',
+                                                                                                            label: 'Unit Price',
+                                                                                                            type: 'decimal',
+                                                                                                            edit_mode: 'fixed'
+                                                                                                        },
+                                                                                                        {
+                                                                                                            key: 'total',
+                                                                                                            label: 'Total',
+                                                                                                            type: 'computed',
+                                                                                                            formula: 'quantity * unit_price'
+                                                                                                        }
+                                                                                                    ]
+                                                                                                };
+                                                                                            }
+                                                                                        }
+                                                                                        updateField(selectedField.id, patch);
                                                                                     }}
                                                                                     className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                     onFocus={() => setHoveredProperty(propertyMetaDetails.catalog_source_type)}

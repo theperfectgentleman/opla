@@ -15,6 +15,7 @@ import {
     Database,
     XCircle,
     MapPin,
+    Trash2,
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
@@ -1457,88 +1458,130 @@ const ProjectWorkspace: React.FC = () => {
                                     </span>
                                 </div>
                                 <div className="flex flex-col gap-4 p-4 lg:p-5">
-                                    <form onSubmit={handleCreateCatalogItem} className="grid grid-cols-1 gap-2 md:grid-cols-5">
-                                        <input
-                                            value={newCatalogItem.sku_code}
-                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, sku_code: event.target.value }))}
-                                            className="input"
-                                            placeholder="Item code"
-                                        />
-                                        <input
-                                            value={newCatalogItem.label}
-                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, label: event.target.value }))}
-                                            className="input"
-                                            placeholder="Label"
-                                        />
-                                        <input
-                                            value={newCatalogItem.default_price}
-                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, default_price: event.target.value }))}
-                                            className="input"
-                                            placeholder="Default price"
-                                            type="number"
-                                            step="0.01"
-                                        />
-                                        <input
-                                            value={newCatalogItem.unit}
-                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, unit: event.target.value }))}
-                                            className="input"
-                                            placeholder="Unit"
-                                        />
-                                        <div className="flex gap-2">
-                                            <input
-                                                value={newCatalogItem.brand}
-                                                onChange={(event) => setNewCatalogItem(prev => ({ ...prev, brand: event.target.value }))}
-                                                className="input"
-                                                placeholder="Brand"
-                                            />
-                                            <button type="submit" className="rounded-md bg-[hsl(var(--primary))] px-3 py-2 text-xs font-semibold text-white">
-                                                Add
-                                            </button>
+                                    <form onSubmit={handleCreateCatalogItem} className="space-y-3.5 p-3.5 bg-[hsl(var(--surface-elevated))]/20 rounded-xl border border-[hsl(var(--border))]/30">
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            <div className="flex flex-col">
+                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Code / ID</label>
+                                                <input
+                                                    value={newCatalogItem.sku_code}
+                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, sku_code: event.target.value }))}
+                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none font-mono"
+                                                    placeholder="e.g. ITEM-001, HH-02"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Name / Label</label>
+                                                <input
+                                                    value={newCatalogItem.label}
+                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, label: event.target.value }))}
+                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                    placeholder="e.g. Coca Cola, John Doe"
+                                                />
+                                            </div>
                                         </div>
+                                        <div className="grid grid-cols-3 gap-2.5">
+                                            <div className="flex flex-col">
+                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Value</label>
+                                                <input
+                                                    value={newCatalogItem.default_price}
+                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, default_price: event.target.value }))}
+                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                    placeholder="0.00"
+                                                    type="number"
+                                                    step="0.01"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Type</label>
+                                                <input
+                                                    value={newCatalogItem.unit}
+                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, unit: event.target.value }))}
+                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                    placeholder="e.g. bottle, member"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Category</label>
+                                                <input
+                                                    value={newCatalogItem.brand}
+                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, brand: event.target.value }))}
+                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                    placeholder="e.g. FMCG, Demographics"
+                                                />
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            className="w-full rounded-lg bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] py-2 text-xs font-semibold text-white transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            Add Catalog Item
+                                        </button>
                                     </form>
 
                                     {catalogItems.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
+                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-6 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">
                                             No catalog items yet.
                                         </p>
-                                    ) : catalogItems.map(item => (
-                                        <div key={item.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{item.label}</h3>
-                                                        <span className="rounded-md bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">{item.sku_code}</span>
+                                    ) : (
+                                        <div className="max-h-[360px] overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
+                                            {catalogItems.map(item => (
+                                                <div key={item.id} className="rounded-xl border border-[hsl(var(--border))]/60 bg-[hsl(var(--background))] p-3.5 hover:border-[hsl(var(--primary))]/30 transition-all">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="space-y-1">
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">{item.label}</h3>
+                                                                <span className="rounded bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/30 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[hsl(var(--text-secondary))]">{item.sku_code}</span>
+                                                            </div>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium flex items-center gap-1.5 flex-wrap">
+                                                                {item.brand && (
+                                                                    <>
+                                                                        <span>{item.brand}</span>
+                                                                        <span className="text-[hsl(var(--border))]/60">•</span>
+                                                                    </>
+                                                                )}
+                                                                {item.unit && (
+                                                                    <>
+                                                                        <span>{item.unit}</span>
+                                                                        <span className="text-[hsl(var(--border))]/60">•</span>
+                                                                    </>
+                                                                )}
+                                                                <span className="text-[hsl(var(--primary))] font-semibold font-mono">
+                                                                    {item.default_price != null ? `$${item.default_price}` : 'No default value'}
+                                                                </span>
+                                                            </p>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => handleDeleteCatalogItem(item.id)} 
+                                                            className="rounded-lg p-1 text-[hsl(var(--text-tertiary))] hover:text-red-500 transition-colors hover:bg-red-500/15"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
                                                     </div>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                        {(item.brand || 'No brand')} • {(item.unit || 'No unit')} • {item.default_price != null ? `$${item.default_price.toFixed(2)}` : 'No default price'}
-                                                    </p>
+                                                    <div className="mt-3 flex items-center gap-4 pt-3 border-t border-[hsl(var(--border))]/30">
+                                                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={item.is_active}
+                                                                onChange={(event) => handleCatalogItemToggle(item, { is_active: event.target.checked })}
+                                                                className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                            />
+                                                            Active
+                                                        </label>
+                                                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={item.price_editable}
+                                                                onChange={(event) => handleCatalogItemToggle(item, { price_editable: event.target.checked })}
+                                                                className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                            />
+                                                            Price editable
+                                                        </label>
+                                                    </div>
                                                 </div>
-                                                <button onClick={() => handleDeleteCatalogItem(item.id)} className="rounded-md px-2 py-1 text-[10px] font-semibold text-[hsl(var(--text-tertiary))] transition-colors hover:bg-[hsl(var(--error))]/10 hover:text-[hsl(var(--error))]">
-                                                    Delete
-                                                </button>
-                                            </div>
-                                            <div className="mt-3 flex items-center gap-4 pt-3 border-t border-[hsl(var(--border))]/50">
-                                                <label className="flex items-center gap-2 text-xs text-[hsl(var(--text-secondary))]">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={item.is_active}
-                                                        onChange={(event) => handleCatalogItemToggle(item, { is_active: event.target.checked })}
-                                                        className="h-4 w-4"
-                                                    />
-                                                    Active
-                                                </label>
-                                                <label className="flex items-center gap-2 text-xs text-[hsl(var(--text-secondary))]">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={item.price_editable}
-                                                        onChange={(event) => handleCatalogItemToggle(item, { price_editable: event.target.checked })}
-                                                        className="h-4 w-4"
-                                                    />
-                                                    Price editable
-                                                </label>
-                                            </div>
+                                            ))}
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
                             </section>
 

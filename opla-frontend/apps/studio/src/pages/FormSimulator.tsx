@@ -410,11 +410,30 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
             }
             return [createObjectValue()];
         }
-        if (Array.isArray(value)) {
-            return value.map((entry) => calculateItemComputedProperties(entry || {}));
+        
+        let loadedItems: any[] = [];
+        if (Array.isArray(value) && value.length > 0) {
+            loadedItems = value.map((entry) => calculateItemComputedProperties(entry || {}));
+        } else if (field.catalog_source_type === 'project_catalog' && catalogItems.length > 0) {
+            loadedItems = catalogItems.map((item: any) => {
+                const row: any = { _isCatalogItem: true };
+                properties.forEach((prop: any) => {
+                    if (prop.type === 'select' && prop.reference?.source_type === 'catalog') {
+                        row[prop.key] = item.id;
+                        Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]: any) => {
+                            row[targetKey] = item[sourceKey];
+                        });
+                    } else if (prop.key === 'unit_price' || prop.key === 'price') {
+                        row[prop.key] = item.default_price;
+                    } else if (prop.default_value !== undefined) {
+                        row[prop.key] = prop.default_value;
+                    }
+                });
+                return calculateItemComputedProperties(row);
+            });
         }
-        return [];
-    }, [isInstance, value, properties]);
+        return loadedItems;
+    }, [isInstance, value, properties, field.catalog_source_type, catalogItems]);
 
     const commitItems = (nextItems: any[]) => {
         if (isInstance) {
@@ -423,6 +442,12 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
             onChange(nextItems);
         }
     };
+
+    React.useEffect(() => {
+        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && field.catalog_source_type === 'project_catalog' && catalogItems.length > 0) {
+            commitItems(items);
+        }
+    }, [catalogItems, value, field.catalog_source_type]);
 
     const updateRow = (rowIndex: number, propertyKey: string, propValue: any, propDef: any) => {
         const nextItems = items.map((entry, index) => {
@@ -468,17 +493,16 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
     };
 
     const removeRow = (rowIndex: number) => {
+        if (items[rowIndex]?._isCatalogItem) return;
         commitItems(items.filter((_, idx) => idx !== rowIndex));
     };
 
-    // Render single sub-property control
-    const renderPropertyControl = (row: any, rowIndex: number, property: any) => {
+    // Render single sub-property control input only
+    const renderPropertyControlInputOnly = (row: any, rowIndex: number, property: any) => {
         const propValue = row[property.key] ?? '';
         const propLabel = property.label || property.key;
 
         if (property.edit_mode === 'hidden') return null;
-
-        let control: React.ReactNode;
 
         const isReadOnly = property.type === 'computed' || property.edit_mode === 'fixed';
 
@@ -492,7 +516,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
                   ]).map((item: any) => ({ label: item.label, value: item.id }))
                 : (property.options || []);
 
-            control = (
+            return (
                 <select
                     disabled={isReadOnly}
                     value={propValue}
@@ -506,23 +530,23 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
                 </select>
             );
         } else if (property.type === 'boolean') {
-            control = (
+            return (
                 <input
                     disabled={isReadOnly}
                     type="checkbox"
                     checked={!!propValue}
                     onChange={(e) => updateRow(rowIndex, property.key, e.target.checked, property)}
-                    className="h-4 w-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20"
+                    className="h-4 w-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
                 />
             );
         } else if (property.type === 'computed') {
-            control = (
-                <div className="bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/35 px-3 py-2 rounded-md font-semibold font-mono text-xs text-[hsl(var(--text-secondary))]">
+            return (
+                <div className="bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/35 px-3 py-2 rounded-md font-semibold font-mono text-xs text-[hsl(var(--text-secondary))] min-w-[60px] text-center">
                     {propValue !== undefined && propValue !== null && propValue !== '' ? String(propValue) : '—'}
                 </div>
             );
         } else {
-            control = (
+            return (
                 <input
                     disabled={isReadOnly}
                     type={['number', 'integer', 'decimal'].includes(property.type) ? 'number' : 'text'}
@@ -533,16 +557,91 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
                 />
             );
         }
+    };
 
+    // Render single sub-property control
+    const renderPropertyControl = (row: any, rowIndex: number, property: any) => {
+        if (property.edit_mode === 'hidden') return null;
+        const propLabel = property.label || property.key;
         return (
             <div key={property.key} className="space-y-1">
                 <label className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block">
                     {propLabel} {property.required && <span className="text-red-500">*</span>}
                 </label>
-                {control}
+                {renderPropertyControlInputOnly(row, rowIndex, property)}
             </div>
         );
     };
+
+    const isTableLayout = !isInstance && field.collection_layout === 'table';
+
+    if (isTableLayout) {
+        return (
+            <div className="space-y-4 w-full">
+                <div className="w-full overflow-x-auto border border-[hsl(var(--border))]/60 rounded-xl bg-[hsl(var(--surface-elevated))]/10 custom-scrollbar">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
+                        <thead>
+                            <tr className="bg-[hsl(var(--surface-elevated))]/40 border-b border-[hsl(var(--border))]/30">
+                                {properties.map((prop: any) => (
+                                    <th key={prop.key} className="p-3 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] whitespace-nowrap">
+                                        {prop.label || prop.key} {prop.required && <span className="text-red-500">*</span>}
+                                    </th>
+                                ))}
+                                {(field.allow_remove_items ?? true) && (
+                                    <th className="p-3 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] text-center w-12">
+                                        Actions
+                                    </th>
+                                )}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[hsl(var(--border))]/20">
+                            {items.length === 0 ? (
+                                <tr>
+                                    <td colSpan={properties.length + 1} className="p-6 text-center text-xs text-[hsl(var(--text-tertiary))] italic">
+                                        No items added yet.
+                                    </td>
+                                </tr>
+                            ) : (
+                                items.map((row: any, rowIndex: number) => (
+                                    <tr key={rowIndex} className="hover:bg-[hsl(var(--surface-elevated))]/5 transition-colors">
+                                        {properties.map((prop: any) => (
+                                            <td key={prop.key} className="p-2">
+                                                {renderPropertyControlInputOnly(row, rowIndex, prop)}
+                                            </td>
+                                        ))}
+                                        {(field.allow_remove_items ?? true) && (
+                                            <td className="p-2 text-center">
+                                                {!row._isCatalogItem && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeRow(rowIndex)}
+                                                        className="p-1.5 text-red-500 hover:text-red-600 transition-colors hover:bg-red-500/10 rounded-md"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {(field.allow_add_items ?? true) && (
+                    <button
+                        type="button"
+                        onClick={addRow}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-transparent hover:bg-[hsl(var(--primary))]/15 transition-all text-xs font-semibold"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Item
+                    </button>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
@@ -553,7 +652,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
                             {isInstance ? <Database className="w-3.5 h-3.5 text-[hsl(var(--primary))]" /> : <Layers className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />}
                             {isInstance ? 'Reference Card' : `Card #${rowIndex + 1}`}
                         </span>
-                        {!isInstance && (field.allow_remove_items ?? true) && (
+                        {!isInstance && (field.allow_remove_items ?? true) && !row._isCatalogItem && (
                             <button
                                 type="button"
                                 onClick={() => removeRow(rowIndex)}

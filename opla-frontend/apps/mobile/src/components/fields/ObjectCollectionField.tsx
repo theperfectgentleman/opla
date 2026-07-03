@@ -172,11 +172,37 @@ export function ObjectCollectionField({
             }
             return [createObjectValue(properties)];
         }
-        if (Array.isArray(value)) {
-            return value.map((entry) => applyComputedProperties((entry as RowValue) || {}, properties));
+        
+        let loadedItems: RowValue[] = [];
+        if (Array.isArray(value) && value.length > 0) {
+            loadedItems = value.map((entry) => applyComputedProperties((entry as RowValue) || {}, properties));
+        } else if (field.catalog_source_type === 'project_catalog') {
+            const propWithCatalog = properties.find((p) => p.type === 'select' && p.reference?.source_type === 'catalog');
+            const sourceItems = propWithCatalog?.reference?.source_items || [];
+            if (sourceItems.length > 0) {
+                loadedItems = sourceItems.map((item) => {
+                    let row: RowValue = { _isCatalogItem: true };
+                    properties.forEach((prop) => {
+                        if (prop.type === 'select' && prop.reference?.source_type === 'catalog') {
+                            row[prop.key] = item.id;
+                            Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]) => {
+                                const val = (item as Record<string, any>)[sourceKey];
+                                if (val !== undefined) {
+                                    row[targetKey] = val;
+                                }
+                            });
+                        } else if (prop.key === 'unit_price' || prop.key === 'price') {
+                            row[prop.key] = item.default_price;
+                        } else if (prop.default_value !== undefined) {
+                            row[prop.key] = prop.default_value;
+                        }
+                    });
+                    return applyComputedProperties(row, properties);
+                });
+            }
         }
-        return [];
-    }, [isInstance, value, properties]);
+        return loadedItems;
+    }, [isInstance, value, properties, field.catalog_source_type]);
 
     const commitItems = (nextItems: RowValue[]) => {
         if (isInstance) {
@@ -185,6 +211,16 @@ export function ObjectCollectionField({
         }
         onChange(nextItems);
     };
+
+    React.useEffect(() => {
+        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && field.catalog_source_type === 'project_catalog') {
+            const propWithCatalog = properties.find((p) => p.type === 'select' && p.reference?.source_type === 'catalog');
+            const sourceItems = propWithCatalog?.reference?.source_items || [];
+            if (sourceItems.length > 0) {
+                commitItems(items);
+            }
+        }
+    }, [properties, value, field.catalog_source_type]);
 
     const updateRow = (rowIndex: number, path: string[], nextValue: any, property?: ObjectPropertyDefinition) => {
         const nextItems = items.map((entry, index) => {
@@ -202,6 +238,7 @@ export function ObjectCollectionField({
     };
 
     const removeRow = (rowIndex: number) => {
+        if (items[rowIndex]?._isCatalogItem) return;
         commitItems(items.filter((_, index) => index !== rowIndex));
     };
 
@@ -370,8 +407,12 @@ export function ObjectCollectionField({
                                         </View>
                                     ))}
                                     {(field.allow_remove_items ?? definition?.allow_manual_remove ?? true) && (
-                                        <TouchableOpacity onPress={() => removeRow(rowIndex)} style={{ width: 70, alignItems: 'center', justifyContent: 'center' }}>
-                                            <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: '700' }}>Delete</Text>
+                                        <TouchableOpacity 
+                                            onPress={() => removeRow(rowIndex)} 
+                                            disabled={!!row._isCatalogItem}
+                                            style={{ width: 70, alignItems: 'center', justifyContent: 'center', opacity: row._isCatalogItem ? 0.3 : 1 }}
+                                        >
+                                            <Text style={{ color: row._isCatalogItem ? '#64748b' : '#ef4444', fontSize: 12, fontWeight: '700' }}>Delete</Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -418,7 +459,7 @@ export function ObjectCollectionField({
                         <Text style={{ color: '#f1f5f9', fontSize: 14, fontWeight: '700' }}>
                             {definition?.label || field.label} {isInstance ? '' : `#${rowIndex + 1}`}
                         </Text>
-                        {!isInstance && (field.allow_remove_items ?? definition?.allow_manual_remove ?? true) ? (
+                        {!isInstance && (field.allow_remove_items ?? definition?.allow_manual_remove ?? true) && !row._isCatalogItem ? (
                             <TouchableOpacity onPress={() => removeRow(rowIndex)}>
                                 <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: '700' }}>Remove</Text>
                             </TouchableOpacity>

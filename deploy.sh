@@ -19,7 +19,7 @@ function show_menu() {
     echo -e "${GREEN}Development:${NC}"
     echo "1. Start All (Studio + Mobile + Backend)"
     echo "2. Start Web Studio + Backend"
-    echo "3. Start Mobile App + Backend"
+    echo "3. Start Mobile App Only"
     echo "4. Start Backend API Only"
     echo ""
     echo -e "${GREEN}Database:${NC}"
@@ -162,7 +162,7 @@ while true; do
     case $choice in
         1) start_backend; start_studio; start_mobile ;;
         2) start_backend; start_studio ;;
-        3) start_backend; start_mobile ;;
+        3) start_mobile ;;
         4) start_backend ;;
         5) db_migrate ;;
         6) db_upgrade ;;

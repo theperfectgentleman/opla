@@ -62,6 +62,8 @@ Email: test@opla.ai
 Password: Test1234
 Full Name: Test User
 ```
+kay@demo.com
+pass123
 
 ### Phone Registration (Dev Mode):
 ```

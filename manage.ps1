@@ -12,7 +12,7 @@ function Show-Menu {
     Write-Host "============================" -ForegroundColor Cyan
     Write-Host "1. Start All (Studio + Backend)"
     Write-Host "2. Start Web Studio + Backend"
-    Write-Host "3. Start Mobile App + Backend"
+    Write-Host "3. Start Mobile App Only"
     Write-Host "4. Start Backend API"
     Write-Host "5. Database: Generate Migration"
     Write-Host "6. Database: Run Migrations"
@@ -76,7 +76,7 @@ function Stop-OplaServices {
 if ($Action) {
     switch ($Action) {
         "studio" { Start-Backend; Start-Studio }
-        "mobile" { Start-Backend; Start-Mobile }
+        "mobile" { Start-Mobile }
         "backend" { Start-Backend }
         "stop" { Stop-OplaServices }
         Default { Write-Error "Unknown action" }
@@ -89,7 +89,7 @@ else {
         switch ($input) {
             "1" { Start-Backend; Start-Studio }
             "2" { Start-Backend; Start-Studio }
-            "3" { Start-Backend; Start-Mobile }
+            "3" { Start-Mobile }
             "4" { Start-Backend }
             "5" { DB-Migrate }
             "6" { DB-Upgrade }

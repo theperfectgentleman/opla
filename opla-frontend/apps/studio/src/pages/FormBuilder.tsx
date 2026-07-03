@@ -3726,15 +3726,25 @@ const FormBuilder: React.FC = () => {
 
                     </div>
 
-                    <aside className="flex h-full shrink-0 border-l border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 relative">
+                    <aside className={`flex h-full shrink-0 border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))]/55 relative transition-all duration-300 ${
+                        isRightSidebarOpen && isRightSidebarPinned && view === 'section'
+                            ? 'w-full md:w-1/2 border-l'
+                            : isRightSidebarOpen && isRightSidebarPinned
+                                ? 'border-l'
+                                : 'w-0 border-l-0 overflow-hidden'
+                    }`}>
                         {isRightSidebarOpen && (
                             <div
                                 className={`${
                                     isRightSidebarPinned
-                                        ? 'border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden'
-                                        : 'absolute right-16 top-3 bottom-4 z-40 border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-2xl shadow-2xl'
+                                        ? 'border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex flex-col overflow-hidden flex-grow min-w-0'
+                                        : 'fixed md:absolute inset-0 md:inset-auto md:right-16 md:top-3 md:bottom-4 z-40 border-0 md:border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface))] flex flex-col overflow-hidden rounded-none md:rounded-2xl shadow-2xl w-auto max-w-full md:w-[560px]'
                                 } animate-in slide-in-from-right-4 fade-in duration-300 relative`}
-                                style={{ width: isRightSidebarPinned ? rightPanelWidth : 560 }}
+                                style={{
+                                    width: isRightSidebarPinned
+                                        ? (view === 'section' ? undefined : rightPanelWidth)
+                                        : undefined
+                                }}
                             >
                                 {/* Drag resize handle (pinned only) */}
                                 {isRightSidebarPinned && (
@@ -3775,6 +3785,13 @@ const FormBuilder: React.FC = () => {
                                         title={isRightSidebarPinned ? "Unpin (Float)" : "Pin (Dock)"}
                                     >
                                         <Pin className={`w-3.5 h-3.5 ${isRightSidebarPinned ? 'fill-current rotate-45' : ''}`} />
+                                    </button>
+                                    <button
+                                        onClick={() => setIsRightSidebarOpen(false)}
+                                        className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] hover:text-red-500 rounded-lg transition-colors ml-1 shrink-0"
+                                        title="Close Properties Panel"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 

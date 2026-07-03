@@ -1214,6 +1214,87 @@ const FormBuilder: React.FC = () => {
     const [quickAddIndex, setQuickAddIndex] = useState<number | null>(null);
     const [quickAddSearchQuery, setQuickAddSearchQuery] = useState('');
     const [quickAddKeyboardIndex, setQuickAddKeyboardIndex] = useState(0);
+
+    // Recent and common fields tracking for quick add
+    const [recentFields, setRecentFields] = useState<FieldType[]>(() => {
+        try {
+            const saved = localStorage.getItem('opla_recent_fields');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) {
+                    return parsed.slice(0, 2) as FieldType[];
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return ['input_text', 'input_number'] as FieldType[];
+    });
+
+    const trackUsedField = (type: FieldType) => {
+        setRecentFields(prev => {
+            const filtered = prev.filter(t => t !== type);
+            const updated = [type, ...filtered].slice(0, 2);
+            localStorage.setItem('opla_recent_fields', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const quickButtons = useMemo(() => {
+        const POOL: FieldType[] = ['input_text', 'input_number', 'date_picker', 'dropdown', 'checkbox_group'];
+        let recent = [...recentFields];
+        for (const item of POOL) {
+            if (recent.length >= 2) break;
+            if (!recent.includes(item)) {
+                recent.push(item);
+            }
+        }
+        recent = recent.slice(0, 2);
+        const availableCommon = POOL.filter(type => !recent.includes(type));
+        const common = availableCommon.slice(0, 2);
+        return {
+            left: common,  // Most common (front)
+            right: recent  // Last 2 used (back)
+        };
+    }, [recentFields]);
+
+    const handleQuickAddDirectly = (index: number, type: FieldType) => {
+        trackUsedField(type);
+        
+        const uniqueId = `field_${Date.now()}`;
+        const sysId = `FIELD_${Math.floor(1000000000000 + Math.random() * 9000000000000)}`;
+        const widget = widgetLibrary.find(w => w.type === type);
+        const widgetLabel = widget?.label || `New ${type.replace(/_/g, ' ')}`;
+        const defaults = buildFieldTypeDefaults(type);
+        
+        const newField: FormField = {
+            id: uniqueId,
+            sysId: sysId,
+            type: type,
+            label: widgetLabel,
+            required: false,
+            placeholder: defaults.placeholder || `Enter ${widgetLabel.toLowerCase()}...`,
+            ...defaults,
+        };
+
+        setSections(prev => prev.map(section => {
+            if (section.id !== currentSectionId) return section;
+            const fields = [...section.fields];
+            fields.splice(index, 0, newField);
+            return { ...section, fields };
+        }));
+
+        setSelectedFieldId(uniqueId);
+        
+        // Apply focus to Properties Panel Label Input
+        setTimeout(() => {
+            const input = document.getElementById('field-label-input') as HTMLInputElement | null;
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }, 120);
+    };
     const [isConsoleOpen, setIsConsoleOpen] = useState(false);
     const [isSectionListOpen, setIsSectionListOpen] = useState(false);
     const sectionListRef = React.useRef<HTMLDivElement | null>(null);
@@ -1627,6 +1708,7 @@ const FormBuilder: React.FC = () => {
     };
 
     const addFieldToSection = (sectionId: string, type: FieldType, defaults?: Partial<FormField>, insertAtTop?: boolean) => {
+        trackUsedField(type);
         const newField: FormField = {
             id: `field_${Date.now()}`,
             type,
@@ -2091,6 +2173,7 @@ const FormBuilder: React.FC = () => {
     };
 
     const handleAddField = (widgetType: FieldType, widgetLabel: string) => {
+        trackUsedField(widgetType);
         const uniqueId = `field_${Date.now()}`;
         const sysId = `FIELD_${Math.floor(1000000000000 + Math.random() * 9000000000000)}`;
 
@@ -3492,14 +3575,49 @@ const FormBuilder: React.FC = () => {
                                                         {/* Horizontal indicator line */}
                                                         <div className="absolute w-full h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent scale-x-0 group-hover/insert:scale-x-100 transition-transform duration-300 pointer-events-none" />
 
-                                                        {/* Action button */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => { e.stopPropagation(); handleOpenQuickAdd(currentIndex); }}
-                                                            className="absolute opacity-0 group-hover/insert:opacity-100 bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-lg border border-emerald-400/30 transition-all scale-75 group-hover/insert:scale-100 cursor-pointer"
-                                                        >
-                                                            <Plus className="w-3.5 h-3.5" /> Insert Field
-                                                        </button>
+                                                        {/* Action buttons group */}
+                                                        <div className="absolute opacity-0 group-hover/insert:opacity-100 flex items-center gap-1.5 transition-all scale-75 group-hover/insert:scale-100 pointer-events-auto z-30">
+                                                            {/* Left common fields (most common) */}
+                                                            {quickButtons.left.map((type) => {
+                                                                const widget = widgetLibrary.find(w => w.type === type);
+                                                                return (
+                                                                    <button
+                                                                        key={`left-${type}`}
+                                                                        type="button"
+                                                                        title={widget?.label || type}
+                                                                        onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(currentIndex, type); }}
+                                                                        className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                                    >
+                                                                        {widget?.icon || <Plus className="w-3.5 h-3.5" />}
+                                                                    </button>
+                                                                );
+                                                            })}
+
+                                                            {/* Action button */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); handleOpenQuickAdd(currentIndex); }}
+                                                                className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 text-[10px] font-semibold px-2.5 rounded-full shadow-lg border border-emerald-400/30 transition-all cursor-pointer h-7 shrink-0"
+                                                            >
+                                                                <Plus className="w-3.5 h-3.5" /> Insert Field
+                                                            </button>
+
+                                                            {/* Right recent fields (last 2 used) */}
+                                                            {quickButtons.right.map((type) => {
+                                                                const widget = widgetLibrary.find(w => w.type === type);
+                                                                return (
+                                                                    <button
+                                                                        key={`right-${type}`}
+                                                                        type="button"
+                                                                        title={widget?.label || type}
+                                                                        onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(currentIndex, type); }}
+                                                                        className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                                    >
+                                                                        {widget?.icon || <Plus className="w-3.5 h-3.5" />}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </div>
 
                                                     <div
@@ -3702,14 +3820,49 @@ const FormBuilder: React.FC = () => {
                                                 {/* Horizontal indicator line */}
                                                 <div className="absolute w-full h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent scale-x-0 group-hover/insert:scale-x-100 transition-transform duration-300 pointer-events-none" />
 
-                                                {/* Action button */}
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => { e.stopPropagation(); handleOpenQuickAdd(fields.length); }}
-                                                    className="absolute opacity-0 group-hover/insert:opacity-100 bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-lg border border-emerald-400/30 transition-all scale-75 group-hover/insert:scale-100 cursor-pointer"
-                                                >
-                                                    <Plus className="w-3.5 h-3.5" /> Insert Field
-                                                </button>
+                                                {/* Action buttons group */}
+                                                <div className="absolute opacity-0 group-hover/insert:opacity-100 flex items-center gap-1.5 transition-all scale-75 group-hover/insert:scale-100 pointer-events-auto z-30">
+                                                    {/* Left common fields (most common) */}
+                                                    {quickButtons.left.map((type) => {
+                                                        const widget = widgetLibrary.find(w => w.type === type);
+                                                        return (
+                                                            <button
+                                                                key={`left-end-${type}`}
+                                                                type="button"
+                                                                title={widget?.label || type}
+                                                                onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(fields.length, type); }}
+                                                                className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                            >
+                                                                {widget?.icon || <Plus className="w-3.5 h-3.5" />}
+                                                            </button>
+                                                        );
+                                                    })}
+
+                                                    {/* Action button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); handleOpenQuickAdd(fields.length); }}
+                                                        className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 text-[10px] font-semibold px-2.5 rounded-full shadow-lg border border-emerald-400/30 transition-all cursor-pointer h-7 shrink-0"
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5" /> Insert Field
+                                                    </button>
+
+                                                    {/* Right recent fields (last 2 used) */}
+                                                    {quickButtons.right.map((type) => {
+                                                        const widget = widgetLibrary.find(w => w.type === type);
+                                                        return (
+                                                            <button
+                                                                key={`right-end-${type}`}
+                                                                type="button"
+                                                                title={widget?.label || type}
+                                                                onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(fields.length, type); }}
+                                                                className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                            >
+                                                                {widget?.icon || <Plus className="w-3.5 h-3.5" />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </>
                                     )}

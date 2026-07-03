@@ -827,6 +827,62 @@ const ObjectPropertiesInput: React.FC<{
                                         placeholder="e.g. qty * price"
                                     />
                                 </div>
+                            ) : property.type === 'select' ? (
+                                <div className="space-y-2">
+                                    <div>
+                                        <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Select Source</label>
+                                        <select
+                                            value={property.reference?.source_type === 'catalog' ? 'catalog' : 'manual'}
+                                            onChange={(e) => {
+                                                if (e.target.value === 'catalog') {
+                                                    updateSelectedObjectProperty(propertyIndex, {
+                                                        reference: {
+                                                            source_type: 'catalog',
+                                                            source_id: 'project_catalog',
+                                                            label_field: 'label',
+                                                            value_field: 'id'
+                                                        },
+                                                        options: undefined
+                                                    });
+                                                } else {
+                                                    updateSelectedObjectProperty(propertyIndex, {
+                                                        reference: undefined,
+                                                        options: [
+                                                            { label: 'Option A', value: 'option_a' },
+                                                            { label: 'Option B', value: 'option_b' }
+                                                        ]
+                                                    });
+                                                }
+                                            }}
+                                            className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[11px] outline-none text-[hsl(var(--text-primary))]"
+                                        >
+                                            <option value="manual">Manual Options</option>
+                                            <option value="catalog">Project Catalog Reference</option>
+                                        </select>
+                                    </div>
+                                    {property.reference?.source_type === 'catalog' ? (
+                                        <div className="text-[9px] text-[hsl(var(--text-tertiary))] leading-normal bg-[hsl(var(--surface-elevated))]/20 p-2 rounded border border-[hsl(var(--border))]/25">
+                                            Linked to Project Catalog. Properties named <code>unit_price</code> or <code>price</code> will auto-fill with selected product MSRP.
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Options (comma-separated)</label>
+                                            <input
+                                                value={(property.options || []).map((o: any) => o.label).join(', ')}
+                                                onChange={(e) => {
+                                                    const parts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                                    const nextOptions = parts.map(label => ({
+                                                        label,
+                                                        value: label.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+                                                    }));
+                                                    updateSelectedObjectProperty(propertyIndex, { options: nextOptions });
+                                                }}
+                                                className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-xs outline-none text-[hsl(var(--text-primary))]"
+                                                placeholder="e.g. Option A, Option B"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             ) : (
                                 <div>
                                     <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Default Value</label>
@@ -4939,6 +4995,23 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
+                                                                            key: 'object_schema_key',
+                                                                            label: 'Schema ID',
+                                                                            metaKey: 'object_schema_key',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.object_schema_key || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { object_schema_key: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="e.g. store_products"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.object_schema_key)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
                                                                             key: 'object_properties',
                                                                             label: 'Row Properties',
                                                                             metaKey: 'object_properties',
@@ -5168,6 +5241,51 @@ const FormBuilder: React.FC = () => {
                                                                                     placeholder="e.g. qty * price"
                                                                                     onFocus={() => setHoveredProperty(propertyMetaDetails.formula)}
                                                                                     onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Behavior',
+                                                                            key: 'collection_layout',
+                                                                            label: 'Layout Mode',
+                                                                            metaKey: undefined as any,
+                                                                            visible: selectedField.type === 'object_collection',
+                                                                            render: () => (
+                                                                                <div className="flex gap-1 bg-[hsl(var(--surface-elevated))]/60 p-0.5 rounded-lg border border-[hsl(var(--border))]/25 w-full">
+                                                                                    {([
+                                                                                        { val: 'cards', label: 'Cards' },
+                                                                                        { val: 'table', label: 'Table' }
+                                                                                    ] as const).map((mode) => {
+                                                                                        const isActive = (selectedField.collection_layout || 'cards') === mode.val;
+                                                                                        return (
+                                                                                            <button
+                                                                                                key={mode.val}
+                                                                                                type="button"
+                                                                                                onClick={() => updateField(selectedField.id, { collection_layout: mode.val })}
+                                                                                                className={`px-2 py-0.5 rounded text-[10px] font-bold capitalize transition-all flex-1 ${isActive
+                                                                                                    ? 'bg-[hsl(var(--primary))] text-white shadow-sm'
+                                                                                                    : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]/80'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {mode.label}
+                                                                                            </button>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Behavior',
+                                                                            key: 'catalog_source_type',
+                                                                            label: 'Catalog-backed',
+                                                                            metaKey: undefined as any,
+                                                                            visible: selectedField.type === 'object_collection',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedField.catalog_source_type === 'project_catalog'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { catalog_source_type: e.target.checked ? 'project_catalog' : undefined })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
                                                                                 />
                                                                             )
                                                                         },

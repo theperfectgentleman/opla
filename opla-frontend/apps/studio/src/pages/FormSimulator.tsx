@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { formAPI, submissionAPI } from '../lib/api';
+import { formAPI, projectAPI, submissionAPI } from '../lib/api';
+import { useOrg } from '../contexts/OrgContext';
 import {
     Smartphone, ChevronLeft, Send, RotateCcw,
-    MapPin, Camera as CameraIcon, CheckCircle2, AlertCircle, Scan
+    MapPin, Camera as CameraIcon, CheckCircle2, AlertCircle, Scan,
+    Plus, Trash2, Layers, Database
 } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
 import {
@@ -39,6 +41,12 @@ interface UIField {
     is_inclusive?: boolean;
     has_no_min?: boolean;
     has_no_max?: boolean;
+    object_schema_key?: string;
+    object_definition?: any;
+    collection_layout?: 'cards' | 'table';
+    allow_add_items?: boolean;
+    allow_remove_items?: boolean;
+    catalog_source_type?: string;
 }
 
 interface LogicCondition {
@@ -349,6 +357,232 @@ const LookupFieldRenderer = ({ field, value, onChange, rulesResult, responses }:
     );
 };
 
+const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: any) => {
+    const isInstance = field.type === 'object_instance';
+    const definition = field.object_definition || {};
+    const properties = definition.properties || [];
+
+    // Helper functions for computing formulas
+    const evaluatePropertyFormula = (formula: string, record: any) => {
+        const expression = formula.replace(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g, (token) => {
+            const val = Number(record[token] ?? 0);
+            return Number.isFinite(val) ? String(val) : '0';
+        });
+        if (!/^[0-9+\-*/().\s]+$/.test(expression)) {
+            return undefined;
+        }
+        try {
+            const result = Function(`"use strict"; return (${expression});`)();
+            return typeof result === 'number' && Number.isFinite(result) ? result : undefined;
+        } catch {
+            return undefined;
+        }
+    };
+
+    const calculateItemComputedProperties = (record: any) => {
+        const next = { ...record };
+        properties.forEach((prop: any) => {
+            if (prop.type === 'computed' && prop.formula) {
+                const computed = evaluatePropertyFormula(prop.formula, next);
+                if (computed !== undefined) {
+                    next[prop.key] = computed;
+                }
+            }
+        });
+        return next;
+    };
+
+    const createObjectValue = () => {
+        const draft: any = {};
+        properties.forEach((prop: any) => {
+            if (prop.default_value !== undefined) {
+                draft[prop.key] = prop.default_value;
+            }
+        });
+        return calculateItemComputedProperties(draft);
+    };
+
+    // Keep items representation in sync
+    const items = React.useMemo(() => {
+        if (isInstance) {
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                return [calculateItemComputedProperties(value)];
+            }
+            return [createObjectValue()];
+        }
+        if (Array.isArray(value)) {
+            return value.map((entry) => calculateItemComputedProperties(entry || {}));
+        }
+        return [];
+    }, [isInstance, value, properties]);
+
+    const commitItems = (nextItems: any[]) => {
+        if (isInstance) {
+            onChange(nextItems[0] || createObjectValue());
+        } else {
+            onChange(nextItems);
+        }
+    };
+
+    const updateRow = (rowIndex: number, propertyKey: string, propValue: any, propDef: any) => {
+        const nextItems = items.map((entry, index) => {
+            if (index !== rowIndex) return entry;
+            let updated = { ...entry, [propertyKey]: propValue };
+
+            // Catalog references auto-injection
+            if (propDef?.type === 'select' && propDef.reference?.source_type === 'catalog') {
+                const selectedItem = (catalogItems.length ? catalogItems : [
+                    { id: 'prod_1', label: 'Product A', default_price: 15.0 },
+                    { id: 'prod_2', label: 'Product B', default_price: 25.0 },
+                    { id: 'prod_3', label: 'Product C', default_price: 9.99 },
+                ]).find((item: any) => String(item.id) === String(propValue));
+
+                if (selectedItem) {
+                    // Auto-fill default mappings
+                    Object.entries(propDef.reference.field_mappings || {}).forEach(([targetKey, sourceKey]: any) => {
+                        const mappedValue = selectedItem[sourceKey];
+                        if (mappedValue !== undefined) {
+                            updated[targetKey] = mappedValue;
+                        }
+                    });
+                    
+                    // Auto-inject MSRP if property named unit_price or price exists
+                    if (selectedItem.default_price !== undefined && selectedItem.default_price !== null) {
+                        if (properties.some((p: any) => p.key === 'unit_price')) {
+                            updated['unit_price'] = selectedItem.default_price;
+                        }
+                        if (properties.some((p: any) => p.key === 'price')) {
+                            updated['price'] = selectedItem.default_price;
+                        }
+                    }
+                }
+            }
+
+            return calculateItemComputedProperties(updated);
+        });
+        commitItems(nextItems);
+    };
+
+    const addRow = () => {
+        commitItems([...items, createObjectValue()]);
+    };
+
+    const removeRow = (rowIndex: number) => {
+        commitItems(items.filter((_, idx) => idx !== rowIndex));
+    };
+
+    // Render single sub-property control
+    const renderPropertyControl = (row: any, rowIndex: number, property: any) => {
+        const propValue = row[property.key] ?? '';
+        const propLabel = property.label || property.key;
+
+        if (property.edit_mode === 'hidden') return null;
+
+        let control: React.ReactNode;
+
+        const isReadOnly = property.type === 'computed' || property.edit_mode === 'fixed';
+
+        if (property.type === 'select') {
+            const isCatalog = property.reference?.source_type === 'catalog';
+            const options = isCatalog 
+                ? (catalogItems.length ? catalogItems : [
+                    { id: 'prod_1', label: 'Product A', default_price: 15.0 },
+                    { id: 'prod_2', label: 'Product B', default_price: 25.0 },
+                    { id: 'prod_3', label: 'Product C', default_price: 9.99 },
+                  ]).map((item: any) => ({ label: item.label, value: item.id }))
+                : (property.options || []);
+
+            control = (
+                <select
+                    disabled={isReadOnly}
+                    value={propValue}
+                    onChange={(e) => updateRow(rowIndex, property.key, e.target.value, property)}
+                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-md px-3 py-2 text-xs text-[hsl(var(--text-primary))]"
+                >
+                    <option value="">-- Select option --</option>
+                    {options.map((opt: any) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                </select>
+            );
+        } else if (property.type === 'boolean') {
+            control = (
+                <input
+                    disabled={isReadOnly}
+                    type="checkbox"
+                    checked={!!propValue}
+                    onChange={(e) => updateRow(rowIndex, property.key, e.target.checked, property)}
+                    className="h-4 w-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20"
+                />
+            );
+        } else if (property.type === 'computed') {
+            control = (
+                <div className="bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/35 px-3 py-2 rounded-md font-semibold font-mono text-xs text-[hsl(var(--text-secondary))]">
+                    {propValue !== undefined && propValue !== null && propValue !== '' ? String(propValue) : '—'}
+                </div>
+            );
+        } else {
+            control = (
+                <input
+                    disabled={isReadOnly}
+                    type={['number', 'integer', 'decimal'].includes(property.type) ? 'number' : 'text'}
+                    value={propValue}
+                    onChange={(e) => updateRow(rowIndex, property.key, ['number', 'integer', 'decimal'].includes(property.type) ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value, property)}
+                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-md px-3 py-2 text-xs text-[hsl(var(--text-primary))]"
+                    placeholder={property.placeholder || `Enter ${propLabel.toLowerCase()}...`}
+                />
+            );
+        }
+
+        return (
+            <div key={property.key} className="space-y-1">
+                <label className="text-[10px] font-bold text-[hsl(var(--text-secondary))] block">
+                    {propLabel} {property.required && <span className="text-red-500">*</span>}
+                </label>
+                {control}
+            </div>
+        );
+    };
+
+    return (
+        <div className="space-y-4">
+            {items.map((row: any, rowIndex: number) => (
+                <div key={rowIndex} className="border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/10 p-3 rounded-lg space-y-3 relative">
+                    <div className="flex justify-between items-center pb-2 border-b border-[hsl(var(--border))]/30">
+                        <span className="text-[11px] font-bold text-[hsl(var(--text-secondary))] flex items-center gap-1.5">
+                            {isInstance ? <Database className="w-3.5 h-3.5 text-[hsl(var(--primary))]" /> : <Layers className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />}
+                            {isInstance ? 'Reference Card' : `Card #${rowIndex + 1}`}
+                        </span>
+                        {!isInstance && (field.allow_remove_items ?? true) && (
+                            <button
+                                type="button"
+                                onClick={() => removeRow(rowIndex)}
+                                className="text-red-500 hover:text-red-600 transition-all text-xs font-semibold"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        {properties.map((prop: any) => renderPropertyControl(row, rowIndex, prop))}
+                    </div>
+                </div>
+            ))}
+
+            {!isInstance && (field.allow_add_items ?? true) && (
+                <button
+                    type="button"
+                    onClick={addRow}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-transparent hover:bg-[hsl(var(--primary))]/15 transition-all text-xs font-semibold"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Item
+                </button>
+            )}
+        </div>
+    );
+};
+
 const FormSimulator: React.FC = () => {
     const { formId } = useParams<{ formId: string }>();
     const navigate = useNavigate();
@@ -359,6 +593,25 @@ const FormSimulator: React.FC = () => {
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
     const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
     const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
+
+    const { currentOrg } = useOrg();
+    const [projectId, setProjectId] = useState<string | null>(null);
+    const [catalogItems, setCatalogItems] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadCatalog = async () => {
+            if (currentOrg?.id && projectId) {
+                try {
+                    const items = await projectAPI.listCatalogItems(currentOrg.id, projectId);
+                    setCatalogItems(Array.isArray(items) ? items : []);
+                } catch (e) {
+                    console.error("Failed to load project catalog items in simulator", e);
+                    setCatalogItems([]);
+                }
+            }
+        };
+        loadCatalog();
+    }, [currentOrg, projectId]);
 
     const rulesResult = useMemo(() => {
         return evaluateAllRules(blueprint?.rules || [], formData, blueprint);
@@ -396,6 +649,7 @@ const FormSimulator: React.FC = () => {
                 const loaded = data.blueprint_draft || data.blueprint_live;
                 if (loaded) {
                     setBlueprint(loaded);
+                    setProjectId(data.project_id || loaded?.meta?.app_id || null);
 
                     // Pre-fill formData with any defined default values
                     const initialData: Record<string, any> = {};
@@ -700,7 +954,14 @@ const FormSimulator: React.FC = () => {
                                                 {field.label}
                                             </label>
 
-                                            {field.type === 'gps_capture' ? (
+                                            {field.type === 'object_collection' || field.type === 'object_instance' ? (
+                                                <ObjectFieldSimulatorRenderer
+                                                    field={field}
+                                                    value={formData[field.bind]}
+                                                    onChange={(val: any) => handleInputChange(field.bind, val)}
+                                                    catalogItems={catalogItems}
+                                                />
+                                            ) : field.type === 'gps_capture' ? (
                                                  <div className="space-y-2">
                                                      <button
                                                          onClick={() => captureGPS(field.bind)}

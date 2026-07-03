@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { FormField, FormObjectDefinition, ObjectPropertyDefinition } from '@opla/types';
 
 import { DropdownField } from './DropdownField';
@@ -280,6 +280,125 @@ export function ObjectCollectionField({
             </View>
         );
     };
+
+    const renderPropertyInputInline = (row: RowValue, rowIndex: number, property: ObjectPropertyDefinition, path: string[] = [property.key]) => {
+        const valueAtPath = getNestedValue(row, path);
+        if (property.edit_mode === 'hidden') return null;
+
+        const selectOptions = resolveSelectOptions(property);
+        if (property.type === 'select' && selectOptions.length) {
+            return (
+                <DropdownField
+                    field={{
+                        id: path.join('.'),
+                        type: 'dropdown',
+                        label: '',
+                        required: Boolean(property.required),
+                        placeholder: property.placeholder,
+                        options: selectOptions,
+                    }}
+                    value={typeof valueAtPath === 'string' ? valueAtPath : ''}
+                    onChange={(nextValue) => updateRow(rowIndex, path, nextValue, property)}
+                />
+            );
+        } else if (property.type === 'boolean') {
+            return (
+                <ToggleField
+                    field={{ id: path.join('.'), type: 'toggle', label: '', required: Boolean(property.required) }}
+                    value={valueAtPath}
+                    onChange={(nextValue) => updateRow(rowIndex, path, nextValue)}
+                />
+            );
+        } else if (property.type === 'number' || property.type === 'integer' || property.type === 'decimal') {
+            return (
+                <NumberInputField
+                    field={{ id: path.join('.'), type: 'input_number', label: '', required: Boolean(property.required), placeholder: property.placeholder }}
+                    value={valueAtPath !== undefined && valueAtPath !== null ? String(valueAtPath) : ''}
+                    onChange={(nextValue) => updateRow(rowIndex, path, nextValue === '' ? '' : Number(nextValue))}
+                />
+            );
+        } else if (property.type === 'computed') {
+            return (
+                <View style={{ backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 8 }}>
+                    <Text style={{ color: '#cbd5e1', fontSize: 12 }}>{renderReadOnlyValue(valueAtPath)}</Text>
+                </View>
+            );
+        } else {
+            return (
+                <TextInputField
+                    field={{ id: path.join('.'), type: 'input_text', label: '', required: Boolean(property.required), placeholder: property.placeholder }}
+                    value={valueAtPath !== undefined && valueAtPath !== null ? String(valueAtPath) : ''}
+                    onChange={(nextValue) => updateRow(rowIndex, path, nextValue)}
+                />
+            );
+        }
+    };
+
+    const isTableLayout = !isInstance && field.collection_layout === 'table';
+
+    if (isTableLayout) {
+        return (
+            <View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginBottom: 12, borderRadius: 10, borderWidth: 1, borderColor: '#334155', backgroundColor: '#0f172a' }}>
+                    <View style={{ flexDirection: 'column', minWidth: '100%' }}>
+                        {/* Headers */}
+                        <View style={{ flexDirection: 'row', backgroundColor: '#1e293b', paddingVertical: 10, borderBottomWidth: 1.5, borderBottomColor: '#334155', alignItems: 'center' }}>
+                            {properties.map((prop) => (
+                                <View key={prop.key} style={{ width: 140, paddingHorizontal: 8 }}>
+                                    <Text style={{ color: '#cbd5e1', fontSize: 12, fontWeight: '700' }}>
+                                        {prop.label || prop.key} {prop.required ? <Text style={{ color: '#ef4444' }}>*</Text> : null}
+                                    </Text>
+                                </View>
+                            ))}
+                            {(field.allow_remove_items ?? definition?.allow_manual_remove ?? true) && (
+                                <View style={{ width: 70, paddingHorizontal: 8 }}>
+                                    <Text style={{ color: '#cbd5e1', fontSize: 12, fontWeight: '700', textAlign: 'center' }}>Actions</Text>
+                                </View>
+                            )}
+                        </View>
+                        {/* Rows */}
+                        {items.length === 0 ? (
+                            <View style={{ padding: 16, alignItems: 'center' }}>
+                                <Text style={{ color: '#64748b', fontSize: 13 }}>No items added yet.</Text>
+                            </View>
+                        ) : (
+                            items.map((row, rowIndex) => (
+                                <View key={`${field.id}_row_${rowIndex}`} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#243041', paddingVertical: 8, alignItems: 'center' }}>
+                                    {properties.map((prop) => (
+                                        <View key={prop.key} style={{ width: 140, paddingHorizontal: 8 }}>
+                                            {renderPropertyInputInline(row, rowIndex, prop)}
+                                        </View>
+                                    ))}
+                                    {(field.allow_remove_items ?? definition?.allow_manual_remove ?? true) && (
+                                        <TouchableOpacity onPress={() => removeRow(rowIndex)} style={{ width: 70, alignItems: 'center', justifyContent: 'center' }}>
+                                            <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: '700' }}>Delete</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            ))
+                        )}
+                    </View>
+                </ScrollView>
+
+                {(field.allow_add_items ?? definition?.allow_manual_add ?? true) && (
+                    <TouchableOpacity
+                        onPress={addRow}
+                        style={{
+                            alignSelf: 'flex-start',
+                            backgroundColor: '#158754',
+                            borderRadius: 8,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                        }}
+                    >
+                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Add Item</Text>
+                    </TouchableOpacity>
+                )}
+
+                {error ? <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 6 }}>{error}</Text> : null}
+            </View>
+        );
+    }
 
     return (
         <View>

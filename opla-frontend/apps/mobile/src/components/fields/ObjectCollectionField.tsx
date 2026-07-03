@@ -179,8 +179,13 @@ export function ObjectCollectionField({
         } else if (field.catalog_source_type === 'project_catalog') {
             const propWithCatalog = properties.find((p) => p.type === 'select' && p.reference?.source_type === 'catalog');
             const sourceItems = propWithCatalog?.reference?.source_items || [];
-            if (sourceItems.length > 0) {
-                loadedItems = sourceItems.map((item) => {
+            const mode = (field as any).catalog_prepopulate_mode || 'all';
+            if (mode !== 'none' && sourceItems.length > 0) {
+                const targetItems = mode === 'required_only'
+                    ? sourceItems.filter((item: any) => !!item.metadata_json?.is_mandatory)
+                    : sourceItems;
+
+                loadedItems = targetItems.map((item) => {
                     let row: RowValue = { _isCatalogItem: true };
                     properties.forEach((prop) => {
                         if (prop.type === 'select' && prop.reference?.source_type === 'catalog') {
@@ -202,7 +207,7 @@ export function ObjectCollectionField({
             }
         }
         return loadedItems;
-    }, [isInstance, value, properties, field.catalog_source_type]);
+    }, [isInstance, value, properties, field.catalog_source_type, (field as any).catalog_prepopulate_mode]);
 
     const commitItems = (nextItems: RowValue[]) => {
         if (isInstance) {
@@ -214,13 +219,16 @@ export function ObjectCollectionField({
 
     React.useEffect(() => {
         if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && field.catalog_source_type === 'project_catalog') {
-            const propWithCatalog = properties.find((p) => p.type === 'select' && p.reference?.source_type === 'catalog');
-            const sourceItems = propWithCatalog?.reference?.source_items || [];
-            if (sourceItems.length > 0) {
-                commitItems(items);
+            const mode = (field as any).catalog_prepopulate_mode || 'all';
+            if (mode !== 'none') {
+                const propWithCatalog = properties.find((p) => p.type === 'select' && p.reference?.source_type === 'catalog');
+                const sourceItems = propWithCatalog?.reference?.source_items || [];
+                if (sourceItems.length > 0) {
+                    commitItems(items);
+                }
             }
         }
-    }, [properties, value, field.catalog_source_type]);
+    }, [properties, value, field.catalog_source_type, (field as any).catalog_prepopulate_mode]);
 
     const updateRow = (rowIndex: number, path: string[], nextValue: any, property?: ObjectPropertyDefinition) => {
         const nextItems = items.map((entry, index) => {

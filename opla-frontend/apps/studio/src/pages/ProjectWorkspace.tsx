@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
     AlertCircle,
     ChevronRight,
@@ -16,6 +16,7 @@ import {
     XCircle,
     MapPin,
     Trash2,
+    Tag,
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
@@ -89,6 +90,7 @@ type CatalogItem = {
     brand?: string | null;
     is_active: boolean;
     price_editable: boolean;
+    metadata_json?: Record<string, any> | null;
     created_at: string;
     updated_at: string;
 };
@@ -269,9 +271,31 @@ const businessRoleLabelBySlug: Record<string, string> = {
     'stakeholder-viewer': 'Viewer',
 };
 
+const TABS = [
+    { id: 'forms', label: 'Forms', icon: FileText },
+    { id: 'review', label: 'Review Queue', icon: CheckCircle2 },
+    { id: 'tasks', label: 'Tasks', icon: SquareCheckBig },
+    { id: 'data', label: 'Datasets', icon: Database },
+    { id: 'catalog', label: 'Catalog', icon: Tag },
+    { id: 'threads', label: 'Threads', icon: MessageSquare },
+    { id: 'reports', label: 'Reports', icon: FileBarChart2 },
+    { id: 'members', label: 'Members', icon: Users },
+] as const;
+
 const ProjectWorkspace: React.FC = () => {
     const navigate = useNavigate();
     const { projectId } = useParams<{ projectId: string }>();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activeTab = searchParams.get('tab') || 'forms';
+
+    const setActiveTab = (tab: string) => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', tab);
+            return next;
+        });
+    };
+
     const {
         currentOrg,
         currentProject,
@@ -320,6 +344,7 @@ const ProjectWorkspace: React.FC = () => {
         default_price: '',
         unit: '',
         brand: '',
+        is_mandatory: false,
     });
     const attendanceDay = useMemo(() => formatDateKey(new Date()), []);
 
@@ -770,19 +795,29 @@ const ProjectWorkspace: React.FC = () => {
                 default_price: newCatalogItem.default_price ? Number(newCatalogItem.default_price) : undefined,
                 unit: newCatalogItem.unit.trim() || undefined,
                 brand: newCatalogItem.brand.trim() || undefined,
+                metadata_json: { is_mandatory: !!newCatalogItem.is_mandatory }
             });
             setCatalogItems(prev => [...prev, created].sort((left, right) => left.label.localeCompare(right.label)));
-            setNewCatalogItem({ sku_code: '', label: '', default_price: '', unit: '', brand: '' });
+            setNewCatalogItem({ sku_code: '', label: '', default_price: '', unit: '', brand: '', is_mandatory: false });
         } catch (err: any) {
             setError(err?.response?.data?.detail || err?.message || 'Failed to create catalog item');
         }
     };
 
-    const handleCatalogItemToggle = async (item: CatalogItem, patch: { is_active?: boolean; price_editable?: boolean }) => {
+    const handleCatalogItemToggle = async (item: CatalogItem, patch: { is_active?: boolean; price_editable?: boolean; is_mandatory?: boolean }) => {
         if (!currentOrg || !projectId) return;
 
         try {
-            const updated = await projectAPI.updateCatalogItem(currentOrg.id, projectId, item.id, patch);
+            let payload: any = { ...patch };
+            if (patch.is_mandatory !== undefined) {
+                payload = {
+                    metadata_json: {
+                        ...(item.metadata_json || {}),
+                        is_mandatory: patch.is_mandatory
+                    }
+                };
+            }
+            const updated = await projectAPI.updateCatalogItem(currentOrg.id, projectId, item.id, payload);
             setCatalogItems(prev => prev.map(entry => entry.id === updated.id ? updated : entry));
         } catch (err: any) {
             setError(err?.response?.data?.detail || err?.message || 'Failed to update catalog item');
@@ -1054,1029 +1089,1155 @@ const ProjectWorkspace: React.FC = () => {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-4">
-                            {workspaceStats.map(stat => (
-                                <div key={stat.label} className="flex flex-col border-l border-[hsl(var(--border))] pl-4 first:border-l-0 first:pl-0">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">{stat.label}</span>
-                                    <span className="text-xl font-semibold text-[hsl(var(--text-primary))]">{stat.value}</span>
-                                </div>
-                            ))}
+                            {workspaceStats.map(stat => {
+                                const tabMap: Record<string, string> = {
+                                    Forms: 'forms',
+                                    Datasets: 'data',
+                                    Assets: 'data',
+                                    Tasks: 'tasks',
+                                    Threads: 'threads',
+                                    Reports: 'reports',
+                                    Members: 'members',
+                                };
+                                const targetTab = tabMap[stat.label];
+                                const isCurrentlyActive = activeTab === targetTab;
+                                return (
+                                    <div
+                                        key={stat.label}
+                                        onClick={() => targetTab && setActiveTab(targetTab)}
+                                        className={`flex flex-col border-l border-[hsl(var(--border))] pl-4 first:border-l-0 first:pl-0 cursor-pointer group select-none transition-all hover:scale-[1.02] ${
+                                            isCurrentlyActive ? 'scale-105' : ''
+                                        }`}
+                                    >
+                                        <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                            isCurrentlyActive ? 'text-[hsl(var(--primary))] font-semibold' : 'text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--text-secondary))]'
+                                        }`}>
+                                            {stat.label}
+                                        </span>
+                                        <span className={`text-xl font-semibold transition-colors ${
+                                            isCurrentlyActive ? 'text-[hsl(var(--primary))] font-bold' : 'text-[hsl(var(--text-primary))] group-hover:text-[hsl(var(--primary))]'
+                                        }`}>
+                                            {stat.value}
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    {/* 3-Column Board */}
-                    <div className="grid gap-6 lg:grid-cols-3 items-start">
+                    {/* Tab Bar */}
+                    <div className="flex gap-2 border-b border-[hsl(var(--border))]/60 pb-px overflow-x-auto no-scrollbar px-2">
+                        {TABS.map(tab => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap outline-none ${
+                                        isActive
+                                            ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))] font-semibold'
+                                            : 'border-transparent text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border))]/40'
+                                    }`}
+                                >
+                                    <Icon className="h-4 w-4" />
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
 
-                        {/* COLUMN 1: FORMS */}
-                        <div className="space-y-6 flex flex-col">
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <FileText className="h-4 w-4" />
-                                        </div>
-                                        <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Forms</h2>
-                                    </div>
-                                    <button onClick={handleCreateForm} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                        <Plus className="h-4 w-4" />
-                                        <span className="text-xs font-semibold">New</span>
-                                    </button>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    {forms.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No forms yet.</p>
-                                    ) : forms.map(form => (
-                                        <div key={form.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{form.title}</h3>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">v{form.version} • {new Date(form.updated_at).toLocaleDateString()}</p>
+                    {/* Tab Views */}
+                    <div className="mt-6">
+                        {/* 1. FORMS WORKSPACE */}
+                        {activeTab === 'forms' && (
+                            <div className="grid gap-6 lg:grid-cols-12 items-start">
+                                {/* Left Column: Forms list (5/12) */}
+                                <div className="lg:col-span-5 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <FileText className="h-4 w-4" />
                                                 </div>
-                                                <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${formStatusTone[form.status] || formStatusTone.draft}`}>
-                                                    {form.status}
-                                                </span>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Forms</h2>
                                             </div>
-                                            <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0" title={resolveAccessorLabel(form.lead_accessor_id, form.lead_accessor_type)}>
-                                                        {resolveAccessorLabel(form.lead_accessor_id, form.lead_accessor_type).charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <select
-                                                        value={getAccessorValue(form.assigned_accessor_id, form.assigned_accessor_type)}
-                                                        onChange={(e) => handleFormResponsibilityChange(form, 'assigned', e.target.value)}
-                                                        className="text-xs bg-transparent text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] cursor-pointer outline-none w-24 truncate"
-                                                    >
-                                                        <option value="">Unassigned</option>
-                                                        {assignmentOptions.map(opt => <option key={`form-assign-${form.id}-${opt.type}-${opt.id}`} value={`${opt.type}:${opt.id}`}>{opt.label}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 flex-wrap justify-end">
-                                                    <button onClick={() => navigate(`/simulator/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
-                                                        <Play className="h-3.5 w-3.5 fill-current" />
-                                                    </button>
-                                                    <button onClick={() => navigate(`/builder/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
-                                                        <ChevronRight className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <Play className="h-4 w-4 fill-current" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Automation Rules</h2>
-                                            <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Submission events that create project tasks</p>
-                                        </div>
-                                    </div>
-                                    <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                        {automationRules.length}
-                                    </span>
-                                </div>
-                                <div className="flex flex-col gap-4 p-4 lg:p-5">
-                                    <div>
-                                        <label className="label">Automation Form</label>
-                                        <select
-                                            value={selectedAutomationFormId}
-                                            onChange={(event) => setSelectedAutomationFormId(event.target.value)}
-                                            className="input py-2"
-                                        >
-                                            {forms.length === 0 ? (
-                                                <option value="">No forms available</option>
-                                            ) : forms.map((form) => (
-                                                <option key={`automation-form-${form.id}`} value={form.id}>
-                                                    {form.title}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {selectedAutomationForm ? (
-                                        <form onSubmit={handleCreateAutomationRule} className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                                <div>
-                                                    <label className="label">Rule Name</label>
-                                                    <input
-                                                        value={newAutomationRule.name}
-                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, name: event.target.value }))}
-                                                        className="input"
-                                                        placeholder="Approved records create scheduled task"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="label">Event</label>
-                                                    <select
-                                                        value={newAutomationRule.event_type}
-                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, event_type: event.target.value as FormAutomationEvent }))}
-                                                        className="input py-2"
-                                                    >
-                                                        {automationEventOptions.map((option) => (
-                                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label className="label">Description</label>
-                                                <input
-                                                    value={newAutomationRule.description}
-                                                    onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, description: event.target.value }))}
-                                                    className="input"
-                                                    placeholder="Creates a scheduled task when a reviewed record matches the rule"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between">
-                                                    <label className="label">Conditions</label>
-                                                    <div className="flex items-center gap-2">
-                                                        <select
-                                                            value={newAutomationRule.combinator}
-                                                            onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, combinator: event.target.value as 'and' | 'or' }))}
-                                                            className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-1 text-[11px] font-semibold text-[hsl(var(--text-secondary))]"
-                                                        >
-                                                            <option value="and">Match all</option>
-                                                            <option value="or">Match any</option>
-                                                        </select>
-                                                        <button type="button" onClick={addAutomationCondition} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--text-secondary))]">
-                                                            Add condition
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                {automationConditions.map((condition, index) => (
-                                                    <div key={`automation-condition-${index}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1.6fr_1fr_1.4fr_auto]">
-                                                        <input
-                                                            value={condition.field}
-                                                            onChange={(event) => updateAutomationCondition(index, { field: event.target.value })}
-                                                            className="input"
-                                                            placeholder="data.region"
-                                                        />
-                                                        <select
-                                                            value={condition.operator}
-                                                            onChange={(event) => updateAutomationCondition(index, { operator: event.target.value })}
-                                                            className="input py-2"
-                                                        >
-                                                            {automationOperatorOptions.map((option) => (
-                                                                <option key={`${option.value}-${index}`} value={option.value}>{option.label}</option>
-                                                            ))}
-                                                        </select>
-                                                        <input
-                                                            value={condition.value}
-                                                            onChange={(event) => updateAutomationCondition(index, { value: event.target.value })}
-                                                            className="input"
-                                                            placeholder={condition.operator === 'in' ? 'north, south' : 'Expected value'}
-                                                        />
-                                                        <button type="button" onClick={() => removeAutomationCondition(index)} className="rounded-md px-2 py-2 text-[11px] font-semibold text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface-elevated))]">
-                                                            Remove
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
-                                                    Paths can reference submission metadata such as <span className="font-mono">submission.review_status</span>, <span className="font-mono">context.project_id</span>, or form data like <span className="font-mono">data.region</span> or <span className="font-mono">data.week_number</span>.
-                                                </p>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                                <div>
-                                                    <label className="label">Task Title Template</label>
-                                                    <input
-                                                        value={newAutomationRule.title_template}
-                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, title_template: event.target.value }))}
-                                                        className="input"
-                                                        placeholder="Follow up {{ submission.id }}"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="label">Assign To</label>
-                                                    <select
-                                                        value={newAutomationRule.assigned_accessor}
-                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, assigned_accessor: event.target.value }))}
-                                                        className="input py-2"
-                                                    >
-                                                        <option value="">Leave unassigned</option>
-                                                        {assignmentOptions.map((option) => (
-                                                            <option key={`automation-accessor-${option.type}-${option.id}`} value={`${option.type}:${option.id}`}>
-                                                                {option.label}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label className="label">Task Description Template</label>
-                                                <input
-                                                    value={newAutomationRule.description_template}
-                                                    onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, description_template: event.target.value }))}
-                                                    className="input"
-                                                    placeholder="Triggered from {{ submission.id }} for {{ data.region }}"
-                                                />
-                                            </div>
-
-                                            <div>
-                                                <label className="label">Task Context Mapping (JSON)</label>
-                                                <textarea
-                                                    value={newAutomationRule.context_mapping_json}
-                                                    onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, context_mapping_json: event.target.value }))}
-                                                    className="input min-h-[120px] font-mono text-[11px]"
-                                                    placeholder={"{\n  \"source_record_label\": \"data.roommate_name\",\n  \"location_label\": \"{{ data.region }} cluster\",\n  \"routing.cluster\": \"data.cluster\"\n}"}
-                                                />
-                                                <p className="mt-1 text-[10px] text-[hsl(var(--text-tertiary))]">
-                                                    Optional. Values can be event paths such as <span className="font-mono">data.region</span> or templates such as <span className="font-mono">{'{{ data.roommate_name }}'}</span>. Dot keys create nested task context.
-                                                </p>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                                <div>
-                                                    <label className="label">Start At</label>
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={newAutomationRule.starts_at_value}
-                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, starts_at_value: event.target.value }))}
-                                                        className="input"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="label">Due At</label>
-                                                    <input
-                                                        type="datetime-local"
-                                                        value={newAutomationRule.due_at_value}
-                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, due_at_value: event.target.value }))}
-                                                        className="input"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="label">Scheduled Date</label>
-                                                    <input
-                                                        type="date"
-                                                        value={newAutomationRule.visit_date_value}
-                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, visit_date_value: event.target.value }))}
-                                                        className="input"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <label className="flex items-center gap-2 text-xs font-medium text-[hsl(var(--text-secondary))]">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={newAutomationRule.is_active}
-                                                    onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, is_active: event.target.checked }))}
-                                                    className="h-4 w-4"
-                                                />
-                                                Activate rule immediately
-                                            </label>
-
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button type="button" onClick={resetAutomationBuilder} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))]">
-                                                    Reset
-                                                </button>
-                                                <button type="submit" className="rounded-md bg-[hsl(var(--primary))] px-3 py-2 text-xs font-semibold text-white">
-                                                    Save Rule
-                                                </button>
-                                            </div>
-                                        </form>
-                                    ) : (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
-                                            Create a form first to configure automation.
-                                        </p>
-                                    )}
-
-                                    {automationLoading ? (
-                                        <div className="flex items-center justify-center py-4">
-                                            <div className="h-6 w-6 animate-spin rounded-full border-4 border-[hsl(var(--primary))]/30 border-t-[hsl(var(--primary))]" />
-                                        </div>
-                                    ) : automationRules.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
-                                            No automation rules configured for this form.
-                                        </p>
-                                    ) : automationRules.map((rule) => (
-                                        <div key={rule.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{rule.name}</h3>
-                                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${rule.is_active ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-300 border border-slate-500/20'}`}>
-                                                            {rule.is_active ? 'Active' : 'Paused'}
-                                                        </span>
-                                                    </div>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{automationEventOptions.find((option) => option.value === rule.event_type)?.label || rule.event_type}</p>
-                                                    {rule.description && (
-                                                        <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">{rule.description}</p>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => handleToggleAutomationRule(rule)} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-1 text-[10px] font-semibold text-[hsl(var(--text-secondary))]">
-                                                        {rule.is_active ? 'Pause' : 'Activate'}
-                                                    </button>
-                                                    <button onClick={() => handleDeleteAutomationRule(rule)} className="rounded-md px-2 py-1 text-[10px] font-semibold text-[hsl(var(--text-tertiary))] transition-colors hover:bg-[hsl(var(--error))]/10 hover:text-[hsl(var(--error))]">
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="mt-3 space-y-2 border-t border-[hsl(var(--border))]/50 pt-3 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                <p><span className="font-semibold text-[hsl(var(--text-primary))]">When:</span> {summariseAutomationRule(rule)}</p>
-                                                <p><span className="font-semibold text-[hsl(var(--text-primary))]">Then:</span> {summariseAutomationAction(rule)}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <CheckCircle2 className="h-4 w-4" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Review Queue</h2>
-                                            <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Pending submissions awaiting approval</p>
-                                        </div>
-                                    </div>
-                                    <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                        {reviewQueue.length}
-                                    </span>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    {reviewQueue.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
-                                            No submissions are waiting for review.
-                                        </p>
-                                    ) : reviewQueue.map(item => (
-                                        <div key={item.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--primary))]">{item.form_title}</p>
-                                                    <h3 className="mt-1 text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">Submission pending review</h3>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{new Date(item.created_at).toLocaleString()}</p>
-                                                </div>
-                                                <span className="inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                                                    Submitted
-                                                </span>
-                                            </div>
-                                            <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{summariseSubmissionData(item.data)}</p>
-                                            <div className="mt-3 flex items-center justify-end gap-2 pt-3 border-t border-[hsl(var(--border))]/50">
-                                                <button
-                                                    onClick={() => handleReviewSubmission(item.id, 'rejected')}
-                                                    className="inline-flex items-center gap-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-colors hover:border-[hsl(var(--error))]/30 hover:text-[hsl(var(--error))]"
-                                                >
-                                                    <XCircle className="h-3.5 w-3.5" />
-                                                    Reject
-                                                </button>
-                                                <button
-                                                    onClick={() => handleReviewSubmission(item.id, 'approved')}
-                                                    className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20"
-                                                >
-                                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                                    Approve
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <Database className="h-4 w-4" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Item Catalog</h2>
-                                            <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Project-scoped reference items and default metadata</p>
-                                        </div>
-                                    </div>
-                                    <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                        {catalogItems.length}
-                                    </span>
-                                </div>
-                                <div className="flex flex-col gap-4 p-4 lg:p-5">
-                                    <form onSubmit={handleCreateCatalogItem} className="space-y-3.5 p-3.5 bg-[hsl(var(--surface-elevated))]/20 rounded-xl border border-[hsl(var(--border))]/30">
-                                        <div className="grid grid-cols-2 gap-2.5">
-                                            <div className="flex flex-col">
-                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Code / ID</label>
-                                                <input
-                                                    value={newCatalogItem.sku_code}
-                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, sku_code: event.target.value }))}
-                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none font-mono"
-                                                    placeholder="e.g. ITEM-001, HH-02"
-                                                />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Name / Label</label>
-                                                <input
-                                                    value={newCatalogItem.label}
-                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, label: event.target.value }))}
-                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                    placeholder="e.g. Coca Cola, John Doe"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2.5">
-                                            <div className="flex flex-col">
-                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Value</label>
-                                                <input
-                                                    value={newCatalogItem.default_price}
-                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, default_price: event.target.value }))}
-                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                    placeholder="0.00"
-                                                    type="number"
-                                                    step="0.01"
-                                                />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Type</label>
-                                                <input
-                                                    value={newCatalogItem.unit}
-                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, unit: event.target.value }))}
-                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                    placeholder="e.g. bottle, member"
-                                                />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Category</label>
-                                                <input
-                                                    value={newCatalogItem.brand}
-                                                    onChange={(event) => setNewCatalogItem(prev => ({ ...prev, brand: event.target.value }))}
-                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                    placeholder="e.g. FMCG, Demographics"
-                                                />
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            className="w-full rounded-lg bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] py-2 text-xs font-semibold text-white transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                            Add Catalog Item
-                                        </button>
-                                    </form>
-
-                                    {catalogItems.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-6 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">
-                                            No catalog items yet.
-                                        </p>
-                                    ) : (
-                                        <div className="max-h-[360px] overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
-                                            {catalogItems.map(item => (
-                                                <div key={item.id} className="rounded-xl border border-[hsl(var(--border))]/60 bg-[hsl(var(--background))] p-3.5 hover:border-[hsl(var(--primary))]/30 transition-all">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="space-y-1">
-                                                            <div className="flex flex-wrap items-center gap-1.5">
-                                                                <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">{item.label}</h3>
-                                                                <span className="rounded bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/30 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[hsl(var(--text-secondary))]">{item.sku_code}</span>
-                                                            </div>
-                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium flex items-center gap-1.5 flex-wrap">
-                                                                {item.brand && (
-                                                                    <>
-                                                                        <span>{item.brand}</span>
-                                                                        <span className="text-[hsl(var(--border))]/60">•</span>
-                                                                    </>
-                                                                )}
-                                                                {item.unit && (
-                                                                    <>
-                                                                        <span>{item.unit}</span>
-                                                                        <span className="text-[hsl(var(--border))]/60">•</span>
-                                                                    </>
-                                                                )}
-                                                                <span className="text-[hsl(var(--primary))] font-semibold font-mono">
-                                                                    {item.default_price != null ? `$${item.default_price}` : 'No default value'}
-                                                                </span>
-                                                            </p>
-                                                        </div>
-                                                        <button 
-                                                            onClick={() => handleDeleteCatalogItem(item.id)} 
-                                                            className="rounded-lg p-1 text-[hsl(var(--text-tertiary))] hover:text-red-500 transition-colors hover:bg-red-500/15"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                    <div className="mt-3 flex items-center gap-4 pt-3 border-t border-[hsl(var(--border))]/30">
-                                                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={item.is_active}
-                                                                onChange={(event) => handleCatalogItemToggle(item, { is_active: event.target.checked })}
-                                                                className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
-                                                            />
-                                                            Active
-                                                        </label>
-                                                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={item.price_editable}
-                                                                onChange={(event) => handleCatalogItemToggle(item, { price_editable: event.target.checked })}
-                                                                className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
-                                                            />
-                                                            Price editable
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </section>
-
-                            {/* DATASETS */}
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <Database className="h-4 w-4" />
-                                        </div>
-                                        <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Datasets</h2>
-                                    </div>
-                                    <button onClick={() => navigate('/dashboard?tab=datasets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                        <Plus className="h-4 w-4" />
-                                        <span className="text-xs font-semibold">New</span>
-                                    </button>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    {datasets.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No datasets yet.</p>
-                                    ) : datasets.map(dataset => (
-                                        <div key={dataset.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{dataset.name}</h3>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{dataset.records_count.toLocaleString()} rows • {new Date(dataset.updated_at).toLocaleDateString()}</p>
-                                                </div>
-                                                <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${dataset.status === 'active' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-300 border border-slate-500/20'}`}>
-                                                    {dataset.status}
-                                                </span>
-                                            </div>
-                                            <div className="mt-3 flex items-center justify-end pt-3 border-t border-[hsl(var(--border))]/50">
-                                                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 flex-wrap">
-                                                    <button className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
-                                                        <ChevronRight className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <Paperclip className="h-4 w-4" />
-                                        </div>
-                                        <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Assets</h2>
-                                    </div>
-                                    <button onClick={() => navigate('/dashboard?tab=assets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                        <Plus className="h-4 w-4" />
-                                        <span className="text-xs font-semibold">New</span>
-                                    </button>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    {assets.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No assets yet.</p>
-                                    ) : assets.map(asset => (
-                                        <div key={asset.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{asset.title}</h3>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{asset.kind} • {new Date(asset.updated_at).toLocaleDateString()}</p>
-                                                </div>
-                                                <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                    {asset.kind}
-                                                </span>
-                                            </div>
-                                            <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{asset.summary}</p>
-                                            <div className="mt-3 rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                Placeholder: previews, uploads, and link attachments will be managed here.
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* COLUMN 2: TASKS */}
-                        <div className="space-y-6 flex flex-col">
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <SquareCheckBig className="h-4 w-4" />
-                                        </div>
-                                        <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Tasks</h2>
-                                    </div>
-                                    <button onClick={() => navigate('/dashboard?tab=tasks')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                        <Plus className="h-4 w-4" />
-                                        <span className="text-xs font-semibold">New</span>
-                                    </button>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-                                        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                                            <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
-                                                <div>
-                                                    <label className="label">Plan Day</label>
-                                                    <input
-                                                        type="date"
-                                                        value={taskPlannerDate}
-                                                        onChange={(event) => setTaskPlannerDate(event.target.value)}
-                                                        className="input"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="label">Assignee</label>
-                                                    <select
-                                                        value={taskPlannerAssignee}
-                                                        onChange={(event) => setTaskPlannerAssignee(event.target.value)}
-                                                        className="input py-2"
-                                                    >
-                                                        <option value="">All assignees</option>
-                                                        {salespersonOptions.map((option) => (
-                                                            <option key={`task-filter-${option.type}-${option.id}`} value={`${option.type}:${option.id}`}>
-                                                                {option.label}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="label">Task Source</label>
-                                                    <select
-                                                        value={taskPlannerSource}
-                                                        onChange={(event) => setTaskPlannerSource(event.target.value as 'all' | 'manual' | 'automated')}
-                                                        className="input py-2"
-                                                    >
-                                                        <option value="all">All tasks</option>
-                                                        <option value="manual">Manual only</option>
-                                                        <option value="automated">Automation only</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setTaskPlannerDate('');
-                                                    setTaskPlannerAssignee('');
-                                                    setTaskPlannerSource('all');
-                                                }}
-                                                className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))]"
-                                            >
-                                                Clear filters
+                                            <button onClick={handleCreateForm} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                                <Plus className="h-4 w-4" />
+                                                <span className="text-xs font-semibold">New</span>
                                             </button>
                                         </div>
-                                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                            <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.total} shown</span>
-                                            <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.todo} todo</span>
-                                            <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.inProgress} in progress</span>
-                                            <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.done} done</span>
-                                            <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.manual} manual</span>
-                                            <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.automated} automated</span>
-                                        </div>
-                                    </div>
-                                    {tasks.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No tasks yet.</p>
-                                    ) : filteredTasks.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No tasks match the selected planner filters.</p>
-                                    ) : filteredTasks.map(task => (
-                                        <div key={task.id} className={`group relative rounded-md border p-3 transition-shadow hover:shadow-md block ${task.status === 'done' ? 'border-[hsl(var(--border))] bg-[hsl(var(--background))]/50 opacity-75' : 'border-[hsl(var(--border))] bg-[hsl(var(--background))]'}`}>
-                                            <div className="flex items-start gap-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={task.status === 'done'}
-                                                    onChange={(e) => handleTaskStatusChange(task.id, e.target.checked ? 'done' : 'todo')}
-                                                    className="mt-1 h-4 w-4 rounded border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))] cursor-pointer shrink-0"
-                                                />
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        {getTaskSourceRecordLabel(task) && (
-                                                            <span className="inline-flex rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-300">
-                                                                {getTaskSourceRecordLabel(task)}
-                                                            </span>
-                                                        )}
-                                                        <h3 className={`text-sm font-semibold leading-tight text-[hsl(var(--text-primary))] ${task.status === 'done' ? 'line-through text-[hsl(var(--text-tertiary))]' : ''}`}>
-                                                            {task.title}
-                                                        </h3>
-                                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isAutomatedTask(task) ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-[hsl(var(--primary))]/20' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))]'}`}>
-                                                            {isAutomatedTask(task) ? 'Automated' : 'Manual'}
+                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                            {forms.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No forms yet.</p>
+                                            ) : forms.map(form => (
+                                                <div key={form.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{form.title}</h3>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">v{form.version} • {new Date(form.updated_at).toLocaleDateString()}</p>
+                                                        </div>
+                                                        <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${formStatusTone[form.status] || formStatusTone.draft}`}>
+                                                            {form.status}
                                                         </span>
-                                                        {task.kind === 'journey_visit' && (
-                                                            <span className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-                                                                Scheduled Visit
-                                                            </span>
-                                                        )}
                                                     </div>
-                                                    {isAutomatedTask(task) && (
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                            Created from submission workflow.
-                                                        </p>
-                                                    )}
-                                                    {!isAutomatedTask(task) && (
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                            Managed directly in Studio.
-                                                        </p>
-                                                    )}
-                                                    {task.starts_at && (
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                            Starts {new Date(task.starts_at).toLocaleDateString()}
-                                                        </p>
-                                                    )}
-                                                    {task.visit_date && (
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                            Scheduled {new Date(task.visit_date).toLocaleDateString()}
-                                                        </p>
-                                                    )}
-                                                    {getTaskContextSummary(task) && (
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                            Context {getTaskContextSummary(task)}
-                                                        </p>
-                                                    )}
-                                                    {task.due_at && (
-                                                        <p className="mt-1 text-[11px] font-medium text-orange-500/80">
-                                                            Due {new Date(task.due_at).toLocaleDateString()}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-[10px] font-bold text-blue-600 dark:text-blue-400 shrink-0" title={resolveTaskAssigneeLabel(task)}>
-                                                        {resolveTaskAssigneeLabel(task).charAt(0).toUpperCase()}
+                                                    <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0" title={resolveAccessorLabel(form.lead_accessor_id, form.lead_accessor_type)}>
+                                                                {resolveAccessorLabel(form.lead_accessor_id, form.lead_accessor_type).charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <select
+                                                                value={getAccessorValue(form.assigned_accessor_id, form.assigned_accessor_type)}
+                                                                onChange={(e) => handleFormResponsibilityChange(form, 'assigned', e.target.value)}
+                                                                className="text-xs bg-transparent text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] cursor-pointer outline-none w-24 truncate"
+                                                            >
+                                                                <option value="">Unassigned</option>
+                                                                {assignmentOptions.map(opt => <option key={`form-assign-${form.id}-${opt.type}-${opt.id}`} value={`${opt.type}:${opt.id}`}>{opt.label}</option>)}
+                                                            </select>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 flex-wrap justify-end">
+                                                            <button onClick={() => navigate(`/simulator/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
+                                                                <Play className="h-3.5 w-3.5 fill-current" />
+                                                            </button>
+                                                            <button onClick={() => navigate(`/builder/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
+                                                                <ChevronRight className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <select
-                                                        value={getTaskAssignmentValue(task)}
-                                                        onChange={(e) => handleTaskAssignmentChange(task.id, e.target.value)}
-                                                        className="text-xs bg-transparent text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] cursor-pointer outline-none w-20 truncate"
-                                                    >
-                                                        <option value="">Unassigned</option>
-                                                        {assignmentOptions.map(opt => <option key={`task-assign-${task.id}-${opt.type}-${opt.id}`} value={`${opt.type}:${opt.id}`}>{opt.label}</option>)}
-                                                    </select>
                                                 </div>
-                                                <button onClick={() => handleDeleteTask(task.id)} className="opacity-0 group-hover:opacity-100 p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] text-[10px] font-semibold transition-opacity rounded bg-[hsl(var(--error))]/5">
-                                                    Del
-                                                </button>
-                                            </div>
+                                            ))}
                                         </div>
-                                    ))}
+                                    </section>
                                 </div>
-                            </section>
 
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <MessageSquare className="h-4 w-4" />
-                                        </div>
-                                        <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Threads</h2>
-                                    </div>
-                                    <button onClick={() => navigate('/dashboard?tab=threads')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                        <Plus className="h-4 w-4" />
-                                        <span className="text-xs font-semibold">New</span>
-                                    </button>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    {threads.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No threads yet.</p>
-                                    ) : threads.map(thread => (
-                                        <div key={thread.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                            <div className="flex items-start justify-between gap-3">
+                                {/* Right Column: Automation Rules (7/12) */}
+                                <div className="lg:col-span-7 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <Play className="h-4 w-4 fill-current" />
+                                                </div>
                                                 <div>
-                                                    <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{thread.title}</h3>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">Updated {new Date(thread.updated_at).toLocaleString()}</p>
+                                                    <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Automation Rules</h2>
+                                                    <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Submission events that create project tasks</p>
                                                 </div>
-                                                <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                    {thread.reply_count} replies
-                                                </span>
                                             </div>
-                                            <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{thread.summary}</p>
-                                            <div className="mt-3 rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                Placeholder: message feed, composer, mentions, and activity history will land here.
-                                            </div>
+                                            <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                {automationRules.length}
+                                            </span>
                                         </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <MapPin className="h-4 w-4" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Attendance</h2>
-                                            <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Operational check-in and check-out for {attendanceDay}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                        <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.total} total</span>
-                                        <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedIn} active</span>
-                                        <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedOut} completed</span>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    {attendanceRecords.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No attendance activity recorded for this day.</p>
-                                    ) : attendanceRecords.map(record => (
-                                        <div key={record.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-                                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                                <div>
-                                                    <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{resolveAttendanceMemberLabel(record)}</h3>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                        Checked in {new Date(record.check_in_at).toLocaleTimeString()}
-                                                        {record.check_out_at ? ` • Checked out ${new Date(record.check_out_at).toLocaleTimeString()}` : ''}
-                                                    </p>
-                                                </div>
-                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${record.status === 'checked_out' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-sky-500/10 text-sky-300 border border-sky-500/20'}`}>
-                                                    {record.status === 'checked_out' ? 'Checked Out' : 'Checked In'}
-                                                </span>
-                                            </div>
-                                            <p className="mt-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                Check-in: {formatAttendanceLocation(record.check_in_location_json)}
-                                            </p>
-                                            {record.check_out_location_json && (
-                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                    Check-out: {formatAttendanceLocation(record.check_out_location_json)}
-                                                </p>
-                                            )}
-                                            {(record.check_in_note || record.check_out_note) && (
-                                                <p className="mt-2 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                    {record.check_out_note || record.check_in_note}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* COLUMN 3: REPORTS AND MEMBERS */}
-                        <div className="space-y-6 flex flex-col">
-
-                            {/* REPORTS */}
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <FileBarChart2 className="h-4 w-4" />
-                                        </div>
-                                        <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Reports</h2>
-                                    </div>
-                                    <button onClick={handleCreateReport} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                        <Plus className="h-4 w-4" />
-                                        <span className="text-xs font-semibold">New</span>
-                                    </button>
-                                </div>
-                                <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4">
-                                        <div className="flex flex-col gap-3">
+                                        <div className="flex flex-col gap-4 p-4 lg:p-5">
                                             <div>
-                                                <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">Workflow Coverage</h3>
-                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                    Operational metrics that reporting can now consume from source review, tasks, automation, and attendance.
-                                                </p>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Pending review</p>
-                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.pendingReview}</p>
-                                                </div>
-                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Source-linked tasks</p>
-                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.sourceLinkedTasks}</p>
-                                                </div>
-                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Automation-created</p>
-                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.automatedTasks}</p>
-                                                </div>
-                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Task completion</p>
-                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.completionRate}%</p>
-                                                </div>
-                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Attendance complete</p>
-                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.attendanceCompletionRate}%</p>
-                                                </div>
-                                                <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Published reports</p>
-                                                    <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.publishedReports}</p>
-                                                </div>
-                                            </div>
-                                            <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Reporting joins</p>
-                                                <div className="mt-2 space-y-1.5 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                    {workflowJoinNotes.map((note) => (
-                                                        <p key={note}>{note}</p>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {reports.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No reports yet.</p>
-                                    ) : reports.map(report => (
-                                        <div key={report.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0 pr-2">
-                                                    <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))] truncate">{report.title}</h3>
-                                                    <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))] truncate">{report.description || 'No description'}</p>
-                                                </div>
+                                                <label className="label">Automation Form</label>
                                                 <select
-                                                    value={report.status}
-                                                    onChange={(e) => handleReportUpdate(report.id, { status: e.target.value as ReportArtifact['status'] })}
-                                                    className={`shrink-0 appearance-none inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer outline-none border-0 ${reportStatusTone[report.status] || reportStatusTone.draft}`}
+                                                    value={selectedAutomationFormId}
+                                                    onChange={(event) => setSelectedAutomationFormId(event.target.value)}
+                                                    className="input py-2"
                                                 >
-                                                    <option value="draft">Draft</option>
-                                                    <option value="published">Published</option>
-                                                    <option value="archived">Archived</option>
+                                                    {forms.length === 0 ? (
+                                                        <option value="">No forms available</option>
+                                                    ) : forms.map((form) => (
+                                                        <option key={`automation-form-${form.id}`} value={form.id}>
+                                                            {form.title}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
-                                            <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
-                                                <div className="flex items-center gap-2 max-w-[50%]">
-                                                    <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500 shrink-0" title={resolveAccessorLabel(report.lead_accessor_id, report.lead_accessor_type)}>
-                                                        {resolveAccessorLabel(report.lead_accessor_id, report.lead_accessor_type).charAt(0).toUpperCase()}
+
+                                            {selectedAutomationForm ? (
+                                                <form onSubmit={handleCreateAutomationRule} className="space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+                                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                        <div>
+                                                            <label className="label">Rule Name</label>
+                                                            <input
+                                                                value={newAutomationRule.name}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, name: event.target.value }))}
+                                                                className="input"
+                                                                placeholder="Approved records create scheduled task"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label">Event</label>
+                                                            <select
+                                                                value={newAutomationRule.event_type}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, event_type: event.target.value as FormAutomationEvent }))}
+                                                                className="input py-2"
+                                                            >
+                                                                {automationEventOptions.map((option) => (
+                                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
                                                     </div>
-                                                    <span className="text-[10px] text-[hsl(var(--text-secondary))] uppercase tracking-widest leading-none font-bold truncate">Owner</span>
+
+                                                    <div>
+                                                        <label className="label">Description</label>
+                                                        <input
+                                                            value={newAutomationRule.description}
+                                                            onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, description: event.target.value }))}
+                                                            className="input"
+                                                            placeholder="Creates a scheduled task when a reviewed record matches the rule"
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <label className="label">Conditions</label>
+                                                            <div className="flex items-center gap-2">
+                                                                <select
+                                                                    value={newAutomationRule.combinator}
+                                                                    onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, combinator: event.target.value as 'and' | 'or' }))}
+                                                                    className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-1 text-[11px] font-semibold text-[hsl(var(--text-secondary))]"
+                                                                >
+                                                                    <option value="and">Match all</option>
+                                                                    <option value="or">Match any</option>
+                                                                </select>
+                                                                <button type="button" onClick={addAutomationCondition} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--text-secondary))]">
+                                                                    Add condition
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        {automationConditions.map((condition, index) => (
+                                                            <div key={`automation-condition-${index}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1.6fr_1fr_1.4fr_auto]">
+                                                                <input
+                                                                    value={condition.field}
+                                                                    onChange={(event) => updateAutomationCondition(index, { field: event.target.value })}
+                                                                    className="input"
+                                                                    placeholder="data.region"
+                                                                />
+                                                                <select
+                                                                    value={condition.operator}
+                                                                    onChange={(event) => updateAutomationCondition(index, { operator: event.target.value })}
+                                                                    className="input py-2"
+                                                                >
+                                                                    {automationOperatorOptions.map((option) => (
+                                                                        <option key={`${option.value}-${index}`} value={option.value}>{option.label}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <input
+                                                                    value={condition.value}
+                                                                    onChange={(event) => updateAutomationCondition(index, { value: event.target.value })}
+                                                                    className="input"
+                                                                    placeholder={condition.operator === 'in' ? 'north, south' : 'Expected value'}
+                                                                />
+                                                                <button type="button" onClick={() => removeAutomationCondition(index)} className="rounded-md px-2 py-2 text-[11px] font-semibold text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--surface-elevated))]">
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
+                                                            Paths can reference submission metadata such as <span className="font-mono">submission.review_status</span>, <span className="font-mono">context.project_id</span>, or form data like <span className="font-mono">data.region</span> or <span className="font-mono">data.week_number</span>.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                        <div>
+                                                            <label className="label">Task Title Template</label>
+                                                            <input
+                                                                value={newAutomationRule.title_template}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, title_template: event.target.value }))}
+                                                                className="input"
+                                                                placeholder="Follow up {{ submission.id }}"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label">Assign To</label>
+                                                            <select
+                                                                value={newAutomationRule.assigned_accessor}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, assigned_accessor: event.target.value }))}
+                                                                className="input py-2"
+                                                            >
+                                                                <option value="">Leave unassigned</option>
+                                                                {assignmentOptions.map((option) => (
+                                                                    <option key={`automation-accessor-${option.type}-${option.id}`} value={`${option.type}:${option.id}`}>
+                                                                        {option.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="label">Task Description Template</label>
+                                                        <input
+                                                            value={newAutomationRule.description_template}
+                                                            onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, description_template: event.target.value }))}
+                                                            className="input"
+                                                            placeholder="Triggered from {{ submission.id }} for {{ data.region }}"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="label">Task Context Mapping (JSON)</label>
+                                                        <textarea
+                                                            value={newAutomationRule.context_mapping_json}
+                                                            onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, context_mapping_json: event.target.value }))}
+                                                            className="input min-h-[120px] font-mono text-[11px]"
+                                                            placeholder={"{\n  \"source_record_label\": \"data.roommate_name\",\n  \"location_label\": \"{{ data.region }} cluster\",\n  \"routing.cluster\": \"data.cluster\"\n}"}
+                                                        />
+                                                        <p className="mt-1 text-[10px] text-[hsl(var(--text-tertiary))]">
+                                                            Optional. Values can be event paths such as <span className="font-mono">data.region</span> or templates such as <span className="font-mono">{'{{ data.roommate_name }}'}</span>. Dot keys create nested task context.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                                        <div>
+                                                            <label className="label">Start At</label>
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={newAutomationRule.starts_at_value}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, starts_at_value: event.target.value }))}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label">Due At</label>
+                                                            <input
+                                                                type="datetime-local"
+                                                                value={newAutomationRule.due_at_value}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, due_at_value: event.target.value }))}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label">Scheduled Date</label>
+                                                            <input
+                                                                type="date"
+                                                                value={newAutomationRule.visit_date_value}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, visit_date_value: event.target.value }))}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <label className="flex items-center gap-2 text-xs font-medium text-[hsl(var(--text-secondary))]">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={newAutomationRule.is_active}
+                                                            onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, is_active: event.target.checked }))}
+                                                            className="h-4 w-4"
+                                                        />
+                                                        Activate rule immediately
+                                                    </label>
+
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button type="button" onClick={resetAutomationBuilder} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))]">
+                                                            Reset
+                                                        </button>
+                                                        <button type="submit" className="rounded-md bg-[hsl(var(--primary))] px-3 py-2 text-xs font-semibold text-white">
+                                                            Save Rule
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            ) : (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
+                                                    Create a form first to configure automation.
+                                                </p>
+                                            )}
+
+                                            {automationLoading ? (
+                                                <div className="flex items-center justify-center py-4">
+                                                    <div className="h-6 w-6 animate-spin rounded-full border-4 border-[hsl(var(--primary))]/30 border-t-[hsl(var(--primary))]" />
                                                 </div>
-                                                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                                    <button onClick={() => handleDeleteReport(report.id)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] text-[10px] font-semibold rounded bg-[hsl(var(--error))]/5">
-                                                        Del
-                                                    </button>
-                                                    <button onClick={() => navigate(`/projects/${projectId}/reports/${report.id}`)} className="p-1 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-md hover:bg-[hsl(var(--primary))]/10">
-                                                        <ChevronRight className="h-3.5 w-3.5" />
-                                                    </button>
+                                            ) : automationRules.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
+                                                    No automation rules configured for this form.
+                                                </p>
+                                            ) : automationRules.map((rule) => (
+                                                <div key={rule.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{rule.name}</h3>
+                                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${rule.is_active ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-300 border border-slate-500/20'}`}>
+                                                                    {rule.is_active ? 'Active' : 'Paused'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{automationEventOptions.find((option) => option.value === rule.event_type)?.label || rule.event_type}</p>
+                                                            {rule.description && (
+                                                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">{rule.description}</p>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <button onClick={() => handleToggleAutomationRule(rule)} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-1 text-[10px] font-semibold text-[hsl(var(--text-secondary))]">
+                                                                {rule.is_active ? 'Pause' : 'Activate'}
+                                                            </button>
+                                                            <button onClick={() => handleDeleteAutomationRule(rule)} className="rounded-md px-2 py-1 text-[10px] font-semibold text-[hsl(var(--text-tertiary))] transition-colors hover:bg-[hsl(var(--error))]/10 hover:text-[hsl(var(--error))]">
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 space-y-2 border-t border-[hsl(var(--border))]/50 pt-3 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                        <p><span className="font-semibold text-[hsl(var(--text-primary))]">When:</span> {summariseAutomationRule(rule)}</p>
+                                                        <p><span className="font-semibold text-[hsl(var(--text-primary))]">Then:</span> {summariseAutomationAction(rule)}</p>
+                                                    </div>
                                                 </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 2. REVIEW QUEUE WORKSPACE */}
+                        {activeTab === 'review' && (
+                            <div className="max-w-4xl mx-auto space-y-6">
+                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                <CheckCircle2 className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Review Queue</h2>
+                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Pending submissions awaiting approval</p>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            {/* MEMBERS */}
-                            <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                            <Users className="h-4 w-4" />
-                                        </div>
-                                        <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Members</h2>
+                                        <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                            {reviewQueue.length}
+                                        </span>
                                     </div>
-                                </div>
-                                <div className="p-4 lg:p-5 flex flex-col gap-4">
-                                    <form onSubmit={handleGrantAccess} className="flex flex-col sm:flex-row gap-2">
-                                        <select
-                                            value={accessorId}
-                                            onChange={(e) => setAccessorId(e.target.value)}
-                                            className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
-                                        >
-                                            <option value="">Add member...</option>
-                                            {selectableAccessors.map(opt => <option key={`add-mem-${opt.id}`} value={opt.id}>{opt.label}</option>)}
-                                        </select>
-                                        <div className="flex gap-2">
-                                            <select
-                                                value={roleTemplateId}
-                                                onChange={(e) => setRoleTemplateId(e.target.value)}
-                                                className="flex-1 sm:w-20 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-2 text-[11px] text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
-                                            >
-                                                {roleTemplates.map(rt => <option key={`add-role-${rt.id}`} value={rt.id}>{businessRoleLabelBySlug[rt.slug] || rt.name}</option>)}
-                                            </select>
-                                            <button type="submit" disabled={!accessorId || !roleTemplateId} className="w-14 sm:w-auto shrink-0 rounded-md bg-[hsl(var(--primary))] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:bg-[hsl(var(--primary-hover))] shadow-sm">
-                                                Add
-                                            </button>
-                                        </div>
-                                    </form>
-
-                                    <div className="space-y-2">
-                                        {accessRules.length === 0 ? (
-                                            <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-2">No members.</p>
-                                        ) : accessRules.map(rule => (
-                                            <div key={`member-rule-${rule.id}`} className="group flex items-center justify-between rounded-md p-2.5 hover:bg-[hsl(var(--background))] transition-colors border border-transparent hover:border-[hsl(var(--border))]">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                                                        {resolveRuleLabel(rule).charAt(0).toUpperCase()}
+                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                        {reviewQueue.length === 0 ? (
+                                            <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
+                                                No submissions are waiting for review.
+                                            </p>
+                                        ) : reviewQueue.map(item => (
+                                            <div key={item.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--primary))]">{item.form_title}</p>
+                                                        <h3 className="mt-1 text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">Submission pending review</h3>
+                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{new Date(item.created_at).toLocaleString()}</p>
                                                     </div>
-                                                    <div className="min-w-0 pr-2">
-                                                        <p className="text-sm font-semibold text-[hsl(var(--text-primary))] leading-tight truncate">{resolveRuleLabel(rule)}</p>
-                                                        <p className="text-[10px] text-[hsl(var(--text-tertiary))] uppercase tracking-widest mt-0.5">{getBusinessRoleLabel(rule)}</p>
-                                                    </div>
+                                                    <span className="inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                                                        Submitted
+                                                    </span>
                                                 </div>
-                                                <button onClick={() => handleRevokeAccess(rule)} className="opacity-0 group-hover:opacity-100 py-1.5 px-2.5 rounded bg-[hsl(var(--error))]/5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] text-[10px] font-semibold transition-opacity shrink-0">
-                                                    Remove
-                                                </button>
+                                                <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{summariseSubmissionData(item.data)}</p>
+                                                <div className="mt-3 flex items-center justify-end gap-2 pt-3 border-t border-[hsl(var(--border))]/50">
+                                                    <button
+                                                        onClick={() => handleReviewSubmission(item.id, 'rejected')}
+                                                        className="inline-flex items-center gap-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-colors hover:border-[hsl(var(--error))]/30 hover:text-[hsl(var(--error))]"
+                                                    >
+                                                        <XCircle className="h-3.5 w-3.5" />
+                                                        Reject
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleReviewSubmission(item.id, 'approved')}
+                                                        className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20"
+                                                    >
+                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        Approve
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
+                                </section>
+                            </div>
+                        )}
+
+                        {/* 3. TASKS WORKSPACE */}
+                        {activeTab === 'tasks' && (
+                            <div className="grid gap-6 lg:grid-cols-12 items-start">
+                                {/* Left Column: Tasks list (7/12) */}
+                                <div className="lg:col-span-7 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <SquareCheckBig className="h-4 w-4" />
+                                                </div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Tasks</h2>
+                                            </div>
+                                            <button onClick={() => navigate('/dashboard?tab=tasks')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                                <Plus className="h-4 w-4" />
+                                                <span className="text-xs font-semibold">New</span>
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                            <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+                                                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                                                    <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
+                                                        <div>
+                                                            <label className="label">Plan Day</label>
+                                                            <input
+                                                                type="date"
+                                                                value={taskPlannerDate}
+                                                                onChange={(event) => setTaskPlannerDate(event.target.value)}
+                                                                className="input"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="label">Assignee</label>
+                                                            <select
+                                                                value={taskPlannerAssignee}
+                                                                onChange={(event) => setTaskPlannerAssignee(event.target.value)}
+                                                                className="input py-2"
+                                                            >
+                                                                <option value="">All assignees</option>
+                                                                {salespersonOptions.map((option) => (
+                                                                    <option key={`task-filter-${option.type}-${option.id}`} value={`${option.type}:${option.id}`}>
+                                                                        {option.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="label">Task Source</label>
+                                                            <select
+                                                                value={taskPlannerSource}
+                                                                onChange={(event) => setTaskPlannerSource(event.target.value as 'all' | 'manual' | 'automated')}
+                                                                className="input py-2"
+                                                            >
+                                                                <option value="all">All tasks</option>
+                                                                <option value="manual">Manual only</option>
+                                                                <option value="automated">Automation only</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setTaskPlannerDate('');
+                                                            setTaskPlannerAssignee('');
+                                                            setTaskPlannerSource('all');
+                                                        }}
+                                                        className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-xs font-semibold text-[hsl(var(--text-secondary))]"
+                                                    >
+                                                        Clear filters
+                                                    </button>
+                                                </div>
+                                                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                    <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.total} shown</span>
+                                                    <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.todo} todo</span>
+                                                    <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.inProgress} in progress</span>
+                                                    <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.done} done</span>
+                                                    <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.manual} manual</span>
+                                                    <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{filteredTaskCounts.automated} automated</span>
+                                                </div>
+                                            </div>
+                                            {tasks.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No tasks yet.</p>
+                                            ) : filteredTasks.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No tasks match the selected planner filters.</p>
+                                            ) : filteredTasks.map(task => (
+                                                <div key={task.id} className={`group relative rounded-md border p-3 transition-shadow hover:shadow-md block ${task.status === 'done' ? 'border-[hsl(var(--border))] bg-[hsl(var(--background))]/50 opacity-75' : 'border-[hsl(var(--border))] bg-[hsl(var(--background))]'}`}>
+                                                    <div className="flex items-start gap-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={task.status === 'done'}
+                                                            onChange={(e) => handleTaskStatusChange(task.id, e.target.checked ? 'done' : 'todo')}
+                                                            className="mt-1 h-4 w-4 rounded border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))] cursor-pointer shrink-0"
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {getTaskSourceRecordLabel(task) && (
+                                                                    <span className="inline-flex rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                                                                        {getTaskSourceRecordLabel(task)}
+                                                                    </span>
+                                                                )}
+                                                                <h3 className={`text-sm font-semibold leading-tight text-[hsl(var(--text-primary))] ${task.status === 'done' ? 'line-through text-[hsl(var(--text-tertiary))]' : ''}`}>
+                                                                    {task.title}
+                                                                </h3>
+                                                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isAutomatedTask(task) ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-[hsl(var(--primary))]/20' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))]'}`}>
+                                                                    {isAutomatedTask(task) ? 'Automated' : 'Manual'}
+                                                                </span>
+                                                                {task.kind === 'journey_visit' && (
+                                                                    <span className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                                                                        Scheduled Visit
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {isAutomatedTask(task) && (
+                                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                                    Created from submission workflow.
+                                                                </p>
+                                                            )}
+                                                            {!isAutomatedTask(task) && (
+                                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                                    Managed directly in Studio.
+                                                                </p>
+                                                            )}
+                                                            {task.starts_at && (
+                                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                                    Starts {new Date(task.starts_at).toLocaleDateString()}
+                                                                </p>
+                                                            )}
+                                                            {task.visit_date && (
+                                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                                    Scheduled {new Date(task.visit_date).toLocaleDateString()}
+                                                                </p>
+                                                            )}
+                                                            {getTaskContextSummary(task) && (
+                                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                                    Context {getTaskContextSummary(task)}
+                                                                </p>
+                                                            )}
+                                                            {task.due_at && (
+                                                                <p className="mt-1 text-[11px] font-medium text-orange-500/80">
+                                                                    Due {new Date(task.due_at).toLocaleDateString()}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-[10px] font-bold text-blue-600 dark:text-blue-400 shrink-0" title={resolveTaskAssigneeLabel(task)}>
+                                                                {resolveTaskAssigneeLabel(task).charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <select
+                                                                value={getTaskAssignmentValue(task)}
+                                                                onChange={(e) => handleTaskAssignmentChange(task.id, e.target.value)}
+                                                                className="text-xs bg-transparent text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] cursor-pointer outline-none w-20 truncate"
+                                                            >
+                                                                <option value="">Unassigned</option>
+                                                                {assignmentOptions.map(opt => <option key={`task-assign-${task.id}-${opt.type}-${opt.id}`} value={`${opt.type}:${opt.id}`}>{opt.label}</option>)}
+                                                            </select>
+                                                        </div>
+                                                        <button onClick={() => handleDeleteTask(task.id)} className="opacity-0 group-hover:opacity-100 p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] text-[10px] font-semibold transition-opacity rounded bg-[hsl(var(--error))]/5">
+                                                            Del
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
                                 </div>
-                            </section>
 
-                        </div>
+                                {/* Right Column: Attendance (5/12) */}
+                                <div className="lg:col-span-5 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <MapPin className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Attendance</h2>
+                                                    <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Operational check-in and check-out for {attendanceDay}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.total} total</span>
+                                                <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedIn} active</span>
+                                                <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedOut} completed</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                            {attendanceRecords.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No attendance activity recorded for this day.</p>
+                                            ) : attendanceRecords.map(record => (
+                                                <div key={record.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <div>
+                                                            <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{resolveAttendanceMemberLabel(record)}</h3>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                                Checked in {new Date(record.check_in_at).toLocaleTimeString()}
+                                                                {record.check_out_at ? ` • Checked out ${new Date(record.check_out_at).toLocaleTimeString()}` : ''}
+                                                            </p>
+                                                        </div>
+                                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${record.status === 'checked_out' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-sky-500/10 text-sky-300 border border-sky-500/20'}`}>
+                                                            {record.status === 'checked_out' ? 'Checked Out' : 'Checked In'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-2 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                        Check-in: {formatAttendanceLocation(record.check_in_location_json)}
+                                                    </p>
+                                                    {record.check_out_location_json && (
+                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                            Check-out: {formatAttendanceLocation(record.check_out_location_json)}
+                                                        </p>
+                                                    )}
+                                                    {(record.check_in_note || record.check_out_note) && (
+                                                        <p className="mt-2 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                            {record.check_out_note || record.check_in_note}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        )}
 
+                        {/* 4. DATASETS WORKSPACE */}
+                        {activeTab === 'data' && (
+                            <div className="grid gap-6 lg:grid-cols-12 items-start">
+                                {/* Left Column: Datasets (6/12) */}
+                                <div className="lg:col-span-6 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <Database className="h-4 w-4" />
+                                                </div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Datasets</h2>
+                                            </div>
+                                            <button onClick={() => navigate('/dashboard?tab=datasets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                                <Plus className="h-4 w-4" />
+                                                <span className="text-xs font-semibold">New</span>
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                            {datasets.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No datasets yet.</p>
+                                            ) : datasets.map(dataset => (
+                                                <div key={dataset.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{dataset.name}</h3>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{dataset.records_count.toLocaleString()} rows • {new Date(dataset.updated_at).toLocaleDateString()}</p>
+                                                        </div>
+                                                        <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${dataset.status === 'active' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-slate-500/10 text-slate-300 border border-slate-500/20'}`}>
+                                                            {dataset.status}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-3 flex items-center justify-end pt-3 border-t border-[hsl(var(--border))]/50">
+                                                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 flex-wrap">
+                                                            <button className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
+                                                                <ChevronRight className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                </div>
+
+                                {/* Right Column: Assets (6/12) */}
+                                <div className="lg:col-span-6 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <Paperclip className="h-4 w-4" />
+                                                </div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Assets</h2>
+                                            </div>
+                                            <button onClick={() => navigate('/dashboard?tab=assets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                                <Plus className="h-4 w-4" />
+                                                <span className="text-xs font-semibold">New</span>
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                            {assets.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No assets yet.</p>
+                                            ) : assets.map(asset => (
+                                                <div key={asset.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{asset.title}</h3>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{asset.kind} • {new Date(asset.updated_at).toLocaleDateString()}</p>
+                                                        </div>
+                                                        <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                            {asset.kind}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{asset.summary}</p>
+                                                    <div className="mt-3 rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                        Placeholder: previews, uploads, and link attachments will be managed here.
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 5. CATALOG WORKSPACE */}
+                        {activeTab === 'catalog' && (
+                            <div className="grid gap-6 lg:grid-cols-12 items-start">
+                                {/* Left Column: Add Catalog Item Form (5/12) */}
+                                <div className="lg:col-span-5 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Add Catalog Item</h2>
+                                            <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Create project-scoped reference items and default metadata</p>
+                                        </div>
+                                        <div className="p-4 lg:p-5">
+                                            <form onSubmit={handleCreateCatalogItem} className="space-y-3.5 p-3.5 bg-[hsl(var(--surface-elevated))]/20 rounded-xl border border-[hsl(var(--border))]/30">
+                                                <div className="grid grid-cols-2 gap-2.5">
+                                                    <div className="flex flex-col">
+                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Code / ID</label>
+                                                        <input
+                                                            value={newCatalogItem.sku_code}
+                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, sku_code: event.target.value }))}
+                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none font-mono"
+                                                            placeholder="e.g. ITEM-001, HH-02"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Name / Label</label>
+                                                        <input
+                                                            value={newCatalogItem.label}
+                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, label: event.target.value }))}
+                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                            placeholder="e.g. Coca Cola, John Doe"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-2.5">
+                                                    <div className="flex flex-col">
+                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Value</label>
+                                                        <input
+                                                            value={newCatalogItem.default_price}
+                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, default_price: event.target.value }))}
+                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                            placeholder="0.00"
+                                                            type="number"
+                                                            step="0.01"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Type</label>
+                                                        <input
+                                                            value={newCatalogItem.unit}
+                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, unit: event.target.value }))}
+                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                            placeholder="e.g. bottle, member"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Category</label>
+                                                        <input
+                                                            value={newCatalogItem.brand}
+                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, brand: event.target.value }))}
+                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                            placeholder="e.g. FMCG, Demographics"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4 py-1">
+                                                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={newCatalogItem.is_mandatory}
+                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, is_mandatory: event.target.checked }))}
+                                                            className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                        />
+                                                        Mandatory
+                                                    </label>
+                                                </div>
+                                                <button
+                                                    type="submit"
+                                                    className="w-full rounded-lg bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] py-2 text-xs font-semibold text-white transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                    Add Catalog Item
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </section>
+                                </div>
+
+                                {/* Right Column: Item Catalog list (7/12) */}
+                                <div className="lg:col-span-7 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <Tag className="h-4 w-4" />
+                                                </div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Catalog Items</h2>
+                                            </div>
+                                            <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                {catalogItems.length}
+                                            </span>
+                                        </div>
+                                        <div className="p-4 lg:p-5 flex flex-col gap-4">
+                                            {catalogItems.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-6 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">
+                                                    No catalog items yet.
+                                                </p>
+                                            ) : (
+                                                <div className="max-h-[500px] overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
+                                                    {catalogItems.map(item => (
+                                                        <div key={item.id} className="rounded-xl border border-[hsl(var(--border))]/60 bg-[hsl(var(--background))] p-3.5 hover:border-[hsl(var(--primary))]/30 transition-all">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="space-y-1">
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">{item.label}</h3>
+                                                                        <span className="rounded bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/30 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[hsl(var(--text-secondary))]">{item.sku_code}</span>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium flex items-center gap-1.5 flex-wrap">
+                                                                        {item.brand && (
+                                                                            <>
+                                                                                <span>{item.brand}</span>
+                                                                                <span className="text-[hsl(var(--border))]/60">•</span>
+                                                                            </>
+                                                                        )}
+                                                                        {item.unit && (
+                                                                            <>
+                                                                                <span>{item.unit}</span>
+                                                                                <span className="text-[hsl(var(--border))]/60">•</span>
+                                                                            </>
+                                                                        )}
+                                                                        <span className="text-[hsl(var(--primary))] font-semibold font-mono">
+                                                                            {item.default_price != null ? `$${item.default_price}` : 'No default value'}
+                                                                        </span>
+                                                                    </p>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={() => handleDeleteCatalogItem(item.id)} 
+                                                                    className="rounded-lg p-1 text-[hsl(var(--text-tertiary))] hover:text-red-500 transition-colors hover:bg-red-500/15"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                            <div className="mt-3 flex items-center gap-4 pt-3 border-t border-[hsl(var(--border))]/30">
+                                                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={item.is_active}
+                                                                        onChange={(event) => handleCatalogItemToggle(item, { is_active: event.target.checked })}
+                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                    />
+                                                                    Active
+                                                                </label>
+                                                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={item.price_editable}
+                                                                        onChange={(event) => handleCatalogItemToggle(item, { price_editable: event.target.checked })}
+                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                    />
+                                                                    Price editable
+                                                                </label>
+                                                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!item.metadata_json?.is_mandatory}
+                                                                        onChange={(event) => handleCatalogItemToggle(item, { is_mandatory: event.target.checked })}
+                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                    />
+                                                                    Mandatory
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 4. DISCUSSIONS WORKSPACE */}
+                        {activeTab === 'threads' && (
+                            <div className="max-w-4xl mx-auto space-y-6">
+                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                <MessageSquare className="h-4 w-4" />
+                                            </div>
+                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Threads</h2>
+                                        </div>
+                                        <button onClick={() => navigate('/dashboard?tab=threads')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                            <Plus className="h-4 w-4" />
+                                            <span className="text-xs font-semibold">New</span>
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                        {threads.length === 0 ? (
+                                            <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No threads yet.</p>
+                                        ) : threads.map(thread => (
+                                            <div key={thread.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{thread.title}</h3>
+                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">Updated {new Date(thread.updated_at).toLocaleString()}</p>
+                                                    </div>
+                                                    <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                        {thread.reply_count} replies
+                                                    </span>
+                                                </div>
+                                                <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{thread.summary}</p>
+                                                <div className="mt-3 rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                    Placeholder: message feed, composer, mentions, and activity history will land here.
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </section>
+                            </div>
+                        )}
+
+                        {/* 5. REPORTS WORKSPACE */}
+                        {activeTab === 'reports' && (
+                            <div className="grid gap-6 lg:grid-cols-12 items-start">
+                                {/* Left Column: Custom Reports list (6/12) */}
+                                <div className="lg:col-span-6 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <FileBarChart2 className="h-4 w-4" />
+                                                </div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Reports</h2>
+                                            </div>
+                                            <button onClick={handleCreateReport} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                                <Plus className="h-4 w-4" />
+                                                <span className="text-xs font-semibold">New</span>
+                                            </button>
+                                        </div>
+                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                            {reports.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No reports yet.</p>
+                                            ) : reports.map(report => (
+                                                <div key={report.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0 pr-2">
+                                                            <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))] truncate">{report.title}</h3>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))] truncate">{report.description || 'No description'}</p>
+                                                        </div>
+                                                        <select
+                                                            value={report.status}
+                                                            onChange={(e) => handleReportUpdate(report.id, { status: e.target.value as ReportArtifact['status'] })}
+                                                            className={`shrink-0 appearance-none inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer outline-none border-0 ${reportStatusTone[report.status] || reportStatusTone.draft}`}
+                                                        >
+                                                            <option value="draft">Draft</option>
+                                                            <option value="published">Published</option>
+                                                            <option value="archived">Archived</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
+                                                        <div className="flex items-center gap-2 max-w-[50%]">
+                                                            <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500 shrink-0" title={resolveAccessorLabel(report.lead_accessor_id, report.lead_accessor_type)}>
+                                                                {resolveAccessorLabel(report.lead_accessor_id, report.lead_accessor_type).charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <span className="text-[10px] text-[hsl(var(--text-secondary))] uppercase tracking-widest leading-none font-bold truncate">Owner</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                                            <button onClick={() => handleDeleteReport(report.id)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] text-[10px] font-semibold rounded bg-[hsl(var(--error))]/5">
+                                                                Del
+                                                            </button>
+                                                            <button onClick={() => navigate(`/projects/${projectId}/reports/${report.id}`)} className="p-1 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-md hover:bg-[hsl(var(--primary))]/10">
+                                                                <ChevronRight className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                </div>
+
+                                {/* Right Column: Workflow Coverage metrics (6/12) */}
+                                <div className="lg:col-span-6 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden p-4 lg:p-5">
+                                        <div className="mb-4">
+                                            <h3 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Workflow Coverage</h3>
+                                            <p className="mt-1 text-xs text-[hsl(var(--text-tertiary))]">
+                                                Operational metrics that reporting can now consume from source review, tasks, automation, and attendance.
+                                            </p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 mb-4">
+                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Pending review</p>
+                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.pendingReview}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Source-linked tasks</p>
+                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.sourceLinkedTasks}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Automation-created</p>
+                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.automatedTasks}</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Task completion</p>
+                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.completionRate}%</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Attendance complete</p>
+                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.attendanceCompletionRate}%</p>
+                                            </div>
+                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Published reports</p>
+                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.publishedReports}</p>
+                                            </div>
+                                        </div>
+                                        <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Reporting joins</p>
+                                            <div className="mt-2 space-y-1.5 text-[11px] text-[hsl(var(--text-secondary))]">
+                                                {workflowJoinNotes.map((note) => (
+                                                    <p key={note}>{note}</p>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 6. TEAM WORKSPACE */}
+                        {activeTab === 'members' && (
+                            <div className="max-w-3xl mx-auto space-y-6">
+                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                <Users className="h-4 w-4" />
+                                            </div>
+                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Members</h2>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 lg:p-5 flex flex-col gap-4">
+                                        <form onSubmit={handleGrantAccess} className="flex flex-col sm:flex-row gap-2">
+                                            <select
+                                                value={accessorId}
+                                                onChange={(e) => setAccessorId(e.target.value)}
+                                                className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
+                                            >
+                                                <option value="">Add member...</option>
+                                                {selectableAccessors.map(opt => <option key={`add-mem-${opt.id}`} value={opt.id}>{opt.label}</option>)}
+                                            </select>
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={roleTemplateId}
+                                                    onChange={(e) => setRoleTemplateId(e.target.value)}
+                                                    className="flex-1 sm:w-20 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-2 text-[11px] text-[hsl(var(--text-primary))] focus:ring-1 focus:ring-[hsl(var(--primary))]"
+                                                >
+                                                    {roleTemplates.map(rt => <option key={`add-role-${rt.id}`} value={rt.id}>{businessRoleLabelBySlug[rt.slug] || rt.name}</option>)}
+                                                </select>
+                                                <button type="submit" disabled={!accessorId || !roleTemplateId} className="w-14 sm:w-auto shrink-0 rounded-md bg-[hsl(var(--primary))] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:bg-[hsl(var(--primary-hover))] shadow-sm">
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </form>
+
+                                        <div className="space-y-2">
+                                            {accessRules.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-2">No members.</p>
+                                            ) : accessRules.map(rule => (
+                                                <div key={`member-rule-${rule.id}`} className="group flex items-center justify-between rounded-md p-2.5 hover:bg-[hsl(var(--background))] transition-colors border border-transparent hover:border-[hsl(var(--border))]">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                                                            {resolveRuleLabel(rule).charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div className="min-w-0 pr-2">
+                                                            <p className="text-sm font-semibold text-[hsl(var(--text-primary))] leading-tight truncate">{resolveRuleLabel(rule)}</p>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] uppercase tracking-widest mt-0.5">{getBusinessRoleLabel(rule)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <button onClick={() => handleRevokeAccess(rule)} className="opacity-0 group-hover:opacity-100 py-1.5 px-2.5 rounded bg-[hsl(var(--error))]/5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] text-[10px] font-semibold transition-opacity shrink-0">
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : null}

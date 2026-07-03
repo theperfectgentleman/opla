@@ -165,6 +165,8 @@ interface FormField {
     allow_add_items?: boolean;
     allow_remove_items?: boolean;
     catalog_source_type?: 'project_catalog';
+    catalog_prepopulate_mode?: string;
+    required_catalog_item_ids?: string[];
 
     // Cascading / filtered dropdown support
     cascade_parent_field_id?: string;
@@ -722,6 +724,7 @@ const ChoicesSetupInput: React.FC<{
         </div>
     );
 };
+
 
 const ObjectPropertiesInput: React.FC<{
     selectedObjectProperties: any[];
@@ -2124,6 +2127,8 @@ const FormBuilder: React.FC = () => {
                 allow_add_items: child.allow_add_items,
                 allow_remove_items: child.allow_remove_items,
                 catalog_source_type: child.catalog_source_type,
+                catalog_prepopulate_mode: child.catalog_prepopulate_mode,
+                required_catalog_item_ids: child.required_catalog_item_ids || [],
                 // Form link
                 linked_form_id: child.linked_form_id,
                 linked_form_slug: child.linked_form_slug,
@@ -2481,6 +2486,8 @@ const FormBuilder: React.FC = () => {
         allow_add_items: field.allow_add_items,
         allow_remove_items: field.allow_remove_items,
         catalog_source_type: field.catalog_source_type,
+        catalog_prepopulate_mode: field.catalog_prepopulate_mode,
+        required_catalog_item_ids: field.required_catalog_item_ids,
         // Form link
         linked_form_id: field.linked_form_id,
         linked_form_slug: field.linked_form_slug,
@@ -4865,6 +4872,23 @@ const FormBuilder: React.FC = () => {
                                                                                 >
                                                                                     <option value="cards">Cards List</option>
                                                                                     <option value="table">Table Rows</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_prepopulate_mode',
+                                                                            label: 'Prepopulate Format',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && selectedField.catalog_source_type === 'project_catalog',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.catalog_prepopulate_mode || 'all'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { catalog_prepopulate_mode: e.target.value })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="all">All Catalog Items</option>
+                                                                                    <option value="required_only">Mandatory Items Only</option>
+                                                                                    <option value="none">None - Start Empty</option>
                                                                                 </select>
                                                                             )
                                                                         },

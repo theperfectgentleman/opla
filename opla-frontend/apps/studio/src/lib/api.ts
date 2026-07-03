@@ -352,6 +352,7 @@ export const projectAPI = {
             brand?: string;
             is_active?: boolean;
             price_editable?: boolean;
+            metadata_json?: Record<string, any>;
         },
     ) => {
         const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/catalog-items`, data);
@@ -369,6 +370,7 @@ export const projectAPI = {
             brand?: string;
             is_active?: boolean;
             price_editable?: boolean;
+            metadata_json?: Record<string, any>;
         },
     ) => {
         const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}/catalog-items/${itemId}`, data);

@@ -415,25 +415,32 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
         if (Array.isArray(value) && value.length > 0) {
             loadedItems = value.map((entry) => calculateItemComputedProperties(entry || {}));
         } else if (field.catalog_source_type === 'project_catalog' && catalogItems.length > 0) {
-            loadedItems = catalogItems.map((item: any) => {
-                const row: any = { _isCatalogItem: true };
-                properties.forEach((prop: any) => {
-                    if (prop.type === 'select' && prop.reference?.source_type === 'catalog') {
-                        row[prop.key] = item.id;
-                        Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]: any) => {
-                            row[targetKey] = item[sourceKey];
-                        });
-                    } else if (prop.key === 'unit_price' || prop.key === 'price') {
-                        row[prop.key] = item.default_price;
-                    } else if (prop.default_value !== undefined) {
-                        row[prop.key] = prop.default_value;
-                    }
+            const mode = field.catalog_prepopulate_mode || 'all';
+            if (mode !== 'none') {
+                const targetItems = mode === 'required_only'
+                    ? catalogItems.filter((item: any) => !!item.metadata_json?.is_mandatory)
+                    : catalogItems;
+
+                loadedItems = targetItems.map((item: any) => {
+                    const row: any = { _isCatalogItem: true };
+                    properties.forEach((prop: any) => {
+                        if (prop.type === 'select' && prop.reference?.source_type === 'catalog') {
+                            row[prop.key] = item.id;
+                            Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]: any) => {
+                                row[targetKey] = item[sourceKey];
+                            });
+                        } else if (prop.key === 'unit_price' || prop.key === 'price') {
+                            row[prop.key] = item.default_price;
+                        } else if (prop.default_value !== undefined) {
+                            row[prop.key] = prop.default_value;
+                        }
+                    });
+                    return calculateItemComputedProperties(row);
                 });
-                return calculateItemComputedProperties(row);
-            });
+            }
         }
         return loadedItems;
-    }, [isInstance, value, properties, field.catalog_source_type, catalogItems]);
+    }, [isInstance, value, properties, field.catalog_source_type, catalogItems, field.catalog_prepopulate_mode]);
 
     const commitItems = (nextItems: any[]) => {
         if (isInstance) {
@@ -445,9 +452,12 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
 
     React.useEffect(() => {
         if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && field.catalog_source_type === 'project_catalog' && catalogItems.length > 0) {
-            commitItems(items);
+            const mode = field.catalog_prepopulate_mode || 'all';
+            if (mode !== 'none') {
+                commitItems(items);
+            }
         }
-    }, [catalogItems, value, field.catalog_source_type]);
+    }, [catalogItems, value, field.catalog_source_type, field.catalog_prepopulate_mode]);
 
     const updateRow = (rowIndex: number, propertyKey: string, propValue: any, propDef: any) => {
         const nextItems = items.map((entry, index) => {

@@ -2625,31 +2625,147 @@ const FormBuilder: React.FC = () => {
 
     const getTypeIconStyle = (type: FieldType) => {
         switch (type) {
-            case 'audio_recorder':
-                return 'bg-rose-50 text-rose-500 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30';
+            // Standard Inputs (Blue/Sky/Cyan/Teal/Indigo shades)
+            case 'input_text':
+                return 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30';
+            case 'input_number':
+                return 'bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400 border border-sky-100 dark:border-sky-900/30';
+            case 'email_input':
+                return 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/30 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-900/30';
+            case 'phone_input':
+                return 'bg-teal-50 text-teal-600 dark:bg-teal-950/30 dark:text-teal-400 border border-teal-100 dark:border-teal-900/30';
+            case 'textarea':
+                return 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30';
+
+            // Time & Date (Purple/Violet/Fuchsia/Pink shades)
+            case 'date_picker':
+                return 'bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30';
+            case 'time_picker':
+                return 'bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400 border border-violet-100 dark:border-violet-900/30';
+            case 'time_range':
+                return 'bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-950/30 dark:text-fuchsia-400 border border-fuchsia-100 dark:border-fuchsia-900/30';
+            case 'generic_range':
+                return 'bg-pink-50 text-pink-600 dark:bg-pink-950/30 dark:text-pink-400 border border-pink-100 dark:border-pink-900/30';
+
+            // Selection Fields (Emerald/Green/Teal/Cyan/Lime shades)
+            case 'dropdown':
+                return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30';
+            case 'radio_group':
+                return 'bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400 border border-green-100 dark:border-green-900/30';
+            case 'checkbox_group':
+                return 'bg-teal-50 text-teal-600 dark:bg-teal-950/30 dark:text-teal-400 border border-teal-100 dark:border-teal-900/30';
+            case 'multi_select_dropdown':
+                return 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/30 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-900/30';
+            case 'toggle':
+                return 'bg-lime-50 text-lime-600 dark:bg-lime-950/30 dark:text-lime-400 border border-lime-100 dark:border-lime-900/30';
+
+            // Device Metrics (Amber/Orange/Yellow shades)
             case 'gps_capture':
                 return 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30';
+            case 'barcode_scanner':
+                return 'bg-orange-50 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400 border border-orange-100 dark:border-orange-900/30';
+
+            // Media Input (Pink/Rose/Red shades)
             case 'photo_capture':
-                return 'bg-teal-50 text-teal-600 dark:bg-teal-950/30 dark:text-teal-400 border border-teal-100 dark:border-teal-900/30';
-            case 'input_text':
-            case 'input_number':
-            case 'email_input':
-            case 'phone_input':
-            case 'textarea':
-                return 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30';
-            case 'date_picker':
-            case 'time_picker':
-            case 'time_range':
-            case 'generic_range':
+                return 'bg-pink-50 text-pink-600 dark:bg-pink-950/30 dark:text-pink-400 border border-pink-100 dark:border-pink-900/30';
+            case 'file_upload':
+                return 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30';
+            case 'audio_recorder':
+                return 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400 border border-red-100 dark:border-red-900/30';
+
+            // Advanced Inputs (Violet/Purple/Fuchsia/Pink/Indigo/Blue shades)
+            case 'signature_pad':
+                return 'bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400 border border-violet-100 dark:border-violet-900/30';
+            case 'matrix_table':
                 return 'bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30';
-            case 'dropdown':
-            case 'radio_group':
-            case 'checkbox_group':
-            case 'multi_select_dropdown':
-            case 'toggle':
+            case 'lookup_list':
+                return 'bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-950/30 dark:text-fuchsia-400 border border-fuchsia-100 dark:border-fuchsia-900/30';
+            case 'rating_scale':
+                return 'bg-pink-50 text-pink-600 dark:bg-pink-950/30 dark:text-pink-400 border border-pink-100 dark:border-pink-900/30';
+            case 'object_collection':
                 return 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30';
+            case 'object_instance':
+                return 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30';
+
+            // Navigation (Sky shades)
+            case 'form_link':
+                return 'bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400 border border-sky-100 dark:border-sky-900/30';
+
             default:
-                return 'bg-slate-50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400 border border-slate-100 dark:border-slate-800/30';
+                return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30';
+        }
+    };
+
+    const getSolidTypeIconStyle = (type: FieldType) => {
+        switch (type) {
+            // Standard Inputs (Blue/Sky/Cyan/Teal/Indigo shades)
+            case 'input_text':
+                return 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-900';
+            case 'input_number':
+                return 'bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300 border border-sky-200 dark:border-sky-900';
+            case 'email_input':
+                return 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-900';
+            case 'phone_input':
+                return 'bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-900';
+            case 'textarea':
+                return 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900';
+
+            // Time & Date (Purple/Violet/Fuchsia/Pink shades)
+            case 'date_picker':
+                return 'bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-900';
+            case 'time_picker':
+                return 'bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300 border border-violet-200 dark:border-violet-900';
+            case 'time_range':
+                return 'bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-950 dark:text-fuchsia-300 border border-fuchsia-200 dark:border-fuchsia-900';
+            case 'generic_range':
+                return 'bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-300 border border-pink-200 dark:border-pink-900';
+
+            // Selection Fields (Emerald/Green/Teal/Cyan/Lime shades)
+            case 'dropdown':
+                return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900';
+            case 'radio_group':
+                return 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-300 border border-green-200 dark:border-green-900';
+            case 'checkbox_group':
+                return 'bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-900';
+            case 'multi_select_dropdown':
+                return 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-900';
+            case 'toggle':
+                return 'bg-lime-50 text-lime-600 dark:bg-lime-950 dark:text-lime-300 border border-lime-200 dark:border-lime-900';
+
+            // Device Metrics (Amber/Orange/Yellow shades)
+            case 'gps_capture':
+                return 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-900';
+            case 'barcode_scanner':
+                return 'bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-300 border border-orange-200 dark:border-orange-900';
+
+            // Media Input (Pink/Rose/Red shades)
+            case 'photo_capture':
+                return 'bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-300 border border-pink-200 dark:border-pink-900';
+            case 'file_upload':
+                return 'bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-900';
+            case 'audio_recorder':
+                return 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300 border border-red-200 dark:border-red-900';
+
+            // Advanced Inputs (Violet/Purple/Fuchsia/Pink/Indigo/Blue shades)
+            case 'signature_pad':
+                return 'bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300 border border-violet-200 dark:border-violet-900';
+            case 'matrix_table':
+                return 'bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-900';
+            case 'lookup_list':
+                return 'bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-950 dark:text-fuchsia-300 border border-fuchsia-200 dark:border-fuchsia-900';
+            case 'rating_scale':
+                return 'bg-pink-50 text-pink-600 dark:bg-pink-950 dark:text-pink-300 border border-pink-200 dark:border-pink-900';
+            case 'object_collection':
+                return 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900';
+            case 'object_instance':
+                return 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-900';
+
+            // Navigation (Sky shades)
+            case 'form_link':
+                return 'bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300 border border-sky-200 dark:border-sky-900';
+
+            default:
+                return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900';
         }
     };
 
@@ -3148,7 +3264,7 @@ const FormBuilder: React.FC = () => {
                                                                         className="group flex items-center justify-between w-full rounded-lg border border-transparent bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/85 hover:border-[hsl(var(--border))]/30 px-2.5 py-2 text-left transition-all"
                                                                     >
                                                                         <div className="flex items-center gap-2.5 min-w-0">
-                                                                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shrink-0 group-hover:bg-[hsl(var(--primary))]/18 transition-colors">
+                                                                            <div className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 transition-colors ${getTypeIconStyle(widget.type)}`}>
                                                                                 {widget.icon}
                                                                             </div>
                                                                             <div className="min-w-0 flex-1">
@@ -3586,7 +3702,7 @@ const FormBuilder: React.FC = () => {
                                                                         type="button"
                                                                         title={widget?.label || type}
                                                                         onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(currentIndex, type); }}
-                                                                        className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                                        className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-md ${getSolidTypeIconStyle(type)}`}
                                                                     >
                                                                         {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                                     </button>
@@ -3611,7 +3727,7 @@ const FormBuilder: React.FC = () => {
                                                                         type="button"
                                                                         title={widget?.label || type}
                                                                         onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(currentIndex, type); }}
-                                                                        className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                                        className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-md ${getSolidTypeIconStyle(type)}`}
                                                                     >
                                                                         {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                                     </button>
@@ -3831,7 +3947,7 @@ const FormBuilder: React.FC = () => {
                                                                 type="button"
                                                                 title={widget?.label || type}
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(fields.length, type); }}
-                                                                className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                                className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-md ${getSolidTypeIconStyle(type)}`}
                                                             >
                                                                 {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                             </button>
@@ -3856,7 +3972,7 @@ const FormBuilder: React.FC = () => {
                                                                 type="button"
                                                                 title={widget?.label || type}
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(fields.length, type); }}
-                                                                className="bg-emerald-50 dark:bg-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-md border border-emerald-500/30 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0"
+                                                                className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-md ${getSolidTypeIconStyle(type)}`}
                                                             >
                                                                 {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                             </button>
@@ -6051,11 +6167,7 @@ const FormBuilder: React.FC = () => {
                                                                     : 'border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--surface-elevated))]/40 hover:border-[hsl(var(--border))]/70 text-[hsl(var(--text-primary))]'
                                                             }`}
                                                         >
-                                                            <div className={`p-1.5 rounded-lg shrink-0 ${
-                                                                isActive
-                                                                    ? 'bg-[hsl(var(--primary))]/15 text-[hsl(var(--primary))]'
-                                                                    : 'bg-[hsl(var(--surface))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]/20'
-                                                            }`}>
+                                                            <div className={`p-1.5 rounded-lg shrink-0 transition-colors ${getTypeIconStyle(widget.type)}`}>
                                                                 {widget.icon}
                                                             </div>
                                                             <div className="min-w-0">

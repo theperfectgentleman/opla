@@ -3702,7 +3702,7 @@ const FormBuilder: React.FC = () => {
                                                                         type="button"
                                                                         title={widget?.label || type}
                                                                         onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(currentIndex, type); }}
-                                                                        className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-lg ${getSolidTypeIconStyle(type)}`}
+                                                                        className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded ${getSolidTypeIconStyle(type)}`}
                                                                     >
                                                                         {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                                     </button>
@@ -3713,7 +3713,7 @@ const FormBuilder: React.FC = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); handleOpenQuickAdd(currentIndex); }}
-                                                                className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 text-[10px] font-semibold px-2.5 rounded-full shadow-lg border border-emerald-400/30 transition-all cursor-pointer h-7 shrink-0"
+                                                                className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center gap-1 text-[10px] font-bold px-2.5 rounded shadow-sm border border-emerald-300 dark:border-emerald-700 transition-all cursor-pointer h-7 shrink-0"
                                                             >
                                                                 <Plus className="w-3.5 h-3.5" /> Insert Field
                                                             </button>
@@ -3727,7 +3727,7 @@ const FormBuilder: React.FC = () => {
                                                                         type="button"
                                                                         title={widget?.label || type}
                                                                         onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(currentIndex, type); }}
-                                                                        className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-lg ${getSolidTypeIconStyle(type)}`}
+                                                                        className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded ${getSolidTypeIconStyle(type)}`}
                                                                     >
                                                                         {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                                     </button>
@@ -3841,13 +3841,14 @@ const FormBuilder: React.FC = () => {
                                                                             e.stopPropagation();
                                                                             updateField(field.id, { required: !field.required });
                                                                         }}
-                                                                        className={`flex items-center gap-1.5 font-bold tracking-wider text-[10px] uppercase py-1.5 px-3 rounded-lg border transition-all ${
+                                                                        title={field.required ? 'Required (click to make optional)' : 'Optional (click to make required)'}
+                                                                        className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${
                                                                             field.required
                                                                                 ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
                                                                                 : 'border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))] bg-transparent'
                                                                         }`}
                                                                     >
-                                                                        Required
+                                                                        <Star className="w-4 h-4" fill={field.required ? 'currentColor' : 'none'} />
                                                                     </button>
 
                                                                     {/* Duplicate Button */}
@@ -3857,7 +3858,7 @@ const FormBuilder: React.FC = () => {
                                                                             copyField(field.id);
                                                                         }}
                                                                         title="Duplicate field"
-                                                                        className="w-8 h-8 rounded-lg flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))]/30 transition-all bg-transparent"
+                                                                        className="w-8 h-8 rounded flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))]/30 transition-all bg-transparent"
                                                                     >
                                                                         <Copy className="w-4 h-4" />
                                                                     </button>
@@ -3871,7 +3872,7 @@ const FormBuilder: React.FC = () => {
                                                                                     setMoveMenuFieldId(moveMenuFieldId === field.id ? null : field.id);
                                                                                 }}
                                                                                 title="Move to section"
-                                                                                className="w-8 h-8 rounded-lg flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))]/30 transition-all bg-transparent"
+                                                                                className="w-8 h-8 rounded flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))]/30 transition-all bg-transparent"
                                                                             >
                                                                                 <MoveRight className="w-4 h-4" />
                                                                             </button>
@@ -3902,7 +3903,7 @@ const FormBuilder: React.FC = () => {
                                                                             removeField(field.id);
                                                                         }}
                                                                         title="Delete field"
-                                                                        className="w-8 h-8 rounded-lg flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] hover:border-[hsl(var(--error))]/30 transition-all bg-transparent"
+                                                                        className="w-8 h-8 rounded flex items-center justify-center border border-[hsl(var(--border))]/40 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] hover:border-[hsl(var(--error))]/30 transition-all bg-transparent"
                                                                     >
                                                                         <Trash2 className="w-4 h-4" />
                                                                     </button>
@@ -3947,7 +3948,7 @@ const FormBuilder: React.FC = () => {
                                                                 type="button"
                                                                 title={widget?.label || type}
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(fields.length, type); }}
-                                                                className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-lg ${getSolidTypeIconStyle(type)}`}
+                                                                className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded ${getSolidTypeIconStyle(type)}`}
                                                             >
                                                                 {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                             </button>
@@ -3958,7 +3959,7 @@ const FormBuilder: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={(e) => { e.stopPropagation(); handleOpenQuickAdd(fields.length); }}
-                                                        className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 text-[10px] font-semibold px-2.5 rounded-full shadow-lg border border-emerald-400/30 transition-all cursor-pointer h-7 shrink-0"
+                                                        className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center gap-1 text-[10px] font-bold px-2.5 rounded shadow-sm border border-emerald-300 dark:border-emerald-700 transition-all cursor-pointer h-7 shrink-0"
                                                     >
                                                         <Plus className="w-3.5 h-3.5" /> Insert Field
                                                     </button>
@@ -3972,7 +3973,7 @@ const FormBuilder: React.FC = () => {
                                                                 type="button"
                                                                 title={widget?.label || type}
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickAddDirectly(fields.length, type); }}
-                                                                className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded-lg ${getSolidTypeIconStyle(type)}`}
+                                                                className={`hover:brightness-95 dark:hover:brightness-110 flex items-center justify-center transition-all cursor-pointer w-7 h-7 shadow-sm shrink-0 rounded ${getSolidTypeIconStyle(type)}`}
                                                             >
                                                                 {widget?.icon || <Plus className="w-3.5 h-3.5" />}
                                                             </button>
@@ -5226,6 +5227,31 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Matrix Setup',
+                                                                            key: 'flip_rows_cols',
+                                                                            label: '',
+                                                                            metaKey: undefined as any,
+                                                                            visible: selectedField.type === 'matrix_table',
+                                                                            render: () => (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    title="Flip rows and columns"
+                                                                                    onClick={() => {
+                                                                                        const cols = (selectedField.table_columns || []) as TableColumn[];
+                                                                                        const rows = (selectedField.table_rows || []) as TableRow[];
+                                                                                        updateField(selectedField.id, {
+                                                                                            table_columns: rows.map(r => ({ id: r.id, label: r.label })),
+                                                                                            table_rows: cols.map(c => ({ id: c.id, label: c.label })),
+                                                                                        });
+                                                                                    }}
+                                                                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[hsl(var(--border))]/50 hover:border-[hsl(var(--primary))]/40 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] bg-[hsl(var(--surface-elevated))]/20 hover:bg-[hsl(var(--primary))]/5 transition-all text-[10px] font-semibold w-full justify-center"
+                                                                                >
+                                                                                    <ChevronsUpDown className="w-3.5 h-3.5 rotate-90" />
+                                                                                    Flip Rows ↔ Columns
+                                                                                </button>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Matrix Setup',
                                                                             key: 'table_rows',
                                                                             label: 'Rows List',
                                                                             metaKey: 'table_rows',
@@ -5557,7 +5583,7 @@ const FormBuilder: React.FC = () => {
                                                                                         {!isCollapsed && (
                                                                                             <div className="divide-y divide-[hsl(var(--border))]/20 bg-[hsl(var(--surface))]">
                                                                                                 {categoryRows.map(row => {
-                                                                                                    if (row.key === 'choices') {
+                                                                                                    if (row.key === 'choices' || row.key === 'flip_rows_cols') {
                                                                                                         return (
                                                                                                             <div
                                                                                                                 key={row.key}

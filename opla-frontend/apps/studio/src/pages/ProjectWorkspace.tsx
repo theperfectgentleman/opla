@@ -19,7 +19,15 @@ import {
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
+import ConfirmPopover from '../components/ConfirmPopover';
+import CatalogGrid from '../components/catalog/CatalogGrid';
 import { useOrg } from '../contexts/OrgContext';
+import { useToast } from '../contexts/ToastContext';
+import {
+    countUnpublishedCatalogFields,
+    getCatalogBlueprintFields,
+    normalizeCatalogEntry,
+} from '../utils/catalogUtils';
 import { formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
 
 type ProjectAccessRule = {
@@ -291,6 +299,7 @@ const ProjectWorkspace: React.FC = () => {
         refreshCurrentProject,
         setCurrentProject,
     } = useOrg();
+    const { showToast } = useToast();
 
     const [forms, setForms] = useState<WorkspaceForm[]>([]);
     const [isCreateFormModalOpen, setIsCreateFormModalOpen] = useState(false);
@@ -299,8 +308,14 @@ const ProjectWorkspace: React.FC = () => {
     const [selectedCatalogForm, setSelectedCatalogForm] = useState<WorkspaceForm | null>(null);
     const [catalogEntries, setCatalogEntries] = useState<any[]>([]);
     const [selectedCatalogFields, setSelectedCatalogFields] = useState<any[]>([]);
+    const [catalogUnpublishedFieldCount, setCatalogUnpublishedFieldCount] = useState(0);
+    const [catalogConfirmAction, setCatalogConfirmAction] = useState<{
+        type: 'hide' | 'delete';
+        entry: any;
+        anchorRect: DOMRect;
+    } | null>(null);
+    const [catalogConfirmLoading, setCatalogConfirmLoading] = useState(false);
     const [entriesLoading, setEntriesLoading] = useState(false);
-    const [newEntryData, setNewEntryData] = useState<Record<string, any>>({});
     const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
     const [tasks, setTasks] = useState<ProjectTask[]>([]);
     const [attendanceRecords, setAttendanceRecords] = useState<ProjectAttendanceRecord[]>([]);
@@ -782,29 +797,15 @@ const ProjectWorkspace: React.FC = () => {
         setEntriesLoading(true);
         try {
             const entries = await formAPI.getCatalogEntries(catalogForm.id);
-            setCatalogEntries(Array.isArray(entries) ? entries : []);
+            setCatalogEntries(Array.isArray(entries) ? entries.map(normalizeCatalogEntry) : []);
 
             const formDetail = await formAPI.get(catalogForm.id);
-            const uiFields: any[] = [];
-            if (formDetail.blueprint?.ui) {
-                formDetail.blueprint.ui.forEach((screen: any) => {
-                    if (screen.children) {
-                        screen.children.forEach((field: any) => {
-                            uiFields.push(field);
-                        });
-                    }
-                });
-            }
+            const uiFields = getCatalogBlueprintFields(formDetail);
             setSelectedCatalogFields(uiFields);
-
-            const initialData: Record<string, any> = {};
-            uiFields.forEach(f => {
-                initialData[f.bind] = '';
-            });
-            setNewEntryData(initialData);
-        } catch (err) {
+            setCatalogUnpublishedFieldCount(countUnpublishedCatalogFields(formDetail));
+        } catch (err: any) {
             console.error('Failed to load catalog data', err);
-            setError('Failed to load catalog entries.');
+            showToast('Failed to load catalog', err?.response?.data?.detail || err?.message || 'Could not load catalog entries.', 'error');
         } finally {
             setEntriesLoading(false);
         }
@@ -815,50 +816,64 @@ const ProjectWorkspace: React.FC = () => {
         loadCatalogData(catalogForm);
     };
 
-    const handleToggleCatalogEntryActive = async (entry: any) => {
+    const getCatalogEntryId = (entry: any) => entry.submission_id || entry.id;
+
+    const getCatalogEntryDisplayName = (entry: any) => {
+        if (!selectedCatalogForm) return 'this record';
+        const keyVal = entry.key_value ?? entry.data?.[selectedCatalogForm.catalog_key_field_id || ''] ?? '';
+        const labelVal = entry.label_value ?? entry.data?.[selectedCatalogForm.catalog_label_field_id || ''] ?? '';
+        return labelVal || keyVal || 'this record';
+    };
+
+    const executeHideCatalogEntry = async (entry: any) => {
         if (!selectedCatalogForm) return;
-        const nextActive = !entry.catalog_is_active;
+
+        const submissionId = getCatalogEntryId(entry);
+        await formAPI.setCatalogEntryActive(selectedCatalogForm.id, submissionId, false);
+        setCatalogEntries((prev) => prev.filter((item) => getCatalogEntryId(item) !== submissionId));
+    };
+
+    const executeDeleteCatalogEntry = async (entry: any) => {
+        if (!selectedCatalogForm) return;
+
+        const submissionId = getCatalogEntryId(entry);
+        await formAPI.deleteCatalogEntry(selectedCatalogForm.id, submissionId);
+        setCatalogEntries((prev) => prev.filter((item) => getCatalogEntryId(item) !== submissionId));
+    };
+
+    const handleCatalogConfirm = async () => {
+        if (!catalogConfirmAction) return;
+
+        setCatalogConfirmLoading(true);
         try {
-            await formAPI.setCatalogEntryActive(selectedCatalogForm.id, entry.id, nextActive);
-            setCatalogEntries(prev => prev.map(item => item.id === entry.id ? { ...item, catalog_is_active: nextActive } : item));
+            if (catalogConfirmAction.type === 'hide') {
+                await executeHideCatalogEntry(catalogConfirmAction.entry);
+            } else {
+                await executeDeleteCatalogEntry(catalogConfirmAction.entry);
+            }
+            setCatalogConfirmAction(null);
         } catch (err: any) {
-            console.error('Failed to toggle active state', err);
-            setError(err?.response?.data?.detail || err?.message || 'Failed to toggle catalog entry status.');
+            console.error('Failed to update catalog entry', err);
+            showToast('Action failed', err?.response?.data?.detail || err?.message || 'Failed to update catalog entry.', 'error');
+        } finally {
+            setCatalogConfirmLoading(false);
         }
     };
 
-    const handleAddCatalogEntrySubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const openCatalogConfirm = (type: 'hide' | 'delete', entry: any, event: React.MouseEvent<HTMLButtonElement>) => {
+        setCatalogConfirmAction({
+            type,
+            entry,
+            anchorRect: event.currentTarget.getBoundingClientRect(),
+        });
+    };
+
+    const handleCatalogSaveEntry = async (data: Record<string, string>) => {
         if (!selectedCatalogForm) return;
 
-        const keyFieldId = selectedCatalogForm.catalog_key_field_id;
-        const labelFieldId = selectedCatalogForm.catalog_label_field_id;
-        if (!keyFieldId || !labelFieldId) {
-            setError('This catalog form is missing key/label field designations.');
-            return;
-        }
-
-        if (!newEntryData[keyFieldId]?.toString().trim() || !newEntryData[labelFieldId]?.toString().trim()) {
-            setError('Key and Label field values are required.');
-            return;
-        }
-
-        try {
-            await formAPI.upsertCatalogEntry(selectedCatalogForm.id, newEntryData);
-            const entries = await formAPI.getCatalogEntries(selectedCatalogForm.id);
-            setCatalogEntries(Array.isArray(entries) ? entries : []);
-
-            setNewEntryData(() => {
-                const cleared: Record<string, any> = {};
-                selectedCatalogFields.forEach(f => {
-                    cleared[f.bind] = '';
-                });
-                return cleared;
-            });
-        } catch (err: any) {
-            console.error('Failed to add catalog entry', err);
-            setError(err?.response?.data?.detail || err?.message || 'Failed to add catalog entry.');
-        }
+        await formAPI.upsertCatalogEntry(selectedCatalogForm.id, data);
+        const entries = await formAPI.getCatalogEntries(selectedCatalogForm.id);
+        setCatalogEntries(Array.isArray(entries) ? entries.map(normalizeCatalogEntry) : []);
     };
 
 
@@ -1887,10 +1902,9 @@ const ProjectWorkspace: React.FC = () => {
 
                         {/* 5. CATALOG WORKSPACE */}
                         {activeTab === 'catalog' && (
-                            <div className="grid gap-6 lg:grid-cols-12 items-start">
-                                {/* Left Column: Catalog List & Add Entry */}
-                                <div className="lg:col-span-5 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                            <div className="grid gap-6 lg:grid-cols-12 items-start min-h-[calc(100vh-12rem)]">
+                                <div className="lg:col-span-3">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden sticky top-4">
                                         <div className="border-b border-[hsl(var(--border))] p-4 lg:p-5 flex items-center justify-between">
                                             <div>
                                                 <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Catalog Sources</h2>
@@ -1950,148 +1964,78 @@ const ProjectWorkspace: React.FC = () => {
                                             )}
                                         </div>
                                     </section>
-
-                                    {selectedCatalogForm && (
-                                        <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden animate-in fade-in duration-200">
-                                            <div className="border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                                <h2 className="text-base font-semibold text-[hsl(var(--text-primary))]">Add Catalog Entry</h2>
-                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                    Insert or update a record in <span className="font-semibold">{selectedCatalogForm.title}</span>
-                                                </p>
-                                            </div>
-                                            <div className="p-4 lg:p-5">
-                                                {selectedCatalogFields.length === 0 ? (
-                                                    <div className="text-center py-4 text-xs italic text-[hsl(var(--text-tertiary))]">
-                                                        No text or number fields defined in form canvas.
-                                                    </div>
-                                                ) : (
-                                                    <form onSubmit={handleAddCatalogEntrySubmit} className="space-y-4">
-                                                        {selectedCatalogFields.map(field => {
-                                                            const isKey = selectedCatalogForm.catalog_key_field_id === field.bind;
-                                                            const isLabel = selectedCatalogForm.catalog_label_field_id === field.bind;
-                                                            return (
-                                                                <div key={field.bind} className="flex flex-col">
-                                                                    <label className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-1 flex items-center gap-1.5">
-                                                                        {field.label || field.bind}
-                                                                        {isKey && (
-                                                                            <span className="text-[8px] bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1 rounded uppercase font-extrabold tracking-widest">
-                                                                                Key Field
-                                                                            </span>
-                                                                        )}
-                                                                        {isLabel && (
-                                                                            <span className="text-[8px] bg-blue-500/10 text-blue-600 border border-blue-500/20 px-1 rounded uppercase font-extrabold tracking-widest">
-                                                                                Label Field
-                                                                            </span>
-                                                                        )}
-                                                                    </label>
-                                                                    <input
-                                                                        type={field.type === 'input_number' ? 'number' : 'text'}
-                                                                        required={isKey || isLabel || field.required}
-                                                                        placeholder={field.placeholder || `Enter ${field.label}...`}
-                                                                        value={newEntryData[field.bind] || ''}
-                                                                        onChange={(e) => setNewEntryData(prev => ({ ...prev, [field.bind]: e.target.value }))}
-                                                                        className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                                    />
-                                                                </div>
-                                                            );
-                                                        })}
-                                                        <button
-                                                            type="submit"
-                                                            className="w-full rounded-lg bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] py-2 text-xs font-semibold text-white transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5"
-                                                        >
-                                                            <Plus className="w-3.5 h-3.5" /> Upsert Entry
-                                                        </button>
-                                                    </form>
-                                                )}
-                                            </div>
-                                        </section>
-                                    )}
                                 </div>
 
-                                {/* Right Column: Catalog Entries */}
-                                <div className="lg:col-span-7 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden min-h-[450px]">
+                                <div className="lg:col-span-9 flex flex-col min-h-0">
+                                    <section className="flex flex-col flex-1 rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden min-h-[500px]">
                                         {!selectedCatalogForm ? (
                                             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none">
                                                 <div className="w-14 h-14 rounded-full bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))]/40 flex items-center justify-center text-[hsl(var(--text-tertiary))] mb-4 shadow-sm">
                                                     <Database className="w-6 h-6" />
                                                 </div>
                                                 <h3 className="text-sm font-bold text-[hsl(var(--text-primary))]">No Catalog Selected</h3>
-                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))] max-w-[240px] mt-1 leading-normal">
-                                                    Select a catalog data source on the left to view records and manage deactivation.
+                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))] max-w-[280px] mt-1 leading-normal">
+                                                    Select a catalog on the left to view and edit records in the spreadsheet grid.
                                                 </p>
                                             </div>
                                         ) : (
                                             <>
-                                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5 shrink-0">
                                                     <div className="flex items-center gap-3">
                                                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                                             <Database className="h-4 w-4" />
                                                         </div>
                                                         <div>
-                                                            <h2 className="text-base font-semibold text-[hsl(var(--text-primary))]">{selectedCatalogForm.title} Entries</h2>
-                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Serves active records to dropdown search fields</p>
+                                                            <h2 className="text-base font-semibold text-[hsl(var(--text-primary))]">{selectedCatalogForm.title}</h2>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Edit inline — suggestions come from values in each column</p>
                                                         </div>
                                                     </div>
                                                     <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
                                                         {catalogEntries.length} Records
                                                     </span>
                                                 </div>
-
-                                                <div className="p-4 lg:p-5 flex-1 flex flex-col">
-                                                    {entriesLoading ? (
-                                                        <div className="flex-1 flex items-center justify-center py-12">
-                                                            <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
-                                                        </div>
-                                                    ) : catalogEntries.length === 0 ? (
-                                                        <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-xs italic text-[hsl(var(--text-tertiary))]">
-                                                            No entries found. Submit the form on the left to insert reference catalog rows.
-                                                        </div>
-                                                    ) : (
-                                                        <div className="overflow-x-auto border border-[hsl(var(--border))]/50 rounded-xl">
-                                                            <table className="w-full text-left border-collapse text-xs">
-                                                                <thead>
-                                                                    <tr className="bg-[hsl(var(--surface-elevated))]/30 border-b border-[hsl(var(--border))]/50 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none">
-                                                                        <th className="p-3">Key (ID)</th>
-                                                                        <th className="p-3">Label (Name)</th>
-                                                                        <th className="p-3">Created At</th>
-                                                                        <th className="p-3 text-center">Active Status</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="divide-y divide-[hsl(var(--border))]/40">
-                                                                    {catalogEntries.map(entry => {
-                                                                        const keyVal = entry.data[selectedCatalogForm.catalog_key_field_id || ''] || '';
-                                                                        const labelVal = entry.data[selectedCatalogForm.catalog_label_field_id || ''] || '';
-                                                                        return (
-                                                                            <tr key={entry.id} className="hover:bg-[hsl(var(--surface-elevated))]/10 transition-colors">
-                                                                                <td className="p-3 font-mono font-medium text-[hsl(var(--text-primary))]">{keyVal}</td>
-                                                                                <td className="p-3 text-[hsl(var(--text-primary))]">{labelVal}</td>
-                                                                                <td className="p-3 text-[hsl(var(--text-tertiary))]">{new Date(entry.created_at).toLocaleString()}</td>
-                                                                                <td className="p-3 text-center">
-                                                                                    <button
-                                                                                        onClick={() => handleToggleCatalogEntryActive(entry)}
-                                                                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
-                                                                                            entry.catalog_is_active
-                                                                                                ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/25'
-                                                                                                : 'bg-rose-500/10 text-rose-500 border border-rose-500/25 hover:bg-rose-500/20'
-                                                                                        }`}
-                                                                                    >
-                                                                                        {entry.catalog_is_active ? '● Active' : '○ Deactivated'}
-                                                                                    </button>
-                                                                                </td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                <CatalogGrid
+                                                    formId={selectedCatalogForm.id}
+                                                    catalogTitle={selectedCatalogForm.title}
+                                                    catalogStatus={selectedCatalogForm.status}
+                                                    keyFieldId={selectedCatalogForm.catalog_key_field_id}
+                                                    labelFieldId={selectedCatalogForm.catalog_label_field_id}
+                                                    fields={selectedCatalogFields}
+                                                    entries={catalogEntries}
+                                                    loading={entriesLoading}
+                                                    unpublishedFieldCount={catalogUnpublishedFieldCount}
+                                                    onSaveEntry={handleCatalogSaveEntry}
+                                                    onHideEntry={(entry, event) => openCatalogConfirm('hide', entry, event)}
+                                                    onDeleteEntry={(entry, event) => openCatalogConfirm('delete', entry, event)}
+                                                    onNotify={showToast}
+                                                />
                                             </>
                                         )}
                                     </section>
                                 </div>
                             </div>
+                        )}
+
+                        {catalogConfirmAction && selectedCatalogForm && (
+                            <ConfirmPopover
+                                open
+                                anchorRect={catalogConfirmAction.anchorRect}
+                                title={
+                                    catalogConfirmAction.type === 'delete'
+                                        ? `Delete "${getCatalogEntryDisplayName(catalogConfirmAction.entry)}"?`
+                                        : `Hide "${getCatalogEntryDisplayName(catalogConfirmAction.entry)}"?`
+                                }
+                                description={
+                                    catalogConfirmAction.type === 'delete'
+                                        ? 'This permanently removes all versions of this record. This cannot be undone.'
+                                        : 'This hides the record from lookups. You can restore it by adding the same key again.'
+                                }
+                                confirmLabel={catalogConfirmAction.type === 'delete' ? 'Delete' : 'Hide'}
+                                variant={catalogConfirmAction.type === 'delete' ? 'danger' : 'default'}
+                                loading={catalogConfirmLoading}
+                                onConfirm={handleCatalogConfirm}
+                                onCancel={() => setCatalogConfirmAction(null)}
+                            />
                         )}
 
                         {/* 4. DISCUSSIONS WORKSPACE */}

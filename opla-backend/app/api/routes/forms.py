@@ -7,6 +7,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.api.schemas.dataset import FormDatasetOut, FormDatasetUpdateIn, LookupDatasetSourceOut, LookupOptionsOut
 from app.api.schemas.form import (
     CatalogDesignationIn,
+    CatalogEntryDeleteOut,
     CatalogEntryOut,
     CatalogEntryUpsertIn,
     FormCreateIn,
@@ -373,6 +374,21 @@ def set_catalog_entry_active(
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
     return CatalogFormService.set_entry_active(db, form, submission_id, payload.active)
+
+
+@router.delete("/{form_id}/catalog-entries/{submission_id}", response_model=CatalogEntryDeleteOut)
+def delete_catalog_entry(
+    form_id: uuid.UUID,
+    submission_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Permanently delete a catalog entry and all historical versions for its key."""
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    return CatalogFormService.delete_entry(db, form, submission_id)
 
 
 @router.put("/{form_id}/responsibility", response_model=FormOut)

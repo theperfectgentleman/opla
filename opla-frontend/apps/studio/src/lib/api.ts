@@ -525,6 +525,10 @@ export const formAPI = {
         const response = await apiClient.patch(`/forms/${formId}/catalog-entries/${submissionId}/active`, { active });
         return response.data;
     },
+    deleteCatalogEntry: async (formId: string, submissionId: string) => {
+        const response = await apiClient.delete(`/forms/${formId}/catalog-entries/${submissionId}`);
+        return response.data;
+    },
 };
 
 export const reportAPI = {

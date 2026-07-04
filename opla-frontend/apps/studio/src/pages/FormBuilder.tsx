@@ -1206,6 +1206,19 @@ const CATALOG_BLOCKED_TYPES: Set<FieldType> = new Set([
     'form_link',
 ]);
 
+/** Scalar fields that can serve as catalog key or display label */
+const CATALOG_DESIGNATABLE_FIELD_TYPES: Set<FieldType> = new Set([
+    'input_text',
+    'input_number',
+    'email_input',
+    'phone_input',
+    'textarea',
+    'dropdown',
+    'radio_group',
+    'barcode_scanner',
+    'toggle',
+]);
+
 
 const FormBuilder: React.FC = () => {
     const { formId } = useParams<{ formId: string }>();
@@ -4779,7 +4792,7 @@ const FormBuilder: React.FC = () => {
                                                                             key: 'catalogKey',
                                                                             label: 'Catalog Key',
                                                                             metaKey: undefined as any,
-                                                                            visible: formMeta?.kind === 'catalog' && ['input_text', 'input_number'].includes(selectedField.type),
+                                                                            visible: formMeta?.kind === 'catalog' && CATALOG_DESIGNATABLE_FIELD_TYPES.has(selectedField.type),
                                                                             render: () => {
                                                                                 const isKey = formMeta?.catalog_key_field_id === selectedField.id;
                                                                                 return (
@@ -4822,7 +4835,7 @@ const FormBuilder: React.FC = () => {
                                                                             key: 'catalogLabel',
                                                                             label: 'Display Label',
                                                                             metaKey: undefined as any,
-                                                                            visible: formMeta?.kind === 'catalog' && ['input_text', 'input_number'].includes(selectedField.type),
+                                                                            visible: formMeta?.kind === 'catalog' && CATALOG_DESIGNATABLE_FIELD_TYPES.has(selectedField.type),
                                                                             render: () => {
                                                                                 const isLabel = formMeta?.catalog_label_field_id === selectedField.id;
                                                                                 return (

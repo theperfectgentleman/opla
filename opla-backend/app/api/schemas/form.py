@@ -144,3 +144,8 @@ class CatalogEntryOut(BaseModel):
     data: Dict[str, Any]
     catalog_is_active: bool
     created_at: Optional[str] = None
+
+
+class CatalogEntryDeleteOut(BaseModel):
+    deleted_count: int
+    key_value: Optional[str] = None

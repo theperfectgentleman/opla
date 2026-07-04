@@ -5,6 +5,7 @@ Handles all business logic specific to catalog-kind forms:
   - Resolving catalog entries (latest-per-key, deduplicated view)
   - Upserting entries (append-only submissions; latest-wins by key)
   - Activating / deactivating entries (one-click, no re-submission)
+  - Permanently deleting entries (all versions for a key)
   - Validating that a catalog form is ready to publish
 """
 from __future__ import annotations
@@ -177,6 +178,63 @@ class CatalogFormService:
             "data": data,
             "catalog_is_active": submission.catalog_is_active,
             "created_at": submission.created_at.isoformat() if submission.created_at else None,
+        }
+
+    @staticmethod
+    def delete_entry(
+        db: Session,
+        form: Form,
+        submission_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        """
+        Permanently delete all submissions for this catalog key value.
+        Removes every historical version tied to the entry, not just the latest row.
+        """
+        if form.kind != FormKind.CATALOG:
+            raise HTTPException(status_code=400, detail="Form is not a catalog")
+
+        submission = (
+            db.query(Submission)
+            .filter(Submission.id == submission_id, Submission.form_id == form.id)
+            .first()
+        )
+        if not submission:
+            raise HTTPException(status_code=404, detail="Catalog entry not found")
+
+        key_field = form.catalog_key_field_id
+        if not key_field:
+            raise HTTPException(status_code=422, detail="Catalog has no key field configured")
+
+        data = submission.data or {}
+        key_value = data.get(key_field)
+        if key_value is None or str(key_value).strip() == "":
+            raise HTTPException(status_code=422, detail="Catalog entry has no key value")
+
+        key_value_str = str(key_value)
+        sql = text(
+            """
+            DELETE FROM submissions
+            WHERE form_id = :form_id
+              AND data->>:key_field = :key_value
+            RETURNING id
+            """
+        )
+        rows = db.execute(
+            sql,
+            {
+                "form_id": str(form.id),
+                "key_field": key_field,
+                "key_value": key_value_str,
+            },
+        ).fetchall()
+        db.commit()
+
+        if not rows:
+            raise HTTPException(status_code=404, detail="Catalog entry not found")
+
+        return {
+            "deleted_count": len(rows),
+            "key_value": key_value_str,
         }
 
     # ------------------------------------------------------------------ #

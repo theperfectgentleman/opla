@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, EyeOff, Loader2, Plus, Trash2, Wand2 } from 'lucide-react';
+import { Check, EyeOff, FileSpreadsheet, Loader2, Plus, Trash2, Wand2 } from 'lucide-react';
+import CatalogCsvImportModal from './CatalogCsvImportModal';
 import {
     buildColumnSuggestions,
     createEmptyRowData,
@@ -194,6 +195,7 @@ const CatalogGrid: React.FC<CatalogGridProps> = ({
     onNotify,
 }) => {
     const [rows, setRows] = useState<GridRow[]>([]);
+    const [importOpen, setImportOpen] = useState(false);
 
     const buildRowsFromEntries = useCallback((sourceEntries: CatalogGridEntry[]): GridRow[] => {
         return sourceEntries.map((entry) => {
@@ -517,6 +519,22 @@ const CatalogGrid: React.FC<CatalogGridProps> = ({
             <div className="flex items-center justify-end gap-2 px-4 pt-4 lg:px-5">
                 <button
                     type="button"
+                    onClick={() => setImportOpen(true)}
+                    disabled={!keyFieldId || !labelFieldId || catalogStatus !== 'live'}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/50 px-2.5 py-1.5 text-[11px] font-semibold text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--primary))]/30 hover:text-[hsl(var(--primary))] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                    title={
+                        catalogStatus !== 'live'
+                            ? 'Publish the catalog before importing'
+                            : !keyFieldId || !labelFieldId
+                                ? 'Designate key and label fields in the builder first'
+                                : 'Paste CSV or JSON to import records'
+                    }
+                >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Import CSV
+                </button>
+                <button
+                    type="button"
                     onClick={addNewRow}
                     disabled={hasDraftNewRow}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2.5 py-1.5 text-[11px] font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
@@ -593,8 +611,18 @@ const CatalogGrid: React.FC<CatalogGridProps> = ({
             </div>
 
             <div className="border-t border-[hsl(var(--border))] px-4 py-2 text-[10px] text-[hsl(var(--text-tertiary))] lg:px-5">
-                Use Add record to create a row. Other columns suggest values from existing data. Press Enter or click save when key, label, and required fields are filled.
+                Use Add record or Import CSV to add rows. Other columns suggest values from existing data. Press Enter or click save when key, label, and required fields are filled.
             </div>
+
+            <CatalogCsvImportModal
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                fields={fields}
+                keyFieldId={keyFieldId}
+                labelFieldId={labelFieldId}
+                onSaveEntry={onSaveEntry}
+                onNotify={onNotify}
+            />
         </div>
     );
 };

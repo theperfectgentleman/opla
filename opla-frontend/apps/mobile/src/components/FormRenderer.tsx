@@ -38,6 +38,8 @@ import { FormLinkField } from './fields/FormLinkField';
 import { GenericRangeField } from './fields/GenericRangeField';
 import { deskFormAPI, publicFormAPI } from '../../services/api';
 import { syncAllLookupDatasets } from '../utils/lookupCache';
+import { hydrateBlueprintCatalogForms } from '../utils/catalogFormLookup';
+import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
 
 function getNestedValue(value: unknown, path: string[]): unknown {
     return path.reduce<unknown>((current, segment) => {
@@ -342,10 +344,16 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         );
     }
 
-    const filteredOptions = rulesResult ? getFilteredOptionsByRules(field.id, rulesResult, responses, field.options) : null;
-    const effectiveField = filteredOptions
-        ? { ...field, options: filteredOptions }
+    const catalogResolvedField = fieldUsesCatalogOptionResolver(field)
+        ? { ...field, options: resolveCatalogFormFieldOptions(field, responses) }
         : field;
+
+    const filteredOptions = rulesResult
+        ? getFilteredOptionsByRules(field.id, rulesResult, responses, catalogResolvedField.options)
+        : null;
+    const effectiveField = filteredOptions
+        ? { ...catalogResolvedField, options: filteredOptions }
+        : catalogResolvedField;
 
     switch (effectiveField.type) {
         case 'input_text':
@@ -356,7 +364,7 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         case 'input_number':
             return <NumberInputField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'radio_group':
-            return <RadioGroupField field={effectiveField} value={value} onChange={onChange} error={error} />;
+            return <RadioGroupField field={effectiveField} value={value} onChange={onChange} error={error} responses={responses} />;
         case 'checkbox_group':
             return <CheckboxGroupField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'dropdown':
@@ -443,6 +451,25 @@ export function FormRenderer({
     const [submitting, setSubmitting] = useState(false);
     const [loadingDraft, setLoadingDraft] = useState(true);
     const [syncingLookups, setSyncingLookups] = useState(false);
+    const [runtimeBlueprint, setRuntimeBlueprint] = useState(blueprint);
+
+    const lookupContext = useMemo(() => ({
+        mode: lookupMode,
+        formId: blueprint.meta.form_id,
+        slug: blueprint.meta.slug,
+    }), [lookupMode, blueprint.meta.form_id, blueprint.meta.slug]);
+
+    useEffect(() => {
+        let mounted = true;
+        hydrateBlueprintCatalogForms(blueprint, lookupContext).then((next) => {
+            if (mounted) {
+                setRuntimeBlueprint(next);
+            }
+        });
+        return () => {
+            mounted = false;
+        };
+    }, [blueprint, lookupContext]);
 
     // Track which field IDs were pre-filled from a parent form
     const prefilledFieldIds = useMemo(() => {
@@ -451,11 +478,6 @@ export function FormRenderer({
     }, [prefillData]);
 
     const draftKey = `draft_${blueprint.meta.form_id}`;
-    const lookupContext = {
-        mode: lookupMode,
-        formId: blueprint.meta.form_id,
-        slug: blueprint.meta.slug,
-    };
 
     useEffect(() => {
         // Load draft on mount
@@ -493,7 +515,7 @@ export function FormRenderer({
     }, [responses, loadingDraft, draftKey, onSaveDraft]);
 
     useEffect(() => {
-        const computedFields = (blueprint.ui || []).flatMap((section) => section.children || []).filter((field) => field.formula);
+        const computedFields = (runtimeBlueprint.ui || []).flatMap((section) => section.children || []).filter((field) => field.formula);
         if (computedFields.length === 0) {
             return;
         }
@@ -515,12 +537,12 @@ export function FormRenderer({
         if (Object.keys(updates).length > 0) {
             setResponses((current) => ({ ...current, ...updates }));
         }
-    }, [blueprint.ui, responses]);
+    }, [runtimeBlueprint.ui, responses]);
 
     // Evaluate centralized rules on every response change
     const rulesResult = useMemo(
-        () => evaluateAllRules(blueprint.rules || [], responses, blueprint),
-        [blueprint, responses]
+        () => evaluateAllRules(runtimeBlueprint.rules || [], responses, runtimeBlueprint),
+        [runtimeBlueprint, responses]
     );
 
     // Apply SET_VALUE effects from rules engine
@@ -557,7 +579,7 @@ export function FormRenderer({
 
     // Evaluate auto-values on mount/load
     useEffect(() => {
-        const autoFields = (blueprint.ui || [])
+        const autoFields = (runtimeBlueprint.ui || [])
             .flatMap((section) => section.children || [])
             .filter((field) => field.auto_value && (!field.auto_value_timing || field.auto_value_timing === 'on_load'));
 
@@ -575,17 +597,17 @@ export function FormRenderer({
         if (Object.keys(updates).length > 0) {
             setResponses((current) => ({ ...current, ...updates }));
         }
-    }, [blueprint.ui]);
+    }, [runtimeBlueprint.ui]);
 
     // Filter sections based on rules engine
     const sections = useMemo(() => {
-        const allSections = blueprint.ui || [];
+        const allSections = runtimeBlueprint.ui || [];
         return allSections.filter(section => {
             const rulesVisible = isSectionVisibleByRules(section.id, rulesResult);
             if (rulesVisible === false) return false;
             return true;
         });
-    }, [blueprint.ui, rulesResult]);
+    }, [runtimeBlueprint.ui, rulesResult]);
 
     // Clamp currentSectionIndex to stay within the valid range of filtered sections
     useEffect(() => {
@@ -703,7 +725,7 @@ export function FormRenderer({
             // Validate ONLY the current active field
             const activeField = visibleFields.find(f => f.id === activeFieldId);
             if (activeField) {
-                const fieldError = validateField(activeField, responses[activeField.id], blueprint, rulesResult);
+                const fieldError = validateField(activeField, responses[activeField.id], runtimeBlueprint, rulesResult);
                 if (fieldError) {
                     setErrors({ [activeField.id]: fieldError });
                     return;
@@ -726,7 +748,7 @@ export function FormRenderer({
             // List Mode: Validate ALL visible fields in the current section
             const newErrors: Record<string, string> = {};
             visibleFields.forEach(field => {
-                const fieldError = validateField(field, responses[field.id], blueprint, rulesResult);
+                const fieldError = validateField(field, responses[field.id], runtimeBlueprint, rulesResult);
                 if (fieldError) {
                     newErrors[field.id] = fieldError;
                 }
@@ -781,7 +803,7 @@ export function FormRenderer({
         setSubmitting(true);
         try {
             // Resolve on_submit auto-values
-            const submitAutoFields = (blueprint.ui || [])
+            const submitAutoFields = (runtimeBlueprint.ui || [])
                 .flatMap((section) => section.children || [])
                 .filter((field) => field.auto_value && field.auto_value_timing === 'on_submit');
 
@@ -794,12 +816,12 @@ export function FormRenderer({
             });
 
             if (onSubmitAttempt && lookupMode === 'desk') {
-                onSubmitAttempt(blueprint.meta.form_id, finalResponses, { source: 'mobile_desk' });
+                onSubmitAttempt(runtimeBlueprint.meta.form_id, finalResponses, { source: 'mobile_desk' });
                 return;
             } else if (lookupMode === 'desk') {
-                await deskFormAPI.submit(blueprint.meta.form_id, finalResponses, { source: 'mobile_desk' });
+                await deskFormAPI.submit(runtimeBlueprint.meta.form_id, finalResponses, { source: 'mobile_desk' });
             } else {
-                await publicFormAPI.submit(blueprint.meta.slug, finalResponses, { source: 'mobile_yard' });
+                await publicFormAPI.submit(runtimeBlueprint.meta.slug, finalResponses, { source: 'mobile_yard' });
             }
             await AsyncStorage.removeItem(draftKey); // Clear draft on success
             if (onSubmitSuccess) onSubmitSuccess();
@@ -813,8 +835,10 @@ export function FormRenderer({
     const handleManualLookupSync = async () => {
         setSyncingLookups(true);
         try {
-            const synced = await syncAllLookupDatasets(blueprint, lookupContext);
-            Alert.alert('Lookup data synced', synced > 0 ? `Updated ${synced} dataset source${synced === 1 ? '' : 's'}.` : 'No dataset-backed lookup fields were found on this form.');
+            const synced = await syncAllLookupDatasets(runtimeBlueprint, lookupContext);
+            const hydrated = await hydrateBlueprintCatalogForms(runtimeBlueprint, lookupContext);
+            setRuntimeBlueprint(hydrated);
+            Alert.alert('Lookup data synced', synced > 0 ? `Updated ${synced} dataset source${synced === 1 ? '' : 's'}.` : 'Catalog and dataset lookups refreshed.');
         } catch {
             Alert.alert('Sync failed', 'Could not refresh lookup data right now. Cached data remains available on this device.');
         } finally {
@@ -876,7 +900,7 @@ export function FormRenderer({
                                     value={undefined}
                                     onChange={() => {}}
                                     lookupContext={lookupContext}
-                                    blueprint={blueprint}
+                                    blueprint={runtimeBlueprint}
                                     responses={responses}
                                     rulesResult={rulesResult}
                                     onFormLinkPress={onFormLinkPress}
@@ -909,7 +933,7 @@ export function FormRenderer({
                                 }}
                                 error={errors[field.id]}
                                 lookupContext={lookupContext}
-                                blueprint={blueprint}
+                                blueprint={runtimeBlueprint}
                                 responses={responses}
                                 rulesResult={rulesResult}
                                 onFormLinkPress={onFormLinkPress}

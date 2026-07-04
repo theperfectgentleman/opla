@@ -79,7 +79,7 @@ interface CatalogSourceItem {
 }
 
 interface ObjectReferenceDefinition {
-    source_type: 'dataset' | 'catalog' | 'user' | 'team' | 'submission' | 'custom';
+    source_type: 'dataset' | 'catalog' | 'catalog_form' | 'user' | 'team' | 'submission' | 'custom';
     source_id?: string;
     label_field?: string;
     value_field?: string;
@@ -164,9 +164,15 @@ interface FormField {
     collection_layout?: 'cards' | 'table';
     allow_add_items?: boolean;
     allow_remove_items?: boolean;
-    catalog_source_type?: 'project_catalog';
+    catalog_source_type?: 'project_catalog' | 'catalog_form';
+    catalog_form_id?: string;
     catalog_prepopulate_mode?: string;
     required_catalog_item_ids?: string[];
+    options_source?: 'manual' | 'catalog_form';
+    catalog_display_field?: string;
+    catalog_value_field?: string;
+    catalog_unique_values?: boolean;
+    catalog_cascade_filter_column?: string;
 
     // Cascading / filtered dropdown support
     cascade_parent_field_id?: string;
@@ -731,7 +737,9 @@ const ObjectPropertiesInput: React.FC<{
     addSelectedObjectProperty: () => void;
     removeSelectedObjectProperty: (index: number) => void;
     updateSelectedObjectProperty: (index: number, patch: any) => void;
-}> = ({ selectedObjectProperties, addSelectedObjectProperty, removeSelectedObjectProperty, updateSelectedObjectProperty }) => {
+    catalogForms: Array<{ id: string; title: string }>;
+    defaultCatalogFormId?: string;
+}> = ({ selectedObjectProperties, addSelectedObjectProperty, removeSelectedObjectProperty, updateSelectedObjectProperty, catalogForms, defaultCatalogFormId }) => {
     const [isOpen, setIsOpen] = useState(false);
     return (
         <div className="w-full">
@@ -835,35 +843,71 @@ const ObjectPropertiesInput: React.FC<{
                                     <div>
                                         <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Select Source</label>
                                         <select
-                                            value={property.reference?.source_type === 'catalog' ? 'catalog' : 'manual'}
+                                            value={property.reference?.source_type === 'catalog_form' ? 'catalog_form' : property.reference?.source_type === 'catalog' ? 'catalog' : 'manual'}
                                             onChange={(e) => {
-                                                if (e.target.value === 'catalog') {
+                                                if (e.target.value === 'catalog_form') {
+                                                    updateSelectedObjectProperty(propertyIndex, {
+                                                        reference: {
+                                                            source_type: 'catalog_form',
+                                                            source_id: defaultCatalogFormId || catalogForms[0]?.id || '',
+                                                            label_field: 'label',
+                                                            value_field: 'sku_code',
+                                                            field_mappings: {},
+                                                        },
+                                                        options: undefined,
+                                                    });
+                                                } else if (e.target.value === 'catalog') {
                                                     updateSelectedObjectProperty(propertyIndex, {
                                                         reference: {
                                                             source_type: 'catalog',
                                                             source_id: 'project_catalog',
                                                             label_field: 'label',
-                                                            value_field: 'id'
+                                                            value_field: 'id',
                                                         },
-                                                        options: undefined
+                                                        options: undefined,
                                                     });
                                                 } else {
                                                     updateSelectedObjectProperty(propertyIndex, {
                                                         reference: undefined,
                                                         options: [
                                                             { label: 'Option A', value: 'option_a' },
-                                                            { label: 'Option B', value: 'option_b' }
-                                                        ]
+                                                            { label: 'Option B', value: 'option_b' },
+                                                        ],
                                                     });
                                                 }
                                             }}
                                             className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[11px] outline-none text-[hsl(var(--text-primary))]"
                                         >
                                             <option value="manual">Manual Options</option>
-                                            <option value="catalog">Project Catalog Reference</option>
+                                            <option value="catalog_form">Catalog Form</option>
+                                            <option value="catalog">Legacy Project Catalog</option>
                                         </select>
                                     </div>
-                                    {property.reference?.source_type === 'catalog' ? (
+                                    {property.reference?.source_type === 'catalog_form' ? (
+                                        <div className="space-y-2">
+                                            <div>
+                                                <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Catalog Form</label>
+                                                <select
+                                                    value={property.reference.source_id || ''}
+                                                    onChange={(e) => updateSelectedObjectProperty(propertyIndex, {
+                                                        reference: {
+                                                            ...property.reference,
+                                                            source_id: e.target.value,
+                                                        },
+                                                    })}
+                                                    className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[11px] outline-none text-[hsl(var(--text-primary))]"
+                                                >
+                                                    <option value="">Select catalog...</option>
+                                                    {catalogForms.map((catalog) => (
+                                                        <option key={catalog.id} value={catalog.id}>{catalog.title}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="text-[9px] text-[hsl(var(--text-tertiary))] leading-normal bg-[hsl(var(--surface-elevated))]/20 p-2 rounded border border-[hsl(var(--border))]/25">
+                                                Options load from the published catalog at runtime. Stored values use the catalog key field.
+                                            </div>
+                                        </div>
+                                    ) : property.reference?.source_type === 'catalog' ? (
                                         <div className="text-[9px] text-[hsl(var(--text-tertiary))] leading-normal bg-[hsl(var(--surface-elevated))]/20 p-2 rounded border border-[hsl(var(--border))]/25">
                                             Linked to Project Catalog. Properties named <code>unit_price</code> or <code>price</code> will auto-fill with selected product MSRP.
                                         </div>
@@ -1562,6 +1606,13 @@ const FormBuilder: React.FC = () => {
         blueprint?: any;
     }>>([]);
     const [catalogItems, setCatalogItems] = useState<ProjectCatalogItem[]>([]);
+    const [catalogForms, setCatalogForms] = useState<Array<{
+        id: string;
+        title: string;
+        catalog_key_field_id: string;
+        catalog_label_field_id: string;
+        fields: Array<{ bind: string; label: string }>;
+    }>>([]);
 
     const multiActionMenuRef = React.useRef<HTMLDivElement | null>(null);
     const consoleWindowRef = React.useRef<HTMLDivElement | null>(null);
@@ -1988,6 +2039,15 @@ const FormBuilder: React.FC = () => {
 
         const catalogSourceItems = buildCatalogSourceItems(catalogItems);
         const nextProperties = (definition.properties || []).map((property) => {
+            if (property.reference?.source_type === 'catalog_form') {
+                return {
+                    ...property,
+                    reference: {
+                        ...property.reference,
+                        source_items: undefined,
+                    },
+                };
+            }
             if (property.reference?.source_type !== 'catalog') {
                 return property;
             }
@@ -2097,6 +2157,31 @@ const FormBuilder: React.FC = () => {
         loadCatalogItems();
     }, [currentOrg?.id, formMeta?.project_id]);
 
+    useEffect(() => {
+        const loadCatalogForms = async () => {
+            if (!formId) {
+                setCatalogForms([]);
+                return;
+            }
+            try {
+                const sources = await formAPI.listCatalogLookupSources(formId);
+                const liveCatalogs = (Array.isArray(sources) ? sources : []).map((item: any) => ({
+                    id: item.id,
+                    title: item.title,
+                    catalog_key_field_id: item.catalog_key_field_id || '',
+                    catalog_label_field_id: item.catalog_label_field_id || '',
+                    fields: Array.isArray(item.fields) ? item.fields : [],
+                }));
+                setCatalogForms(liveCatalogs);
+            } catch (error) {
+                console.error('Failed to load catalog forms', error);
+                setCatalogForms([]);
+            }
+        };
+
+        loadCatalogForms();
+    }, [formId]);
+
     const getSlotVersion = (slot: 1 | 2 | 3) => activeVersions.find(v => v.kind === 'draft' && v.slot_index === slot);
 
     const applyBlueprintToBuilder = (blueprint: any, fallbackTitle?: string) => {
@@ -2155,9 +2240,15 @@ const FormBuilder: React.FC = () => {
                 allow_add_items: child.allow_add_items,
                 allow_remove_items: child.allow_remove_items,
                 catalog_source_type: child.catalog_source_type,
+                catalog_form_id: child.catalog_form_id,
                 catalog_prepopulate_mode: child.catalog_prepopulate_mode,
                 required_catalog_item_ids: child.required_catalog_item_ids || [],
-                // Form link
+                options_source: child.options_source,
+                catalog_display_field: child.catalog_display_field,
+                catalog_value_field: child.catalog_value_field,
+                catalog_unique_values: !!child.catalog_unique_values,
+                catalog_cascade_filter_column: child.catalog_cascade_filter_column,
+                cascade_parent_field_id: child.cascade_parent_field_id,
                 linked_form_id: child.linked_form_id,
                 linked_form_slug: child.linked_form_slug,
                 linked_form_param_map: child.linked_form_param_map,
@@ -2517,8 +2608,15 @@ const FormBuilder: React.FC = () => {
         allow_add_items: field.allow_add_items,
         allow_remove_items: field.allow_remove_items,
         catalog_source_type: field.catalog_source_type,
+        catalog_form_id: field.catalog_form_id,
         catalog_prepopulate_mode: field.catalog_prepopulate_mode,
         required_catalog_item_ids: field.required_catalog_item_ids,
+        options_source: field.options_source,
+        catalog_display_field: field.catalog_display_field,
+        catalog_value_field: field.catalog_value_field,
+        catalog_unique_values: field.catalog_unique_values,
+        catalog_cascade_filter_column: field.catalog_cascade_filter_column,
+        cascade_parent_field_id: field.cascade_parent_field_id,
         // Form link
         linked_form_id: field.linked_form_id,
         linked_form_slug: field.linked_form_slug,
@@ -4875,10 +4973,191 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
+                                                                            key: 'options_source',
+                                                                            label: 'Options Source',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.options_source || 'manual'}
+                                                                                    onChange={(e) => {
+                                                                                        const nextSource = e.target.value === 'catalog_form' ? 'catalog_form' : 'manual';
+                                                                                        updateField(selectedField.id, {
+                                                                                            options_source: nextSource,
+                                                                                            catalog_form_id: nextSource === 'catalog_form' ? selectedField.catalog_form_id : undefined,
+                                                                                        });
+                                                                                    }}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="manual">Manual choices</option>
+                                                                                    <option value="catalog_form">Catalog form</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_form_id',
+                                                                            label: 'Catalog Form',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type) && selectedField.options_source === 'catalog_form',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.catalog_form_id || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { catalog_form_id: e.target.value || undefined })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="">Select catalog...</option>
+                                                                                    {catalogForms.map((catalog) => (
+                                                                                        <option key={catalog.id} value={catalog.id}>{catalog.title}</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_display_field',
+                                                                            label: 'Display Column',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
+                                                                                && selectedField.options_source === 'catalog_form'
+                                                                                && !!selectedField.catalog_form_id,
+                                                                            render: () => {
+                                                                                const catalog = catalogForms.find((item) => item.id === selectedField.catalog_form_id);
+                                                                                const catalogFields = catalog?.fields || [];
+                                                                                return (
+                                                                                    <select
+                                                                                        value={selectedField.catalog_display_field || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_display_field: e.target.value || undefined })}
+                                                                                        className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        <option value="">Default (catalog label field)</option>
+                                                                                        {catalogFields.map((column) => (
+                                                                                            <option key={column.bind} value={column.bind}>
+                                                                                                {column.label}
+                                                                                                {column.bind === catalog?.catalog_label_field_id ? ' (Label)' : ''}
+                                                                                                {column.bind === catalog?.catalog_key_field_id ? ' (Key)' : ''}
+                                                                                            </option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_value_field',
+                                                                            label: 'Stored Value',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
+                                                                                && selectedField.options_source === 'catalog_form'
+                                                                                && !!selectedField.catalog_form_id,
+                                                                            render: () => {
+                                                                                const catalog = catalogForms.find((item) => item.id === selectedField.catalog_form_id);
+                                                                                const catalogFields = catalog?.fields || [];
+                                                                                return (
+                                                                                    <select
+                                                                                        value={selectedField.catalog_value_field || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_value_field: e.target.value || undefined })}
+                                                                                        className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        <option value="">Default (catalog key field)</option>
+                                                                                        {catalogFields.map((column) => (
+                                                                                            <option key={column.bind} value={column.bind}>
+                                                                                                {column.label}
+                                                                                                {column.bind === catalog?.catalog_label_field_id ? ' (Label)' : ''}
+                                                                                                {column.bind === catalog?.catalog_key_field_id ? ' (Key)' : ''}
+                                                                                            </option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_unique_values',
+                                                                            label: 'Unique Values',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
+                                                                                && selectedField.options_source === 'catalog_form'
+                                                                                && !!selectedField.catalog_form_id,
+                                                                            render: () => (
+                                                                                <label className="flex items-center gap-2 text-xs text-[hsl(var(--text-primary))] cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={!!selectedField.catalog_unique_values}
+                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_unique_values: e.target.checked })}
+                                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                    />
+                                                                                    Show each stored value once
+                                                                                </label>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'cascade_parent_field_id',
+                                                                            label: 'Cascade Parent',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
+                                                                                && selectedField.options_source === 'catalog_form'
+                                                                                && !!selectedField.catalog_form_id,
+                                                                            render: () => {
+                                                                                const parentCandidates = sections.flatMap((section) => section.fields).filter((field) => (
+                                                                                    field.id !== selectedField.id
+                                                                                    && ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(field.type)
+                                                                                ));
+                                                                                return (
+                                                                                    <select
+                                                                                        value={selectedField.cascade_parent_field_id || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, {
+                                                                                            cascade_parent_field_id: e.target.value || undefined,
+                                                                                            catalog_cascade_filter_column: e.target.value ? selectedField.catalog_cascade_filter_column : undefined,
+                                                                                        })}
+                                                                                        className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        <option value="">None</option>
+                                                                                        {parentCandidates.map((field) => (
+                                                                                            <option key={field.id} value={field.id}>{field.label}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_cascade_filter_column',
+                                                                            label: 'Filter Column',
+                                                                            metaKey: 'lookup_source',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
+                                                                                && selectedField.options_source === 'catalog_form'
+                                                                                && !!selectedField.catalog_form_id
+                                                                                && !!selectedField.cascade_parent_field_id,
+                                                                            render: () => {
+                                                                                const catalog = catalogForms.find((item) => item.id === selectedField.catalog_form_id);
+                                                                                const catalogFields = catalog?.fields || [];
+                                                                                return (
+                                                                                    <select
+                                                                                        value={selectedField.catalog_cascade_filter_column || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_cascade_filter_column: e.target.value || undefined })}
+                                                                                        className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    >
+                                                                                        <option value="">Select catalog column...</option>
+                                                                                        {catalogFields.map((column) => (
+                                                                                            <option key={column.bind} value={column.bind}>
+                                                                                                {column.label}
+                                                                                                {column.bind === catalog?.catalog_label_field_id ? ' (Label)' : ''}
+                                                                                                {column.bind === catalog?.catalog_key_field_id ? ' (Key)' : ''}
+                                                                                            </option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
                                                                             key: 'choices',
                                                                             label: 'Choices Setup',
                                                                             metaKey: 'choices',
-                                                                            visible: ['dropdown', 'radio_group', 'checkbox_group'].includes(selectedField.type),
+                                                                            visible: ['dropdown', 'radio_group', 'checkbox_group'].includes(selectedField.type)
+                                                                                && (selectedField.options_source || 'manual') === 'manual',
                                                                             render: () => (
                                                                                     <ChoicesSetupInput
                                                                                         selectedField={selectedField}
@@ -4957,12 +5236,27 @@ const FormBuilder: React.FC = () => {
                                                                                 <select
                                                                                     value={selectedField.catalog_source_type || ''}
                                                                                     onChange={(e) => {
-                                                                                        const nextValue = e.target.value === 'project_catalog' ? 'project_catalog' : undefined;
-                                                                                        let patch: any = { catalog_source_type: nextValue };
-                                                                                        if (nextValue === 'project_catalog') {
+                                                                                        const nextValue = e.target.value || undefined;
+                                                                                        let patch: any = {
+                                                                                            catalog_source_type: nextValue,
+                                                                                            catalog_form_id: nextValue === 'catalog_form' ? selectedField.catalog_form_id : undefined,
+                                                                                        };
+                                                                                        if (nextValue === 'project_catalog' || nextValue === 'catalog_form') {
                                                                                             const currentDef: any = selectedField.object_definition || {};
                                                                                             const currentProps = currentDef.properties || [];
                                                                                             if (currentProps.length === 0) {
+                                                                                                const productReference = nextValue === 'catalog_form'
+                                                                                                    ? {
+                                                                                                        source_type: 'catalog_form',
+                                                                                                        source_id: selectedField.catalog_form_id || '',
+                                                                                                        label_field: 'label',
+                                                                                                        value_field: 'sku_code',
+                                                                                                        field_mappings: {},
+                                                                                                    }
+                                                                                                    : {
+                                                                                                        source_type: 'catalog',
+                                                                                                        field_mappings: {},
+                                                                                                    };
                                                                                                 patch.object_definition = {
                                                                                                     ...currentDef,
                                                                                                     properties: [
@@ -4972,31 +5266,16 @@ const FormBuilder: React.FC = () => {
                                                                                                             type: 'select',
                                                                                                             edit_mode: 'editable',
                                                                                                             required: true,
-                                                                                                            reference: {
-                                                                                                                source_type: 'catalog',
-                                                                                                                field_mappings: {}
-                                                                                                            }
+                                                                                                            reference: productReference,
                                                                                                         },
                                                                                                         {
                                                                                                             key: 'quantity',
                                                                                                             label: 'Quantity',
                                                                                                             type: 'integer',
                                                                                                             edit_mode: 'editable',
-                                                                                                            default_value: 0
+                                                                                                            default_value: 0,
                                                                                                         },
-                                                                                                        {
-                                                                                                            key: 'unit_price',
-                                                                                                            label: 'Unit Price',
-                                                                                                            type: 'decimal',
-                                                                                                            edit_mode: 'fixed'
-                                                                                                        },
-                                                                                                        {
-                                                                                                            key: 'total',
-                                                                                                            label: 'Total',
-                                                                                                            type: 'computed',
-                                                                                                            formula: 'quantity * unit_price'
-                                                                                                        }
-                                                                                                    ]
+                                                                                                    ],
                                                                                                 };
                                                                                             }
                                                                                         }
@@ -5007,7 +5286,55 @@ const FormBuilder: React.FC = () => {
                                                                                     onBlur={() => setHoveredProperty(null)}
                                                                                 >
                                                                                     <option value="">None / Custom Row</option>
-                                                                                    <option value="project_catalog">Project Catalog</option>
+                                                                                    <option value="catalog_form">Catalog Form</option>
+                                                                                    <option value="project_catalog">Legacy Project Catalog</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalog_form_id_collection',
+                                                                            label: 'Catalog Form',
+                                                                            metaKey: 'catalog_source_type',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && selectedField.catalog_source_type === 'catalog_form',
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.catalog_form_id || ''}
+                                                                                    onChange={(e) => {
+                                                                                        const catalogFormId = e.target.value || undefined;
+                                                                                        const currentDef: any = selectedField.object_definition || {};
+                                                                                        const nextProps = (currentDef.properties || []).map((property: any) => {
+                                                                                            if (property.type !== 'select' || !property.reference) {
+                                                                                                return property;
+                                                                                            }
+                                                                                            if (property.reference.source_type === 'catalog_form' || property.reference.source_type === 'catalog') {
+                                                                                                return {
+                                                                                                    ...property,
+                                                                                                    reference: {
+                                                                                                        ...property.reference,
+                                                                                                        source_type: 'catalog_form',
+                                                                                                        source_id: catalogFormId,
+                                                                                                        label_field: 'label',
+                                                                                                        value_field: 'sku_code',
+                                                                                                    },
+                                                                                                };
+                                                                                            }
+                                                                                            return property;
+                                                                                        });
+                                                                                        updateField(selectedField.id, {
+                                                                                            catalog_form_id: catalogFormId,
+                                                                                            object_definition: {
+                                                                                                ...currentDef,
+                                                                                                properties: nextProps,
+                                                                                            },
+                                                                                        });
+                                                                                    }}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="">Select catalog...</option>
+                                                                                    {catalogForms.map((catalog) => (
+                                                                                        <option key={catalog.id} value={catalog.id}>{catalog.title}</option>
+                                                                                    ))}
                                                                                 </select>
                                                                             )
                                                                         },
@@ -5032,7 +5359,7 @@ const FormBuilder: React.FC = () => {
                                                                             category: 'Data',
                                                                             key: 'catalog_prepopulate_mode',
                                                                             label: 'Prepopulate Format',
-                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && selectedField.catalog_source_type === 'project_catalog',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && (selectedField.catalog_source_type === 'project_catalog' || selectedField.catalog_source_type === 'catalog_form'),
                                                                             render: () => (
                                                                                 <select
                                                                                     value={selectedField.catalog_prepopulate_mode || 'all'}
@@ -5241,6 +5568,8 @@ const FormBuilder: React.FC = () => {
                                                                                         addSelectedObjectProperty={addSelectedObjectProperty}
                                                                                         removeSelectedObjectProperty={removeSelectedObjectProperty}
                                                                                         updateSelectedObjectProperty={updateSelectedObjectProperty}
+                                                                                        catalogForms={catalogForms}
+                                                                                        defaultCatalogFormId={selectedField.catalog_form_id}
                                                                                     />
                                                                                 )
                                                                         },

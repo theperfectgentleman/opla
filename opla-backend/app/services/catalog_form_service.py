@@ -276,6 +276,161 @@ class CatalogFormService:
     )
 
     @staticmethod
+    def extract_catalog_blueprint_fields(catalog: Form) -> list[dict[str, str]]:
+        """Scalar fields from a catalog form blueprint for column pickers."""
+        blueprint = catalog.blueprint_live or {}
+        fields: list[dict[str, str]] = []
+        for screen in blueprint.get("ui", []) or []:
+            for child in screen.get("children", []) or []:
+                field_type = str(child.get("type") or "")
+                if field_type in CatalogFormService.BLOCKED_FIELD_TYPES:
+                    continue
+                bind = str(child.get("bind") or "").strip()
+                if not bind:
+                    continue
+                fields.append(
+                    {
+                        "bind": bind,
+                        "label": str(child.get("label") or bind),
+                    }
+                )
+        return fields
+
+    @staticmethod
+    def list_lookup_sources(db: Session, form: Form) -> list[dict[str, Any]]:
+        """Return live catalog forms in the same project that can back survey lookups."""
+        catalogs = (
+            db.query(Form)
+            .filter(
+                Form.project_id == form.project_id,
+                Form.kind == FormKind.CATALOG,
+                Form.status == FormStatus.LIVE,
+                Form.catalog_key_field_id.isnot(None),
+                Form.catalog_label_field_id.isnot(None),
+            )
+            .order_by(Form.title.asc())
+            .all()
+        )
+        return [
+            {
+                "id": str(catalog.id),
+                "title": catalog.title,
+                "catalog_key_field_id": catalog.catalog_key_field_id or "",
+                "catalog_label_field_id": catalog.catalog_label_field_id or "",
+                "fields": CatalogFormService.extract_catalog_blueprint_fields(catalog),
+            }
+            for catalog in catalogs
+        ]
+
+    @staticmethod
+    def get_catalog_form_for_lookup(
+        db: Session,
+        consumer_form: Form,
+        catalog_form_id: uuid.UUID,
+    ) -> Form:
+        catalog = db.query(Form).filter(Form.id == catalog_form_id).first()
+        if not catalog or catalog.kind != FormKind.CATALOG:
+            raise HTTPException(status_code=404, detail="Catalog form not found")
+        if catalog.project_id != consumer_form.project_id:
+            raise HTTPException(status_code=404, detail="Catalog form not found")
+        if catalog.status != FormStatus.LIVE:
+            raise HTTPException(status_code=404, detail="Catalog form is not published")
+        if not catalog.catalog_key_field_id or not catalog.catalog_label_field_id:
+            raise HTTPException(status_code=400, detail="Catalog form is missing key/label designations")
+        return catalog
+
+    @staticmethod
+    def get_lookup_options(
+        db: Session,
+        *,
+        consumer_form: Form,
+        catalog_form_id: uuid.UUID,
+        search: str | None = None,
+        limit: int = 500,
+    ) -> dict[str, Any]:
+        catalog = CatalogFormService.get_catalog_form_for_lookup(db, consumer_form, catalog_form_id)
+        entries = CatalogFormService.get_catalog_entries(db, catalog)
+
+        search_term = (search or "").strip().lower()
+        options: list[dict[str, Any]] = []
+        for entry in entries:
+            label = str(entry.get("label_value") or "")
+            value = str(entry.get("key_value") or "")
+            if not label or not value:
+                continue
+            if search_term and search_term not in label.lower() and search_term not in value.lower():
+                continue
+            options.append(
+                {
+                    "label": label,
+                    "value": value,
+                    "submission_id": entry["submission_id"],
+                    "created_at": entry.get("created_at"),
+                    "data": entry.get("data") or {},
+                }
+            )
+            if len(options) >= limit:
+                break
+
+        return {
+            "catalog_form_id": str(catalog.id),
+            "catalog_form_title": catalog.title,
+            "label_field": catalog.catalog_label_field_id or "",
+            "value_field": catalog.catalog_key_field_id or "",
+            "synced_at": datetime.utcnow(),
+            "total_options": len(options),
+            "options": options,
+        }
+
+    @staticmethod
+    def build_source_items(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Normalize catalog entries for object-collection reference hydration."""
+        items: list[dict[str, Any]] = []
+        for entry in entries:
+            key_value = entry.get("key_value")
+            label_value = entry.get("label_value")
+            data = entry.get("data") or {}
+            item = {
+                "id": entry.get("submission_id"),
+                "sku_code": key_value,
+                "label": label_value,
+                **data,
+            }
+            items.append(item)
+        return items
+
+    @staticmethod
+    def get_public_lookup_options(
+        db: Session,
+        *,
+        slug: str,
+        catalog_form_id: uuid.UUID,
+        search: str | None = None,
+        limit: int = 500,
+    ) -> dict[str, Any]:
+        from app.models.form import Form
+        from app.models.project import ProjectStatus
+
+        form = db.query(Form).filter(Form.slug == slug).first()
+        if (
+            not form
+            or not form.is_public
+            or form.status != FormStatus.LIVE
+            or not form.blueprint_live
+            or not form.project
+            or form.project.status != ProjectStatus.ACTIVE
+        ):
+            raise HTTPException(status_code=404, detail="Form not found or not public")
+
+        return CatalogFormService.get_lookup_options(
+            db,
+            consumer_form=form,
+            catalog_form_id=catalog_form_id,
+            search=search,
+            limit=limit,
+        )
+
+    @staticmethod
     def validate_ready_to_publish(form: Form) -> None:
         """
         Called by the publish route before promoting a catalog form to live.

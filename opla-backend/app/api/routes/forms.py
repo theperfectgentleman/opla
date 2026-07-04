@@ -10,6 +10,8 @@ from app.api.schemas.form import (
     CatalogEntryDeleteOut,
     CatalogEntryOut,
     CatalogEntryUpsertIn,
+    CatalogLookupOptionsOut,
+    CatalogLookupSourceOut,
     FormCreateIn,
     FormOut,
     FormRuntimeOut,
@@ -389,6 +391,44 @@ def delete_catalog_entry(
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
     return CatalogFormService.delete_entry(db, form, submission_id)
+
+
+@router.get("/{form_id}/catalog-lookup-sources", response_model=List[CatalogLookupSourceOut])
+def list_catalog_lookup_sources(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List published catalog forms in the same project that can populate survey lookups."""
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    return CatalogFormService.list_lookup_sources(db, form)
+
+
+@router.get("/{form_id}/catalog-lookup-sources/{catalog_form_id}/options", response_model=CatalogLookupOptionsOut)
+def get_catalog_lookup_options(
+    form_id: uuid.UUID,
+    catalog_form_id: uuid.UUID,
+    search: str | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return dropdown/lookup options from a catalog form for use in a standard survey form."""
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    bounded_limit = max(1, min(limit, 500))
+    return CatalogFormService.get_lookup_options(
+        db,
+        consumer_form=form,
+        catalog_form_id=catalog_form_id,
+        search=search,
+        limit=bounded_limit,
+    )
 
 
 @router.put("/{form_id}/responsibility", response_model=FormOut)

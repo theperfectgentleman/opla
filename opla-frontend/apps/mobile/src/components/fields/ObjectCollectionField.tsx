@@ -114,6 +114,15 @@ function resolveSelectOptions(property: ObjectPropertyDefinition) {
         }));
     }
 
+    if (property.reference?.source_type === 'catalog_form' && property.reference.source_items?.length) {
+        const labelField = property.reference.label_field || 'label';
+        const valueField = property.reference.value_field || 'sku_code';
+        return property.reference.source_items.map((item) => ({
+            label: String((item as Record<string, any>)[labelField] ?? item.label ?? item.id),
+            value: String((item as Record<string, any>)[valueField] ?? item.sku_code ?? item.id),
+        }));
+    }
+
     return [];
 }
 
@@ -121,11 +130,11 @@ function applyCatalogSelection(record: RowValue, path: string[], property: Objec
     let nextRecord = setNestedValue(record, path, selectedValue);
     const reference = property.reference;
 
-    if (reference?.source_type !== 'catalog' || !reference.source_items?.length) {
+    if ((reference?.source_type !== 'catalog' && reference?.source_type !== 'catalog_form') || !reference.source_items?.length) {
         return nextRecord;
     }
 
-    const valueField = reference.value_field || 'id';
+    const valueField = reference.value_field || (reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
     const selectedItem = reference.source_items.find((item) => String((item as Record<string, any>)[valueField] ?? item.id) === String(selectedValue));
     if (!selectedItem) {
         return nextRecord;
@@ -176,8 +185,8 @@ export function ObjectCollectionField({
         let loadedItems: RowValue[] = [];
         if (Array.isArray(value) && value.length > 0) {
             loadedItems = value.map((entry) => applyComputedProperties((entry as RowValue) || {}, properties));
-        } else if (field.catalog_source_type === 'project_catalog') {
-            const propWithCatalog = properties.find((p) => p.type === 'select' && p.reference?.source_type === 'catalog');
+        } else if (field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form') {
+            const propWithCatalog = properties.find((p) => p.type === 'select' && (p.reference?.source_type === 'catalog' || p.reference?.source_type === 'catalog_form'));
             const sourceItems = propWithCatalog?.reference?.source_items || [];
             const mode = (field as any).catalog_prepopulate_mode || 'all';
             if (mode !== 'none' && sourceItems.length > 0) {
@@ -188,8 +197,9 @@ export function ObjectCollectionField({
                 loadedItems = targetItems.map((item) => {
                     let row: RowValue = { _isCatalogItem: true };
                     properties.forEach((prop) => {
-                        if (prop.type === 'select' && prop.reference?.source_type === 'catalog') {
-                            row[prop.key] = item.id;
+                        if (prop.type === 'select' && (prop.reference?.source_type === 'catalog' || prop.reference?.source_type === 'catalog_form')) {
+                            const valueField = prop.reference.value_field || (prop.reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
+                            row[prop.key] = (item as Record<string, any>)[valueField] ?? item.id;
                             Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]) => {
                                 const val = (item as Record<string, any>)[sourceKey];
                                 if (val !== undefined) {
@@ -218,10 +228,10 @@ export function ObjectCollectionField({
     };
 
     React.useEffect(() => {
-        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && field.catalog_source_type === 'project_catalog') {
+        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && (field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form')) {
             const mode = (field as any).catalog_prepopulate_mode || 'all';
             if (mode !== 'none') {
-                const propWithCatalog = properties.find((p) => p.type === 'select' && p.reference?.source_type === 'catalog');
+                const propWithCatalog = properties.find((p) => p.type === 'select' && (p.reference?.source_type === 'catalog' || p.reference?.source_type === 'catalog_form'));
                 const sourceItems = propWithCatalog?.reference?.source_items || [];
                 if (sourceItems.length > 0) {
                     commitItems(items);

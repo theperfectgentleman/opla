@@ -1,16 +1,23 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { FormField } from '@opla/types';
+import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
     value: string;
     onChange: (value: string) => void;
     error?: string;
+    responses?: Record<string, any>;
 }
 
-export function RadioGroupField({ field, value, onChange, error }: Props) {
-    const options = field.options || [];
+export function RadioGroupField({ field, value, onChange, error, responses = {} }: Props) {
+    const options = useMemo(() => {
+        if (fieldUsesCatalogOptionResolver(field)) {
+            return resolveCatalogFormFieldOptions(field, responses);
+        }
+        return field.options || [];
+    }, [field, responses]);
 
     return (
         <View>

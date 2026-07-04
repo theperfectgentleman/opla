@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
 import { FormField } from '@opla/types';
+import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -13,27 +14,28 @@ interface Props {
 export function DropdownField({ field, value, onChange, error, responses = {} }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
 
-    // Resolve cascading options
     const options = useMemo(() => {
+        if (fieldUsesCatalogOptionResolver(field)) {
+            return resolveCatalogFormFieldOptions(field, responses);
+        }
         if (field.cascade_parent_field_id && field.cascade_options_map) {
             const parentValue = responses[field.cascade_parent_field_id];
             if (parentValue && field.cascade_options_map[parentValue]) {
                 return field.cascade_options_map[parentValue];
             }
-            return []; // Parent not selected — show no options
+            return [];
         }
         return field.options || [];
-    }, [field.options, field.cascade_parent_field_id, field.cascade_options_map, responses]);
+    }, [field, responses]);
 
-    // Clear value if parent changes and current value is no longer valid
     useEffect(() => {
-        if (field.cascade_parent_field_id && value) {
+        if ((field.cascade_parent_field_id || field.catalog_cascade_filter_column) && value) {
             const stillValid = options.some(o => o.value === value);
             if (!stillValid) {
                 onChange('');
             }
         }
-    }, [options]);
+    }, [options, value, field.cascade_parent_field_id, field.catalog_cascade_filter_column, onChange]);
 
     const selectedOption = options.find(o => o.value === value);
 
@@ -56,7 +58,7 @@ export function DropdownField({ field, value, onChange, error, responses = {} }:
                 <Text style={{ color: selectedOption ? '#f1f5f9' : '#475569', fontSize: 14 }}>
                     {selectedOption ? selectedOption.label : (field.placeholder || "Select an option...")}
                 </Text>
-                <Text style={{ color: '#94a3b8', fontSize: 12 }}>?</Text>
+                <Text style={{ color: '#94a3b8', fontSize: 12 }}>▼</Text>
             </TouchableOpacity>
 
             {error && (
@@ -93,7 +95,7 @@ export function DropdownField({ field, value, onChange, error, responses = {} }:
                                     <Text style={{ color: value === item.value ? '#158754' : '#f1f5f9', fontSize: 14, fontWeight: value === item.value ? '700' : '400' }}>
                                         {item.label}
                                     </Text>
-                                    {value === item.value && <Text style={{ color: '#158754', fontSize: 14 }}>?</Text>}
+                                    {value === item.value && <Text style={{ color: '#158754', fontSize: 14 }}>✓</Text>}
                                 </TouchableOpacity>
                             )}
                         />

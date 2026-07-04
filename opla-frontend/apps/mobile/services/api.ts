@@ -118,6 +118,14 @@ export const publicFormAPI = {
     const res = await apiClient.get(`/public/forms/${slug}/lookup-sources/${datasetId}/options`, { params });
     return res.data;
   },
+  catalogLookupOptions: async (
+    slug: string,
+    catalogFormId: string,
+    params?: { search?: string; limit?: number },
+  ) => {
+    const res = await apiClient.get(`/public/forms/${slug}/catalog-lookup-sources/${catalogFormId}/options`, { params });
+    return res.data;
+  },
 };
 
 // ─── Desk form endpoints (authenticated) ────────────────────────────────────
@@ -149,6 +157,14 @@ export const deskFormAPI = {
     params: { label_field: string; value_field: string; search?: string; limit?: number },
   ) => {
     const res = await apiClient.get(`/forms/${formId}/lookup-sources/${datasetId}/options`, { params });
+    return res.data;
+  },
+  catalogLookupOptions: async (
+    formId: string,
+    catalogFormId: string,
+    params?: { search?: string; limit?: number },
+  ) => {
+    const res = await apiClient.get(`/forms/${formId}/catalog-lookup-sources/${catalogFormId}/options`, { params });
     return res.data;
   },
 };

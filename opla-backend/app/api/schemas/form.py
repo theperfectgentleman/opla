@@ -149,3 +149,30 @@ class CatalogEntryOut(BaseModel):
 class CatalogEntryDeleteOut(BaseModel):
     deleted_count: int
     key_value: Optional[str] = None
+
+
+class CatalogLookupSourceOut(BaseModel):
+    """Published catalog form available as a lookup source within the same project."""
+    id: str
+    title: str
+    catalog_key_field_id: str
+    catalog_label_field_id: str
+    fields: List[Dict[str, str]] = []
+
+
+class CatalogLookupOptionOut(BaseModel):
+    label: str
+    value: str
+    submission_id: str
+    created_at: Optional[str] = None
+    data: Dict[str, Any] = {}
+
+
+class CatalogLookupOptionsOut(BaseModel):
+    catalog_form_id: str
+    catalog_form_title: str
+    label_field: str
+    value_field: str
+    synced_at: datetime
+    total_options: int
+    options: List[CatalogLookupOptionOut]

@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.api.dependencies import get_current_user, get_db, get_optional_user
 from app.api.schemas.submission import SubmissionCreate, PublicSubmissionCreate, SubmissionOut, SubmissionReviewUpdate
-from app.api.schemas.form import FormRuntimeOut
+from app.api.schemas.form import CatalogLookupOptionsOut, FormRuntimeOut
 from app.api.schemas.dataset import LookupOptionsOut
+from app.services.catalog_form_service import CatalogFormService
 from app.services.dataset_service import DatasetService
 from app.services.submission_service import SubmissionService
 from app.services.project_access_service import ProjectAccessService
@@ -150,6 +151,24 @@ def get_public_lookup_options(
         dataset_id=dataset_id,
         label_field=label_field,
         value_field=value_field,
+        search=search,
+        limit=bounded_limit,
+    )
+
+
+@router.get("/public/forms/{slug}/catalog-lookup-sources/{catalog_form_id}/options", response_model=CatalogLookupOptionsOut)
+def get_public_catalog_lookup_options(
+    slug: str,
+    catalog_form_id: uuid.UUID,
+    search: str | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    bounded_limit = max(1, min(limit, 500))
+    return CatalogFormService.get_public_lookup_options(
+        db,
+        slug=slug,
+        catalog_form_id=catalog_form_id,
         search=search,
         limit=bounded_limit,
     )

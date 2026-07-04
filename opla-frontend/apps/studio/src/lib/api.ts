@@ -529,6 +529,16 @@ export const formAPI = {
         const response = await apiClient.delete(`/forms/${formId}/catalog-entries/${submissionId}`);
         return response.data;
     },
+    listCatalogLookupSources: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/catalog-lookup-sources`);
+        return response.data;
+    },
+    getCatalogLookupOptions: async (formId: string, catalogFormId: string, params?: { search?: string; limit?: number }) => {
+        const response = await apiClient.get(`/forms/${formId}/catalog-lookup-sources/${catalogFormId}/options`, {
+            params: { limit: 500, ...params },
+        });
+        return response.data;
+    },
 };
 
 export const reportAPI = {

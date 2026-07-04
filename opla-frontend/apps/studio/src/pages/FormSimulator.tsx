@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { formAPI, projectAPI, submissionAPI } from '../lib/api';
+import { hydrateBlueprintCatalogForms } from '../utils/catalogFormLookup';
 import { useOrg } from '../contexts/OrgContext';
 import {
     Smartphone, ChevronLeft, Send, RotateCcw,
@@ -13,6 +14,7 @@ import {
     isFieldVisibleByRules,
     getFilteredOptionsByRules
 } from '../../../mobile/src/utils/rulesEngine';
+import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
 
 interface UIField {
     type: string;
@@ -414,18 +416,25 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
         let loadedItems: any[] = [];
         if (Array.isArray(value) && value.length > 0) {
             loadedItems = value.map((entry) => calculateItemComputedProperties(entry || {}));
-        } else if (field.catalog_source_type === 'project_catalog' && catalogItems.length > 0) {
+        } else {
+            const catalogBacked = field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form';
+            const catalogProp = properties.find((prop: any) => prop.type === 'select' && prop.reference?.source_items?.length);
+            const runtimeCatalogItems = catalogProp?.reference?.source_items || [];
+
+            if (catalogBacked && (catalogItems.length > 0 || runtimeCatalogItems.length > 0)) {
             const mode = field.catalog_prepopulate_mode || 'all';
             if (mode !== 'none') {
+                const sourceItems = runtimeCatalogItems.length > 0 ? runtimeCatalogItems : catalogItems;
                 const targetItems = mode === 'required_only'
-                    ? catalogItems.filter((item: any) => !!item.metadata_json?.is_mandatory)
-                    : catalogItems;
+                    ? sourceItems.filter((item: any) => !!item.metadata_json?.is_mandatory)
+                    : sourceItems;
 
                 loadedItems = targetItems.map((item: any) => {
                     const row: any = { _isCatalogItem: true };
                     properties.forEach((prop: any) => {
-                        if (prop.type === 'select' && prop.reference?.source_type === 'catalog') {
-                            row[prop.key] = item.id;
+                        if (prop.type === 'select' && (prop.reference?.source_type === 'catalog' || prop.reference?.source_type === 'catalog_form')) {
+                            const valueField = prop.reference.value_field || (prop.reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
+                            row[prop.key] = item[valueField] ?? item.id;
                             Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]: any) => {
                                 row[targetKey] = item[sourceKey];
                             });
@@ -437,6 +446,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
                     });
                     return calculateItemComputedProperties(row);
                 });
+            }
             }
         }
         return loadedItems;
@@ -451,7 +461,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
     };
 
     React.useEffect(() => {
-        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && field.catalog_source_type === 'project_catalog' && catalogItems.length > 0) {
+        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && (field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form')) {
             const mode = field.catalog_prepopulate_mode || 'all';
             if (mode !== 'none') {
                 commitItems(items);
@@ -465,12 +475,12 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
             let updated = { ...entry, [propertyKey]: propValue };
 
             // Catalog references auto-injection
-            if (propDef?.type === 'select' && propDef.reference?.source_type === 'catalog') {
-                const selectedItem = (catalogItems.length ? catalogItems : [
-                    { id: 'prod_1', label: 'Product A', default_price: 15.0 },
-                    { id: 'prod_2', label: 'Product B', default_price: 25.0 },
-                    { id: 'prod_3', label: 'Product C', default_price: 9.99 },
-                ]).find((item: any) => String(item.id) === String(propValue));
+            if (propDef?.type === 'select' && (propDef.reference?.source_type === 'catalog' || propDef.reference?.source_type === 'catalog_form')) {
+                const valueField = propDef.reference.value_field || (propDef.reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
+                const sourceItems = propDef.reference.source_items?.length
+                    ? propDef.reference.source_items
+                    : (catalogItems.length ? catalogItems : []);
+                const selectedItem = sourceItems.find((item: any) => String(item[valueField] ?? item.id) === String(propValue));
 
                 if (selectedItem) {
                     // Auto-fill default mappings
@@ -517,13 +527,17 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
         const isReadOnly = property.type === 'computed' || property.edit_mode === 'fixed';
 
         if (property.type === 'select') {
-            const isCatalog = property.reference?.source_type === 'catalog';
-            const options = isCatalog 
-                ? (catalogItems.length ? catalogItems : [
-                    { id: 'prod_1', label: 'Product A', default_price: 15.0 },
-                    { id: 'prod_2', label: 'Product B', default_price: 25.0 },
-                    { id: 'prod_3', label: 'Product C', default_price: 9.99 },
-                  ]).map((item: any) => ({ label: item.label, value: item.id }))
+            const isCatalog = property.reference?.source_type === 'catalog' || property.reference?.source_type === 'catalog_form';
+            const valueField = property.reference?.value_field || (property.reference?.source_type === 'catalog_form' ? 'sku_code' : 'id');
+            const labelField = property.reference?.label_field || 'label';
+            const options = isCatalog
+                ? (property.reference?.source_items?.length
+                    ? property.reference.source_items
+                    : (catalogItems.length ? catalogItems : []))
+                    .map((item: any) => ({
+                        label: String(item[labelField] ?? item.label ?? item.id),
+                        value: String(item[valueField] ?? item.id),
+                    }))
                 : (property.options || []);
 
             return (
@@ -757,12 +771,16 @@ const FormSimulator: React.FC = () => {
                 const data = await formAPI.get(formId);
                 const loaded = data.blueprint_draft || data.blueprint_live;
                 if (loaded) {
-                    setBlueprint(loaded);
-                    setProjectId(data.project_id || loaded?.meta?.app_id || null);
+                    const hydrated = await hydrateBlueprintCatalogForms(loaded, data.id, {
+                        listSources: (consumerFormId) => formAPI.listCatalogLookupSources(consumerFormId),
+                        getOptions: (consumerFormId, catalogFormId) => formAPI.getCatalogLookupOptions(consumerFormId, catalogFormId),
+                    });
+                    setBlueprint(hydrated as FormBlueprint);
+                    setProjectId(data.project_id || hydrated?.meta?.app_id || null);
 
                     // Pre-fill formData with any defined default values
                     const initialData: Record<string, any> = {};
-                    (loaded.ui || []).forEach((section: any) => {
+                    (hydrated.ui || []).forEach((section: any) => {
                         (section.children || []).forEach((field: any) => {
                             if (field.default_value !== undefined && field.default_value !== null && field.default_value !== '') {
                                 if (field.type === 'toggle') {
@@ -1047,9 +1065,13 @@ const FormSimulator: React.FC = () => {
                                     .filter(field => isFieldVisible(field.bind))
                                     .filter(field => !activeFieldId || field.bind === activeFieldId)
                                     .map((field, idx) => {
-                                        const displayOptions = (field.options || []).filter((opt: any) => {
+                                        const catalogField = field as import('@opla/types').FormField;
+                                        const baseOptions = fieldUsesCatalogOptionResolver(catalogField)
+                                            ? resolveCatalogFormFieldOptions(catalogField, formData)
+                                            : (field.options || []);
+                                        const displayOptions = baseOptions.filter((opt: any) => {
                                             if (rulesResult && formData) {
-                                                const filtered = getFilteredOptionsByRules(field.bind, rulesResult, formData, field.options || []);
+                                                const filtered = getFilteredOptionsByRules(field.bind, rulesResult, formData, baseOptions);
                                                 if (filtered !== null) {
                                                     return filtered.some((fOpt: any) => getOptionValue(fOpt) === getOptionValue(opt));
                                                 }

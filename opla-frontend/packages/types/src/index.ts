@@ -86,7 +86,7 @@ export interface CatalogSourceItem {
 }
 
 export interface ObjectReferenceDefinition {
-  source_type: 'dataset' | 'catalog' | 'user' | 'team' | 'submission' | 'custom';
+  source_type: 'dataset' | 'catalog' | 'catalog_form' | 'user' | 'team' | 'submission' | 'custom';
   source_id?: string;
   label_field?: string;
   value_field?: string;
@@ -138,6 +138,13 @@ export interface FieldOption {
   skip_to?: string;
 }
 
+export type CatalogRuntimeEntry = {
+  label: string;
+  value: string;
+  submission_id?: string;
+  data?: Record<string, unknown>;
+};
+
 export interface TableColumn { id: string; label: string; }
 export interface TableRow    { id: string; label: string; }
 export type TableCellType = 'checkbox' | 'radio' | 'text' | 'number' | 'dropdown';
@@ -187,12 +194,28 @@ export interface FormField {
   collection_layout?: 'cards' | 'table';
   allow_add_items?: boolean;
   allow_remove_items?: boolean;
-  catalog_source_type?: 'project_catalog';
-
-  // Cascading / filtered dropdown support
+  catalog_source_type?: 'project_catalog' | 'catalog_form';
+  catalog_form_id?: string;
+  catalog_prepopulate_mode?: string;
+  required_catalog_item_ids?: string[];
+  options_source?: 'manual' | 'catalog_form';
+  /** Catalog column bind used as dropdown display label (defaults to catalog label field). */
+  catalog_display_field?: string;
+  /** Catalog column bind stored as the submitted value (defaults to catalog key field). */
+  catalog_value_field?: string;
+  /** When true, deduplicate options by stored value (e.g. unique regions from repeated rows). */
+  catalog_unique_values?: boolean;
+  /** Parent survey field bind — child options filter when catalog_cascade_filter_column is set. */
   cascade_parent_field_id?: string;
   cascade_options_map?: Record<string, FieldOption[]>;
   cascade_dataset_filter_key?: string;
+  /** Catalog column bind matched against the parent field's stored value for cascading. */
+  catalog_cascade_filter_column?: string;
+  /** Runtime-only: full catalog rows loaded at form render time. Not persisted in blueprint. */
+  catalog_runtime_entries?: CatalogRuntimeEntry[];
+  /** Runtime-only: default key/label binds from the source catalog form. */
+  catalog_default_value_field?: string;
+  catalog_default_label_field?: string;
 
   // Decimal / currency input support
   decimal_places?: number;
@@ -456,3 +479,7 @@ export interface GenericRangeValue {
   has_no_max: boolean;
 }
 
+export {
+    fieldUsesCatalogOptionResolver,
+    resolveCatalogFormFieldOptions,
+} from './catalogFormOptions';

@@ -8,7 +8,7 @@ import MembersManagement from '../components/MembersManagement';
 import TeamsManagement from '../components/TeamsManagement';
 import RolesManagement from '../components/RolesManagement';
 import {
-    Plus, Settings, ChevronRight, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database
+    Plus, Settings, ChevronRight, ChevronLeft, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid
 } from 'lucide-react';
 import FontProfileSelector from '../components/FontProfileSelector';
 import { AnalyticsHubSkeleton } from '../components/analytics/ui';
@@ -93,15 +93,21 @@ const Dashboard: React.FC = () => {
     const [activeAnalyticsTool, setActiveAnalyticsTool] = useState<AnalyticsToolKey>('lab');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
     const [formsSubTab, setFormsSubTab] = useState<'standard' | 'catalog'>('standard');
-    const [formKind, setFormKind] = useState<'standard' | 'catalog'>('standard');
+
     const [forms, setForms] = useState<any[]>([]);
+    const [formSearchQuery, setFormSearchQuery] = useState('');
+    const [selectedProjectId, setSelectedProjectId] = useState('all');
+    const [projectSearchQuery, setProjectSearchQuery] = useState('');
+    const [formsViewMode, setFormsViewMode] = useState<'grid' | 'list'>('grid');
+    const [formsPage, setFormsPage] = useState(1);
+    const formsPageSize = 24;
+    const [isCreatingFormInline, setIsCreatingFormInline] = useState(false);
+    const [inlineFormTitle, setInlineFormTitle] = useState('');
+    const [inlineFormProjectId, setInlineFormProjectId] = useState('');
     const [tasks, setTasks] = useState<DashboardTask[]>([]);
     const [reports, setReports] = useState<DashboardReport[]>([]);
     const [showCreateProject, setShowCreateProject] = useState(false);
     const [projectName, setProjectName] = useState('');
-    const [showCreateForm, setShowCreateForm] = useState(false);
-    const [formProjectId, setFormProjectId] = useState('');
-    const [formTitle, setFormTitle] = useState('');
     const [savingForm, setSavingForm] = useState(false);
     const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
     const [taskProjectId, setTaskProjectId] = useState('');
@@ -190,7 +196,15 @@ const Dashboard: React.FC = () => {
             }
 
             try {
-                const allForms = await Promise.all(projects.map(project => formAPI.list(project.id)));
+                const allForms = await Promise.all(
+                    projects.map(async project => {
+                        const projectForms = await formAPI.list(project.id);
+                        return projectForms.map((form: any) => ({
+                            ...form,
+                            project_name: project.name,
+                        }));
+                    })
+                );
                 setForms(allForms.flat());
             } catch (err) {
                 console.error(err);
@@ -199,6 +213,8 @@ const Dashboard: React.FC = () => {
 
         fetchForms();
     }, [projects]);
+
+
 
     useEffect(() => {
         const fetchTasks = async () => {
@@ -285,7 +301,7 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         setTaskProjectId(projects[0]?.id || '');
         setReportProjectId(projects[0]?.id || '');
-        setFormProjectId(projects[0]?.id || '');
+        setInlineFormProjectId(projects[0]?.id || '');
     }, [projects]);
 
     useEffect(() => {
@@ -343,27 +359,7 @@ const Dashboard: React.FC = () => {
         }
     };
 
-    const handleCreateFormSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-        if (!formProjectId) return;
 
-        try {
-            setSavingForm(true);
-            const titleToUse = formTitle.trim() || 'New Form';
-            const newForm = await formAPI.create(formProjectId, {
-                title: titleToUse,
-                kind: formKind
-            });
-            setShowCreateForm(false);
-            setFormTitle('');
-            setFormKind('standard');
-            navigate(`/builder/${newForm.id}`);
-        } catch (err) {
-            alert('Failed to create form');
-        } finally {
-            setSavingForm(false);
-        }
-    };
 
     const handleCreateForm = async (projectId: string) => {
         try {
@@ -501,6 +497,216 @@ const Dashboard: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        setFormsPage(1);
+    }, [selectedProjectId, formsSubTab, formSearchQuery]);
+
+    const handleNewFormClick = (projectId?: string) => {
+        if (projectId) {
+            setSelectedProjectId(projectId);
+            setInlineFormProjectId(projectId);
+        }
+        setIsCreatingFormInline(prev => !prev);
+    };
+
+    const handleInlineCreateSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        
+        const projectToUse = selectedProjectId !== 'all' ? selectedProjectId : inlineFormProjectId;
+        if (!projectToUse) {
+            showToast('Select Project', 'Please select a project to create a form.', 'info');
+            return;
+        }
+
+        if (!inlineFormTitle.trim()) {
+            showToast('Enter Title', 'Please enter a title.', 'info');
+            return;
+        }
+
+        try {
+            setSavingForm(true);
+            const kindToUse = formsSubTab === 'catalog' ? 'catalog' : 'standard';
+            const newForm = await formAPI.create(projectToUse, {
+                title: inlineFormTitle.trim(),
+                kind: kindToUse,
+            });
+            showToast('Form Created', `Successfully created ${kindToUse === 'catalog' ? 'catalog' : 'form'}.`, 'success');
+            setIsCreatingFormInline(false);
+            setInlineFormTitle('');
+            navigate(`/builder/${newForm.id}`);
+        } catch (err) {
+            console.error(err);
+            showToast('Creation Failed', 'Failed to create form.', 'error');
+        } finally {
+            setSavingForm(false);
+        }
+    };
+
+    useEffect(() => {
+        setIsCreatingFormInline(false);
+        setInlineFormTitle('');
+        if (selectedProjectId !== 'all') {
+            setInlineFormProjectId(selectedProjectId);
+        } else if (projects.length > 0) {
+            setInlineFormProjectId(projects[0].id);
+        }
+    }, [selectedProjectId, formsSubTab, projects]);
+
+    const sidebarProjects = useMemo(() => {
+        if (!projectSearchQuery.trim()) return projects;
+        const query = projectSearchQuery.toLowerCase();
+        return projects.filter(p => p.name.toLowerCase().includes(query) || p.description?.toLowerCase().includes(query));
+    }, [projects, projectSearchQuery]);
+
+    const filteredForms = useMemo(() => {
+        return forms.filter(form => {
+            // Tab filtering
+            const matchesSubTab = formsSubTab === 'catalog' ? form.kind === 'catalog' : form.kind !== 'catalog';
+            if (!matchesSubTab) return false;
+
+            // Project filtering
+            if (selectedProjectId !== 'all' && form.project_id !== selectedProjectId) return false;
+
+            // Search query filtering
+            if (formSearchQuery.trim()) {
+                const query = formSearchQuery.toLowerCase();
+                const matchesTitle = form.title?.toLowerCase().includes(query);
+                const matchesSlug = form.slug?.toLowerCase().includes(query);
+                const matchesProject = form.project_name?.toLowerCase().includes(query);
+                if (!matchesTitle && !matchesSlug && !matchesProject) return false;
+            }
+
+            return true;
+        });
+    }, [forms, formsSubTab, selectedProjectId, formSearchQuery]);
+
+    const paginatedForms = useMemo(() => {
+        const start = (formsPage - 1) * formsPageSize;
+        return filteredForms.slice(start, start + formsPageSize);
+    }, [filteredForms, formsPage]);
+
+    const totalFormsPages = useMemo(() => {
+        return Math.ceil(filteredForms.length / formsPageSize);
+    }, [filteredForms]);
+
+    const renderFormCard = (form: any, showProjectBadge = false) => (
+        <div
+            key={form.id}
+            className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] p-6 rounded-md hover:border-[hsl(var(--border-hover))] transition-all group cursor-pointer shadow-sm relative overflow-hidden flex flex-col justify-between"
+            onClick={() => navigate(`/builder/${form.id}`)}
+        >
+            <div>
+                <div className="flex justify-between items-start mb-4">
+                    <div className={`p-3 rounded-md transition-all ${
+                        formsSubTab === 'catalog'
+                            ? 'bg-amber-500/10 text-amber-600 group-hover:bg-amber-500/20'
+                            : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/20'
+                    }`}>
+                        {formsSubTab === 'catalog' ? (
+                            <Database className="w-6 h-6" />
+                        ) : (
+                            <FileText className="w-6 h-6" />
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        {form.kind === 'catalog' && (
+                            <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 select-none">
+                                Catalog
+                            </span>
+                        )}
+                        <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${form.status === 'live' ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
+                            {form.status}
+                        </span>
+                    </div>
+                </div>
+
+                {showProjectBadge && form.project_name && (
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-[hsl(var(--text-secondary))] mb-2 bg-[hsl(var(--surface-elevated))]/60 px-2 py-1 rounded w-fit border border-[hsl(var(--border))]/40">
+                        <Folder className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                        <span className="truncate max-w-[150px]">{form.project_name}</span>
+                    </div>
+                )}
+
+                <h3 className="text-lg font-bold mb-1 group-hover:text-[hsl(var(--primary))] transition-colors">{form.title}</h3>
+                <p className="text-xs text-[hsl(var(--text-tertiary))] mb-6">v{form.version} • Updated {new Date(form.updated_at).toLocaleDateString()}</p>
+            </div>
+
+            <div className="flex items-center text-[hsl(var(--primary))] text-sm font-semibold opacity-0 group-hover:opacity-100 transition-all mt-auto pt-2">
+                <span>Open Builder</span>
+                <ChevronRight className="w-4 h-4 ml-1" />
+            </div>
+        </div>
+    );
+
+    const renderFormsTable = (formsList: any[]) => (
+        <div className="w-full overflow-x-auto border border-[hsl(var(--border))]/60 rounded-xl bg-[hsl(var(--surface))] shadow-sm">
+            <table className="w-full border-collapse text-left text-sm">
+                <thead>
+                    <tr className="border-b border-[hsl(var(--border))]/60 bg-[hsl(var(--surface-elevated))]/50 text-xs font-semibold text-[hsl(var(--text-tertiary))] uppercase tracking-wider select-none">
+                        <th className="px-6 py-4">Title</th>
+                        <th className="px-6 py-4">Slug</th>
+                        <th className="px-6 py-4">Version</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">Updated</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-[hsl(var(--border))]/40">
+                    {formsList.map(form => (
+                        <tr 
+                            key={form.id} 
+                            className="hover:bg-[hsl(var(--surface-elevated))]/30 transition-colors cursor-pointer group"
+                            onClick={() => navigate(`/builder/${form.id}`)}
+                        >
+                            <td className="px-6 py-4 font-semibold text-[hsl(var(--text-primary))]">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-md ${
+                                        form.kind === 'catalog' 
+                                            ? 'bg-amber-500/10 text-amber-600' 
+                                            : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
+                                    }`}>
+                                        {form.kind === 'catalog' ? <Database className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="group-hover:text-[hsl(var(--primary))] transition-colors">{form.title}</span>
+                                        {form.project_name && (
+                                            <span className="text-[10px] text-[hsl(var(--text-tertiary))] font-normal flex items-center gap-0.5 mt-0.5">
+                                                <Folder className="w-3 h-3 shrink-0" />
+                                                {form.project_name}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 text-xs font-mono text-[hsl(var(--text-secondary))]">{form.slug}</td>
+                            <td className="px-6 py-4 text-[hsl(var(--text-secondary))]">v{form.version}</td>
+                            <td className="px-6 py-4">
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                    form.status === 'live' 
+                                        ? 'bg-[hsl(var(--success))]/10 text-[hsl(var(--success))] border border-[hsl(var(--success))]/20' 
+                                        : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]/40'
+                                }`}>
+                                    {form.status}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-[hsl(var(--text-secondary))]">{new Date(form.updated_at).toLocaleDateString()}</td>
+                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-2">
+                                    <button 
+                                        onClick={() => navigate(`/builder/${form.id}`)}
+                                        className="text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10 px-3 py-1.5 rounded-lg border border-[hsl(var(--primary))]/20 transition-all"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+
     return (
         <>
             <StudioLayout
@@ -509,7 +715,7 @@ const Dashboard: React.FC = () => {
                 activeAnalyticsTool={activeAnalyticsTool}
                 onSelectAnalyticsTool={handleAnalyticsToolSelect}
                 counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, members: members?.length || 0 }}
-                contentClassName="flex-1 overflow-y-auto p-10"
+                contentClassName={activeTab === 'forms' ? "flex-1 overflow-hidden flex" : "flex-1 overflow-y-auto p-10"}
             >
                 {organizations.length === 0 && !isLoading && (
                     <div className="mb-10 card border-dashed border-2">
@@ -526,96 +732,298 @@ const Dashboard: React.FC = () => {
                 )}
 
                 {activeTab === 'forms' && (
-                    <div className="space-y-8">
-                        <div className="flex justify-between items-end">
-                            <div>
-                                <h2 className="text-3xl font-bold mb-2">My Forms</h2>
-                                <p className="text-[hsl(var(--text-secondary))]">Manage and publish your forms to collect data.</p>
+                    <div className="flex w-full h-[calc(100vh-64px)] overflow-hidden bg-[hsl(var(--background))] select-none">
+                        {/* Projects Sidebar */}
+                        <div className="w-80 border-r border-[hsl(var(--border))]/70 bg-[hsl(var(--surface))] flex flex-col shrink-0">
+                            {/* Sidebar Header */}
+                            <div className="h-16 px-6 border-b border-[hsl(var(--border))]/50 flex items-center justify-between shrink-0 bg-[hsl(var(--surface-elevated))]/20">
+                                <h3 className="font-bold text-sm text-[hsl(var(--text-primary))] flex items-center gap-2">
+                                    <Folder className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                    <span>Projects</span>
+                                </h3>
+                                <span className="text-[10px] font-bold bg-[hsl(var(--surface-elevated))] px-2 py-0.5 rounded-full border border-[hsl(var(--border))]/40 text-[hsl(var(--text-secondary))]">
+                                    {projects.length}
+                                </span>
                             </div>
-                            <button
-                                onClick={() => setShowCreateForm(true)}
-                                className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-4 py-2.5 rounded-md shadow-lg shadow-black/10 transition-all"
-                            >
-                                <Plus className="w-4 h-4" />
-                                <span>New Form</span>
-                            </button>
-                        </div>
 
-                        {/* Segmented Sub-Tabs */}
-                        <div className="flex border-b border-[hsl(var(--border))]/50 gap-6 text-sm font-semibold select-none pb-px mb-2">
-                            <button
-                                onClick={() => setFormsSubTab('standard')}
-                                className={`pb-2.5 transition-all relative ${
-                                    formsSubTab === 'standard'
-                                        ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
-                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
-                                }`}
-                            >
-                                Standard Forms
-                                <span className="ml-1.5 rounded-full bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--text-secondary))]">
-                                    {forms.filter(f => f.kind !== 'catalog').length}
-                                </span>
-                            </button>
-                            <button
-                                onClick={() => setFormsSubTab('catalog')}
-                                className={`pb-2.5 transition-all relative ${
-                                    formsSubTab === 'catalog'
-                                        ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
-                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
-                                }`}
-                            >
-                                Reference Catalogs
-                                <span className="ml-1.5 rounded-full bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--text-secondary))]">
-                                    {forms.filter(f => f.kind === 'catalog').length}
-                                </span>
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {forms.filter(f => formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog').length === 0 ? (
-                                <div className="col-span-full border-2 border-dashed border-[hsl(var(--border))] rounded-md p-12 text-center text-[hsl(var(--text-tertiary))]">
-                                    <Activity className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                                    <p>No {formsSubTab === 'catalog' ? 'catalogs' : 'forms'} found. Click New Form to start.</p>
+                            {/* Sidebar Search */}
+                            <div className="p-4 border-b border-[hsl(var(--border))]/30 bg-[hsl(var(--surface-elevated))]/10 shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search projects..."
+                                        value={projectSearchQuery}
+                                        onChange={(e) => setProjectSearchQuery(e.target.value)}
+                                        className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg pl-9 pr-3 py-1.5 text-xs focus:outline-none focus:border-[hsl(var(--primary))] transition-colors"
+                                    />
                                 </div>
-                            ) : (
-                                forms.filter(f => formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog').map(form => (
-                                    <div
-                                        key={form.id}
-                                        className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] p-6 rounded-md hover:border-[hsl(var(--border-hover))] transition-all group cursor-pointer shadow-sm relative overflow-hidden"
-                                        onClick={() => navigate(`/builder/${form.id}`)}
-                                    >
-                                        <div className="flex justify-between items-start mb-6">
-                                            <div className={`p-3 rounded-md transition-all ${
-                                                formsSubTab === 'catalog'
-                                                    ? 'bg-amber-500/10 text-amber-600 group-hover:bg-amber-500/20'
-                                                    : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/20'
-                                            }`}>
-                                                {formsSubTab === 'catalog' ? (
-                                                    <Database className="w-6 h-6" />
-                                                ) : (
-                                                    <FileText className="w-6 h-6" />
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                {form.kind === 'catalog' && (
-                                                    <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 select-none">
-                                                        Catalog
-                                                    </span>
-                                                )}
-                                                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${form.status === 'live' ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
-                                                    {form.status}
+                            </div>
+
+                            {/* Projects List */}
+                            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                                <button
+                                    onClick={() => setSelectedProjectId('all')}
+                                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                                        selectedProjectId === 'all'
+                                            ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-[hsl(var(--primary))]/20'
+                                            : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))]/50 border border-transparent'
+                                    }`}
+                                >
+                                    <span className="truncate">All Projects</span>
+                                    <span className="text-[10px] opacity-60">
+                                        {forms.filter(f => formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog').length}
+                                    </span>
+                                </button>
+
+                                <div className="h-px bg-[hsl(var(--border))]/40 my-2" />
+
+                                {sidebarProjects.map(project => {
+                                    const count = forms.filter(f => f.project_id === project.id && (formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog')).length;
+                                    const isSelected = selectedProjectId === project.id;
+                                    return (
+                                        <button
+                                            key={project.id}
+                                            onClick={() => setSelectedProjectId(project.id)}
+                                            className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-xs font-medium transition-all text-left ${
+                                                isSelected
+                                                    ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-[hsl(var(--primary))]/20 font-semibold'
+                                                    : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] hover:bg-[hsl(var(--surface-elevated))]/50 border border-transparent'
+                                            }`}
+                                        >
+                                            <span className="truncate pr-2">{project.name}</span>
+                                            {count > 0 && (
+                                                <span className="text-[9px] font-bold bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))]/40 shrink-0">
+                                                    {count}
                                                 </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+
+                                {sidebarProjects.length === 0 && (
+                                    <div className="text-center py-6 text-xs text-[hsl(var(--text-tertiary))]">
+                                        No projects found.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Forms Main Workspace Area */}
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            {/* Workspace Header */}
+                            <div className="h-16 px-8 border-b border-[hsl(var(--border))]/50 flex items-center justify-between shrink-0 bg-[hsl(var(--surface))]">
+                                <div className="min-w-0">
+                                    <h2 className="text-base font-bold text-[hsl(var(--text-primary))] flex items-center gap-2 truncate">
+                                        {selectedProjectId === 'all' ? (
+                                            'All Projects'
+                                        ) : (
+                                            projects.find(p => p.id === selectedProjectId)?.name || 'Project forms'
+                                        )}
+                                        <span className="text-xs font-normal text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 rounded border border-[hsl(var(--border))]/45">
+                                            {filteredForms.length} {formsSubTab === 'catalog' ? 'Catalog' : 'Standard Forms'}
+                                        </span>
+                                    </h2>
+                                </div>
+                            </div>
+
+                            {/* Filters Panel */}
+                            <div className="px-8 py-3 border-b border-[hsl(var(--border))]/30 bg-[hsl(var(--surface-elevated))]/10 shrink-0 flex items-center justify-between gap-4">
+                                {/* Left Subtabs */}
+                                <div className="flex border-b border-[hsl(var(--border))]/30 gap-6 text-xs font-semibold select-none pb-px">
+                                    <button
+                                        onClick={() => setFormsSubTab('standard')}
+                                        className={`pb-2.5 transition-all relative ${
+                                            formsSubTab === 'standard'
+                                                ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
+                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
+                                        }`}
+                                    >
+                                        Standard
+                                    </button>
+                                    <button
+                                        onClick={() => setFormsSubTab('catalog')}
+                                        className={`pb-2.5 transition-all relative ${
+                                            formsSubTab === 'catalog'
+                                                ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
+                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
+                                        }`}
+                                    >
+                                        Catalog
+                                    </button>
+                                </div>
+
+                                {/* Right: Form Search, Add, and Layout Select */}
+                                <div className="flex items-center gap-4">
+                                    {/* Search forms */}
+                                    <div className="relative w-56">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search forms..."
+                                            value={formSearchQuery}
+                                            onChange={(e) => setFormSearchQuery(e.target.value)}
+                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-[hsl(var(--primary))] transition-colors"
+                                        />
+                                    </div>
+
+                                    {/* Add Button */}
+                                    <button
+                                        onClick={() => handleNewFormClick()}
+                                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+                                            isCreatingFormInline
+                                                ? 'bg-[hsl(var(--primary))]/10 border-[hsl(var(--primary))]/30 text-[hsl(var(--primary))] font-bold'
+                                                : 'bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] border-transparent text-white shadow-sm'
+                                        }`}
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Add {formsSubTab === 'catalog' ? 'Catalog' : 'Standard Form'}</span>
+                                    </button>
+
+                                    {/* Grid / List view toggle */}
+                                    <div className="flex border border-[hsl(var(--border))] rounded-lg p-0.5 bg-[hsl(var(--surface))] text-xs shrink-0">
+                                        <button
+                                            onClick={() => setFormsViewMode('grid')}
+                                            className={`p-1 rounded-md transition-all ${
+                                                formsViewMode === 'grid'
+                                                    ? 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/40'
+                                                    : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] border border-transparent'
+                                            }`}
+                                            title="Grid View"
+                                        >
+                                            <Grid className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={() => setFormsViewMode('list')}
+                                            className={`p-1 rounded-md transition-all ${
+                                                formsViewMode === 'list'
+                                                    ? 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--primary))] shadow-sm border border-[hsl(var(--border))]/40'
+                                                    : 'text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] border border-transparent'
+                                            }`}
+                                            title="List View"
+                                        >
+                                            <List className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Inline Create Form Section */}
+                            {isCreatingFormInline && (
+                                <div className="px-8 py-5 border-b border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/20 flex flex-col gap-3 shrink-0 animate-in slide-in-from-top duration-150">
+                                    <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">
+                                        Create New {formsSubTab === 'catalog' ? 'Catalog' : 'Standard Form'}
+                                    </h3>
+                                    <form onSubmit={handleInlineCreateSubmit} className="flex flex-col md:flex-row items-end gap-4">
+                                        {selectedProjectId === 'all' && (
+                                            <div className="w-full md:w-60 flex flex-col gap-1">
+                                                <label className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">Project</label>
+                                                <select
+                                                    value={inlineFormProjectId}
+                                                    onChange={(e) => setInlineFormProjectId(e.target.value)}
+                                                    className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg px-3 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:outline-none focus:border-[hsl(var(--primary))]"
+                                                    required
+                                                >
+                                                    <option value="" disabled>Select project...</option>
+                                                    {projects.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                                    ))}
+                                                </select>
                                             </div>
+                                        )}
+
+                                        <div className="flex-1 flex flex-col gap-1 w-full">
+                                            <label className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
+                                                {formsSubTab === 'catalog' ? 'Catalog Title' : 'Standard Form Title'}
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={inlineFormTitle}
+                                                onChange={(e) => setInlineFormTitle(e.target.value)}
+                                                placeholder={formsSubTab === 'catalog' ? "e.g. Parts Catalog" : "e.g. Customer Feedback"}
+                                                className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg px-3 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:outline-none focus:border-[hsl(var(--primary))]"
+                                                required
+                                                autoFocus
+                                            />
                                         </div>
-                                        <h3 className="text-lg font-bold mb-1">{form.title}</h3>
-                                        <p className="text-xs text-[hsl(var(--text-tertiary))] mb-6">v{form.version} • Updated {new Date(form.updated_at).toLocaleDateString()}</p>
-                                        <div className="flex items-center text-[hsl(var(--primary))] text-sm font-semibold opacity-0 group-hover:opacity-100 transition-all">
-                                            <span>Open Builder</span>
-                                            <ChevronRight className="w-4 h-4 ml-1" />
+
+                                        <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsCreatingFormInline(false);
+                                                    setInlineFormTitle('');
+                                                }}
+                                                className="px-4 py-1.5 border border-[hsl(var(--border))] rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={savingForm || (selectedProjectId === 'all' && !inlineFormProjectId)}
+                                                className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white px-4 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
+                                            >
+                                                {savingForm ? 'Creating...' : 'Create & Open'}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            )}
+
+                            {/* Scrollable Main content */}
+                            <div className="flex-1 overflow-y-auto p-8 flex flex-col justify-between">
+                                <div className="space-y-6">
+                                    {paginatedForms.length === 0 ? (
+                                        <div className="border border-dashed border-[hsl(var(--border))] rounded-xl p-12 text-center text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface))] max-w-xl mx-auto mt-12">
+                                            <Activity className="w-10 h-10 mx-auto mb-4 opacity-20" />
+                                            <h4 className="font-bold text-sm text-[hsl(var(--text-primary))] mb-1">No forms found</h4>
+                                            <p className="text-xs mb-4">Try adjusting your filters, or click Add to start building.</p>
+                                            {selectedProjectId !== 'all' && (
+                                                <button
+                                                    onClick={() => handleNewFormClick()}
+                                                    className="bg-[hsl(var(--primary))]/10 hover:bg-[hsl(var(--primary))]/15 text-[hsl(var(--primary))] text-xs font-semibold px-4 py-2 rounded-lg border border-[hsl(var(--primary))]/20 transition-all"
+                                                >
+                                                    Create your first form
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : formsViewMode === 'grid' ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {paginatedForms.map(form => renderFormCard(form, selectedProjectId === 'all'))}
+                                        </div>
+                                    ) : (
+                                        renderFormsTable(paginatedForms)
+                                    )}
+                                </div>
+
+                                {/* Pagination Controls */}
+                                {totalFormsPages > 1 && (
+                                    <div className="mt-8 pt-4 border-t border-[hsl(var(--border))]/30 flex items-center justify-between text-xs shrink-0 select-none">
+                                        <span className="text-[hsl(var(--text-secondary))] font-medium">
+                                            Showing <span className="font-semibold text-[hsl(var(--text-primary))]">{(formsPage - 1) * formsPageSize + 1}</span> to <span className="font-semibold text-[hsl(var(--text-primary))]">{Math.min(formsPage * formsPageSize, filteredForms.length)}</span> of <span className="font-semibold text-[hsl(var(--text-primary))]">{filteredForms.length}</span> {formsSubTab === 'catalog' ? 'catalog' : 'standard forms'}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                disabled={formsPage <= 1}
+                                                onClick={() => setFormsPage(prev => Math.max(1, prev - 1))}
+                                                className="p-1.5 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--text-primary))] disabled:opacity-40 disabled:hover:bg-[hsl(var(--surface))] disabled:hover:text-[hsl(var(--text-secondary))] transition-all"
+                                            >
+                                                <ChevronLeft className="w-4 h-4" />
+                                            </button>
+                                            <span className="text-[hsl(var(--text-secondary))] font-medium">
+                                                Page <span className="font-semibold text-[hsl(var(--text-primary))]">{formsPage}</span> of <span className="font-semibold text-[hsl(var(--text-primary))]">{totalFormsPages}</span>
+                                            </span>
+                                            <button
+                                                disabled={formsPage >= totalFormsPages}
+                                                onClick={() => setFormsPage(prev => Math.min(totalFormsPages, prev + 1))}
+                                                className="p-1.5 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--text-primary))] disabled:opacity-40 disabled:hover:bg-[hsl(var(--surface))] disabled:hover:text-[hsl(var(--text-secondary))] transition-all"
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </button>
                                         </div>
                                     </div>
-                                ))
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1189,108 +1597,6 @@ const Dashboard: React.FC = () => {
                                     className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-md shadow-lg shadow-black/10 transition-all"
                                 >
                                     Create
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {showCreateForm && (
-                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-[32px] p-8 w-full max-w-md shadow-2xl">
-                        <h2 className="text-2xl font-bold mb-6">Create New Form</h2>
-                        <form onSubmit={handleCreateFormSubmit} className="space-y-6">
-                            <div>
-                                <label className="label">Project</label>
-                                <select
-                                    value={formProjectId}
-                                    onChange={(event) => setFormProjectId(event.target.value)}
-                                    className="input"
-                                    required
-                                >
-                                    {projects.length === 0 && <option value="" disabled>No projects available</option>}
-                                    {projects.map(project => (
-                                        <option key={project.id} value={project.id}>{project.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="label">Form Title</label>
-                                <input
-                                    value={formTitle}
-                                    onChange={(event) => setFormTitle(event.target.value)}
-                                    className="input"
-                                    placeholder="e.g. Customer Satisfaction Survey"
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
-                                    Select Form Type
-                                </label>
-                                <div className="grid grid-cols-2 gap-3.5">
-                                    <div
-                                        onClick={() => setFormKind('standard')}
-                                        className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all select-none text-center ${
-                                            formKind === 'standard'
-                                                ? 'border-emerald-500 bg-emerald-500/5 shadow-md shadow-emerald-500/5'
-                                                : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
-                                        }`}
-                                    >
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                            formKind === 'standard'
-                                                ? 'bg-emerald-500 text-white'
-                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
-                                        }`}>
-                                            <FileText className="w-4 h-4" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-[hsl(var(--text-primary))]">Standard Form</p>
-                                            <p className="text-[9px] text-[hsl(var(--text-tertiary))] mt-1 leading-snug">
-                                                Surveys, checklists, audits and signatures.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        onClick={() => setFormKind('catalog')}
-                                        className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all select-none text-center ${
-                                            formKind === 'catalog'
-                                                ? 'border-amber-500 bg-amber-500/5 shadow-md shadow-amber-500/5'
-                                                : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
-                                        }`}
-                                    >
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                            formKind === 'catalog'
-                                                ? 'bg-amber-500 text-white'
-                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
-                                        }`}>
-                                            <Database className="w-4 h-4" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-[hsl(var(--text-primary))]">Catalog Form</p>
-                                            <p className="text-[9px] text-[hsl(var(--text-tertiary))] mt-1 leading-snug">
-                                                Lookup reference dataset with keys.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex space-x-3 mt-8">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCreateForm(false)}
-                                    className="flex-1 px-6 py-3 rounded-md border border-[hsl(var(--border))] text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={savingForm || projects.length === 0}
-                                    className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-bold py-3 rounded-md shadow-lg shadow-black/10 transition-all disabled:opacity-50 flex items-center justify-center"
-                                >
-                                    {savingForm ? 'Creating...' : 'Create Form'}
                                 </button>
                             </div>
                         </form>

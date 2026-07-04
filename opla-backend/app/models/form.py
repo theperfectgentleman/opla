@@ -7,6 +7,11 @@ from app.models.base import Base
 from app.models.project_access import AccessorType
 import enum
 
+
+class FormKind(str, enum.Enum):
+    STANDARD = "standard"
+    CATALOG = "catalog"
+
 class FormStatus(str, enum.Enum):
     DRAFT = "draft"
     LIVE = "live"
@@ -19,6 +24,12 @@ class Form(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)
     title = Column(String, nullable=False)
     slug = Column(String, unique=True, index=True, nullable=False)
+    # kind distinguishes standard data-collection forms from catalog (reference data) forms
+    kind = Column(
+        Enum(FormKind, name="form_kind", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+        default=FormKind.STANDARD,
+    )
     blueprint_draft = Column(JSONB, nullable=True)
     blueprint_live = Column(JSONB, nullable=True)
     version = Column(Integer, default=1, nullable=False)
@@ -41,6 +52,10 @@ class Form(Base):
         Enum(AccessorType, name="accessor_type", values_callable=lambda obj: [e.value for e in obj]),
         nullable=True,
     )
+    # Catalog-specific: sysId of the field that serves as the unique record key
+    catalog_key_field_id = Column(String, nullable=True)
+    # Catalog-specific: sysId of the field used as the human-readable display label
+    catalog_label_field_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

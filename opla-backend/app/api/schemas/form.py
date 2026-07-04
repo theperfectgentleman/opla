@@ -1,8 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, Dict, List
-from app.models.form import FormStatus
+from typing import Any, Optional, Dict, List
+from app.models.form import FormKind, FormStatus
 from app.models.form_version import FormVersionKind
 from app.models.project_access import AccessorType
 
@@ -33,6 +33,7 @@ class FormBase(BaseModel):
 
 class FormCreateIn(FormBase):
     blueprint: Optional[Dict] = None
+    kind: FormKind = FormKind.STANDARD
 
 class FormCreate(FormBase):
     project_id: UUID
@@ -43,6 +44,7 @@ class FormOut(FormBase):
     id: UUID
     project_id: UUID
     slug: str
+    kind: FormKind
     dataset_id: Optional[UUID] = None
     current_dataset_schema_version_number: Optional[int] = None
     blueprint_draft: Optional[Dict] = None
@@ -57,6 +59,9 @@ class FormOut(FormBase):
     assigned_accessor_type: Optional[AccessorType] = None
     guest_accessor_id: Optional[UUID] = None
     guest_accessor_type: Optional[AccessorType] = None
+    # Catalog-specific designations
+    catalog_key_field_id: Optional[str] = None
+    catalog_label_field_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -114,3 +119,28 @@ class PublishFormIn(BaseModel):
 class FormVersionsListOut(BaseModel):
     live: Optional[FormVersionOut] = None
     drafts: List[FormVersionOut] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Catalog-specific schemas
+# ---------------------------------------------------------------------------
+
+class CatalogDesignationIn(BaseModel):
+    """PATCH body for setting key/label field designations on a catalog form."""
+    catalog_key_field_id: Optional[str] = None
+    catalog_label_field_id: Optional[str] = None
+
+
+class CatalogEntryUpsertIn(BaseModel):
+    """Body for creating or updating a catalog entry."""
+    data: Dict[str, Any]
+
+
+class CatalogEntryOut(BaseModel):
+    """Resolved catalog entry (latest submission per key value)."""
+    submission_id: str
+    key_value: Optional[str] = None
+    label_value: Optional[str] = None
+    data: Dict[str, Any]
+    catalog_is_active: bool
+    created_at: Optional[str] = None

@@ -8,7 +8,7 @@ import MembersManagement from '../components/MembersManagement';
 import TeamsManagement from '../components/TeamsManagement';
 import RolesManagement from '../components/RolesManagement';
 import {
-    Plus, Settings, ChevronRight, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2
+    Plus, Settings, ChevronRight, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database
 } from 'lucide-react';
 import FontProfileSelector from '../components/FontProfileSelector';
 import { AnalyticsHubSkeleton } from '../components/analytics/ui';
@@ -92,6 +92,8 @@ const Dashboard: React.FC = () => {
     const [activeTab, setActiveTab] = useState('forms');
     const [activeAnalyticsTool, setActiveAnalyticsTool] = useState<AnalyticsToolKey>('lab');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
+    const [formsSubTab, setFormsSubTab] = useState<'standard' | 'catalog'>('standard');
+    const [formKind, setFormKind] = useState<'standard' | 'catalog'>('standard');
     const [forms, setForms] = useState<any[]>([]);
     const [tasks, setTasks] = useState<DashboardTask[]>([]);
     const [reports, setReports] = useState<DashboardReport[]>([]);
@@ -348,9 +350,13 @@ const Dashboard: React.FC = () => {
         try {
             setSavingForm(true);
             const titleToUse = formTitle.trim() || 'New Form';
-            const newForm = await formAPI.create(formProjectId, { title: titleToUse });
+            const newForm = await formAPI.create(formProjectId, {
+                title: titleToUse,
+                kind: formKind
+            });
             setShowCreateForm(false);
             setFormTitle('');
+            setFormKind('standard');
             navigate(`/builder/${newForm.id}`);
         } catch (err) {
             alert('Failed to create form');
@@ -535,26 +541,71 @@ const Dashboard: React.FC = () => {
                             </button>
                         </div>
 
+                        {/* Segmented Sub-Tabs */}
+                        <div className="flex border-b border-[hsl(var(--border))]/50 gap-6 text-sm font-semibold select-none pb-px mb-2">
+                            <button
+                                onClick={() => setFormsSubTab('standard')}
+                                className={`pb-2.5 transition-all relative ${
+                                    formsSubTab === 'standard'
+                                        ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
+                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
+                                }`}
+                            >
+                                Standard Forms
+                                <span className="ml-1.5 rounded-full bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--text-secondary))]">
+                                    {forms.filter(f => f.kind !== 'catalog').length}
+                                </span>
+                            </button>
+                            <button
+                                onClick={() => setFormsSubTab('catalog')}
+                                className={`pb-2.5 transition-all relative ${
+                                    formsSubTab === 'catalog'
+                                        ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
+                                        : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
+                                }`}
+                            >
+                                Reference Catalogs
+                                <span className="ml-1.5 rounded-full bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--text-secondary))]">
+                                    {forms.filter(f => f.kind === 'catalog').length}
+                                </span>
+                            </button>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {forms.length === 0 ? (
+                            {forms.filter(f => formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog').length === 0 ? (
                                 <div className="col-span-full border-2 border-dashed border-[hsl(var(--border))] rounded-md p-12 text-center text-[hsl(var(--text-tertiary))]">
                                     <Activity className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                                    <p>No forms found. Create a project first.</p>
+                                    <p>No {formsSubTab === 'catalog' ? 'catalogs' : 'forms'} found. Click New Form to start.</p>
                                 </div>
                             ) : (
-                                forms.map(form => (
+                                forms.filter(f => formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog').map(form => (
                                     <div
                                         key={form.id}
-                                        className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] p-6 rounded-md hover:border-[hsl(var(--border-hover))] transition-all group cursor-pointer shadow-sm"
+                                        className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] p-6 rounded-md hover:border-[hsl(var(--border-hover))] transition-all group cursor-pointer shadow-sm relative overflow-hidden"
                                         onClick={() => navigate(`/builder/${form.id}`)}
                                     >
                                         <div className="flex justify-between items-start mb-6">
-                                            <div className="p-3 bg-[hsl(var(--primary))]/10 rounded-md group-hover:bg-[hsl(var(--primary))]/20 transition-all">
-                                                <FileText className="w-6 h-6 text-[hsl(var(--primary))]" />
+                                            <div className={`p-3 rounded-md transition-all ${
+                                                formsSubTab === 'catalog'
+                                                    ? 'bg-amber-500/10 text-amber-600 group-hover:bg-amber-500/20'
+                                                    : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/20'
+                                            }`}>
+                                                {formsSubTab === 'catalog' ? (
+                                                    <Database className="w-6 h-6" />
+                                                ) : (
+                                                    <FileText className="w-6 h-6" />
+                                                )}
                                             </div>
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${form.status === 'live' ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
-                                                {form.status}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                {form.kind === 'catalog' && (
+                                                    <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 select-none">
+                                                        Catalog
+                                                    </span>
+                                                )}
+                                                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${form.status === 'live' ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
+                                                    {form.status}
+                                                </span>
+                                            </div>
                                         </div>
                                         <h3 className="text-lg font-bold mb-1">{form.title}</h3>
                                         <p className="text-xs text-[hsl(var(--text-tertiary))] mb-6">v{form.version} • Updated {new Date(form.updated_at).toLocaleDateString()}</p>
@@ -1173,6 +1224,58 @@ const Dashboard: React.FC = () => {
                                     placeholder="e.g. Customer Satisfaction Survey"
                                     autoFocus
                                 />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
+                                    Select Form Type
+                                </label>
+                                <div className="grid grid-cols-2 gap-3.5">
+                                    <div
+                                        onClick={() => setFormKind('standard')}
+                                        className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all select-none text-center ${
+                                            formKind === 'standard'
+                                                ? 'border-emerald-500 bg-emerald-500/5 shadow-md shadow-emerald-500/5'
+                                                : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                            formKind === 'standard'
+                                                ? 'bg-emerald-500 text-white'
+                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
+                                        }`}>
+                                            <FileText className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-[hsl(var(--text-primary))]">Standard Form</p>
+                                            <p className="text-[9px] text-[hsl(var(--text-tertiary))] mt-1 leading-snug">
+                                                Surveys, checklists, audits and signatures.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        onClick={() => setFormKind('catalog')}
+                                        className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all select-none text-center ${
+                                            formKind === 'catalog'
+                                                ? 'border-amber-500 bg-amber-500/5 shadow-md shadow-amber-500/5'
+                                                : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                            formKind === 'catalog'
+                                                ? 'bg-amber-500 text-white'
+                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
+                                        }`}>
+                                            <Database className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-[hsl(var(--text-primary))]">Catalog Form</p>
+                                            <p className="text-[9px] text-[hsl(var(--text-tertiary))] mt-1 leading-snug">
+                                                Lookup reference dataset with keys.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div className="flex space-x-3 mt-8">
                                 <button

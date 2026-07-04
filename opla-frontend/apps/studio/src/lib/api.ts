@@ -423,7 +423,7 @@ export const projectAPI = {
 // ============= Form API Methods =============
 
 export const formAPI = {
-    create: async (projectId: string, data: { title: string; blueprint?: any; is_public?: boolean }) => {
+    create: async (projectId: string, data: { title: string; blueprint?: any; is_public?: boolean; kind?: 'standard' | 'catalog' }) => {
         const response = await apiClient.post(`/projects/${projectId}/forms`, data);
         return response.data;
     },
@@ -500,8 +500,29 @@ export const formAPI = {
         const response = await apiClient.get(`/forms/${formId}/runtime`);
         return response.data;
     },
-    list: async (projectId: string) => {
-        const response = await apiClient.get(`/projects/${projectId}/forms`);
+    list: async (projectId: string, kind?: 'standard' | 'catalog') => {
+        const params = kind ? `?kind=${kind}` : '';
+        const response = await apiClient.get(`/projects/${projectId}/forms${params}`);
+        return response.data;
+    },
+    // --------------- Catalog-specific methods ---------------
+    updateCatalogDesignations: async (
+        formId: string,
+        data: { catalog_key_field_id?: string | null; catalog_label_field_id?: string | null },
+    ) => {
+        const response = await apiClient.patch(`/forms/${formId}/catalog-designations`, data);
+        return response.data;
+    },
+    getCatalogEntries: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/catalog-entries`);
+        return response.data;
+    },
+    upsertCatalogEntry: async (formId: string, data: Record<string, any>) => {
+        const response = await apiClient.post(`/forms/${formId}/catalog-entries`, { data });
+        return response.data;
+    },
+    setCatalogEntryActive: async (formId: string, submissionId: string, active: boolean) => {
+        const response = await apiClient.patch(`/forms/${formId}/catalog-entries/${submissionId}/active`, { active });
         return response.data;
     },
 };

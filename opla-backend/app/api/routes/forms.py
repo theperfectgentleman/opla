@@ -1,10 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from app.api.schemas.automation import FormAutomationRuleCreate, FormAutomationRuleOut, FormAutomationRuleUpdate
 from app.api.dependencies import get_current_user, get_db
 from app.api.schemas.dataset import FormDatasetOut, FormDatasetUpdateIn, LookupDatasetSourceOut, LookupOptionsOut
-from app.api.schemas.form import FormCreateIn, FormOut, FormRuntimeOut, FormVersionOut, FormStatsOut, PublishFormIn, FormResponsibilityUpdateIn
+from app.api.schemas.form import (
+    CatalogDesignationIn,
+    CatalogEntryOut,
+    CatalogEntryUpsertIn,
+    FormCreateIn,
+    FormOut,
+    FormRuntimeOut,
+    FormVersionOut,
+    FormStatsOut,
+    PublishFormIn,
+    FormResponsibilityUpdateIn,
+)
+from app.services.catalog_form_service import CatalogFormService
 from app.services.dataset_service import DatasetService
 from app.services.form_automation_service import FormAutomationService
 from app.services.form_service import FormService
@@ -28,7 +41,8 @@ def create_form(
         db=db,
         project_id=project_id,
         title=form_in.title,
-        blueprint=form_in.blueprint
+        blueprint=form_in.blueprint,
+        kind=form_in.kind.value,
     )
 
 @project_router.get("", response_model=List[FormOut])
@@ -254,6 +268,9 @@ def publish_form(
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_publish_form(db, current_user.id, source_form)
 
+    # Extra validation for catalog forms: key + label fields must be designated
+    CatalogFormService.validate_ready_to_publish(source_form)
+
     payload = payload or PublishFormIn()
 
     try:
@@ -271,6 +288,91 @@ def publish_form(
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     return form
+
+
+# ---------------------------------------------------------------------------
+# Catalog-specific endpoints
+# ---------------------------------------------------------------------------
+
+@router.patch("/{form_id}/catalog-designations", response_model=FormOut)
+def update_catalog_designations(
+    form_id: uuid.UUID,
+    payload: CatalogDesignationIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Set or update the key/label field designations for a catalog form."""
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    return CatalogFormService.update_catalog_designations(
+        db,
+        form,
+        catalog_key_field_id=payload.catalog_key_field_id,
+        catalog_label_field_id=payload.catalog_label_field_id,
+    )
+
+
+@router.get("/{form_id}/catalog-entries", response_model=List[CatalogEntryOut])
+def get_catalog_entries(
+    form_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return resolved catalog entries (latest per key, active only)."""
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    return CatalogFormService.get_catalog_entries(db, form)
+
+
+@router.post("/{form_id}/catalog-entries", response_model=CatalogEntryOut, status_code=status.HTTP_201_CREATED)
+def upsert_catalog_entry(
+    form_id: uuid.UUID,
+    payload: CatalogEntryUpsertIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create or update a catalog entry (append-only; latest per key wins)."""
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    submission = CatalogFormService.upsert_entry(db, form, payload.data, actor_id=current_user.id)
+    # Return in CatalogEntryOut shape
+    key_field = form.catalog_key_field_id or ""
+    label_field = form.catalog_label_field_id or key_field
+    data = submission.data or {}
+    return CatalogEntryOut(
+        submission_id=str(submission.id),
+        key_value=data.get(key_field),
+        label_value=data.get(label_field),
+        data=data,
+        catalog_is_active=True,
+        created_at=submission.created_at.isoformat() if submission.created_at else None,
+    )
+
+
+class _ActivePayload(BaseModel):
+    active: bool
+
+
+@router.patch("/{form_id}/catalog-entries/{submission_id}/active", response_model=CatalogEntryOut)
+def set_catalog_entry_active(
+    form_id: uuid.UUID,
+    submission_id: uuid.UUID,
+    payload: _ActivePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Activate or deactivate a catalog entry in one click."""
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
+    return CatalogFormService.set_entry_active(db, form, submission_id, payload.active)
 
 
 @router.put("/{form_id}/responsibility", response_model=FormOut)

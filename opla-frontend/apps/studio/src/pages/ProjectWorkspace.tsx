@@ -15,7 +15,6 @@ import {
     Database,
     XCircle,
     MapPin,
-    Trash2,
     Tag,
 } from 'lucide-react';
 
@@ -67,6 +66,9 @@ type WorkspaceForm = ResponsibilityFields & {
     status: string;
     version: number;
     updated_at: string;
+    kind?: 'standard' | 'catalog';
+    catalog_key_field_id?: string | null;
+    catalog_label_field_id?: string | null;
 };
 
 type ReviewQueueItem = {
@@ -80,20 +82,6 @@ type ReviewQueueItem = {
     created_at: string;
 };
 
-type CatalogItem = {
-    id: string;
-    project_id: string;
-    sku_code: string;
-    label: string;
-    default_price?: number | null;
-    unit?: string | null;
-    brand?: string | null;
-    is_active: boolean;
-    price_editable: boolean;
-    metadata_json?: Record<string, any> | null;
-    created_at: string;
-    updated_at: string;
-};
 
 type WorkspaceDataset = {
     id: string;
@@ -305,7 +293,14 @@ const ProjectWorkspace: React.FC = () => {
     } = useOrg();
 
     const [forms, setForms] = useState<WorkspaceForm[]>([]);
-    const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+    const [isCreateFormModalOpen, setIsCreateFormModalOpen] = useState(false);
+    const [newFormTitle, setNewFormTitle] = useState('');
+    const [newFormKind, setNewFormKind] = useState<'standard' | 'catalog'>('standard');
+    const [selectedCatalogForm, setSelectedCatalogForm] = useState<WorkspaceForm | null>(null);
+    const [catalogEntries, setCatalogEntries] = useState<any[]>([]);
+    const [selectedCatalogFields, setSelectedCatalogFields] = useState<any[]>([]);
+    const [entriesLoading, setEntriesLoading] = useState(false);
+    const [newEntryData, setNewEntryData] = useState<Record<string, any>>({});
     const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
     const [tasks, setTasks] = useState<ProjectTask[]>([]);
     const [attendanceRecords, setAttendanceRecords] = useState<ProjectAttendanceRecord[]>([]);
@@ -338,14 +333,6 @@ const ProjectWorkspace: React.FC = () => {
     const [taskPlannerDate, setTaskPlannerDate] = useState(() => formatDateKey(new Date()));
     const [taskPlannerAssignee, setTaskPlannerAssignee] = useState('');
     const [taskPlannerSource, setTaskPlannerSource] = useState<'all' | 'manual' | 'automated'>('all');
-    const [newCatalogItem, setNewCatalogItem] = useState({
-        sku_code: '',
-        label: '',
-        default_price: '',
-        unit: '',
-        brand: '',
-        is_mandatory: false,
-    });
     const attendanceDay = useMemo(() => formatDateKey(new Date()), []);
 
     const [datasets] = useState<WorkspaceDataset[]>([
@@ -398,7 +385,7 @@ const ProjectWorkspace: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const [project, projectForms, projectTasks, projectAttendance, projectReports, projectAccess, orgTeams, templates, projectCatalogItems] = await Promise.all([
+                const [project, projectForms, projectTasks, projectAttendance, projectReports, projectAccess, orgTeams, templates] = await Promise.all([
                     refreshCurrentProject(currentOrg.id, projectId),
                     formAPI.list(projectId),
                     projectAPI.listTasks(currentOrg.id, projectId),
@@ -407,14 +394,13 @@ const ProjectWorkspace: React.FC = () => {
                     projectAPI.listAccess(currentOrg.id, projectId),
                     teamAPI.list(currentOrg.id),
                     projectAPI.listRoleTemplates(currentOrg.id),
-                    projectAPI.listCatalogItems(currentOrg.id, projectId),
                 ]);
                 const pendingReviews = (
                     await Promise.all(
                         projectForms.map(async (form: WorkspaceForm) => {
                             try {
                                 const submissions = await submissionAPI.listForForm(form.id, 'submitted');
-                                return (Array.isArray(submissions) ? submissions : []).map((submission: any) => ({
+                                  return (Array.isArray(submissions) ? submissions : []).map((submission: any) => ({
                                     ...submission,
                                     form_title: form.title,
                                 }));
@@ -426,7 +412,6 @@ const ProjectWorkspace: React.FC = () => {
                 ).flat();
                 setCurrentProject(project);
                 setForms(projectForms);
-                setCatalogItems(projectCatalogItems);
                 setReviewQueue(pendingReviews);
                 setTasks(projectTasks);
                 setAttendanceRecords(projectAttendance);
@@ -741,10 +726,17 @@ const ProjectWorkspace: React.FC = () => {
         }
     };
 
-    const handleCreateForm = async () => {
-        if (!projectId) return;
+    const handleCreateForm = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!projectId || !newFormTitle.trim()) return;
         try {
-            const newForm = await formAPI.create(projectId, { title: 'New Form' });
+            const newForm = await formAPI.create(projectId, {
+                title: newFormTitle.trim(),
+                kind: newFormKind
+            });
+            setIsCreateFormModalOpen(false);
+            setNewFormTitle('');
+            setNewFormKind('standard');
             navigate(`/builder/${newForm.id}`);
         } catch (err: any) {
             setError(err?.response?.data?.detail || err?.message || 'Failed to create form');
@@ -784,56 +776,92 @@ const ProjectWorkspace: React.FC = () => {
         }
     };
 
-    const handleCreateCatalogItem = async (event: React.FormEvent) => {
-        event.preventDefault();
-        if (!currentOrg || !projectId || !newCatalogItem.sku_code.trim() || !newCatalogItem.label.trim()) return;
 
+
+    const loadCatalogData = async (catalogForm: WorkspaceForm) => {
+        setEntriesLoading(true);
         try {
-            const created = await projectAPI.createCatalogItem(currentOrg.id, projectId, {
-                sku_code: newCatalogItem.sku_code.trim(),
-                label: newCatalogItem.label.trim(),
-                default_price: newCatalogItem.default_price ? Number(newCatalogItem.default_price) : undefined,
-                unit: newCatalogItem.unit.trim() || undefined,
-                brand: newCatalogItem.brand.trim() || undefined,
-                metadata_json: { is_mandatory: !!newCatalogItem.is_mandatory }
-            });
-            setCatalogItems(prev => [...prev, created].sort((left, right) => left.label.localeCompare(right.label)));
-            setNewCatalogItem({ sku_code: '', label: '', default_price: '', unit: '', brand: '', is_mandatory: false });
-        } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || 'Failed to create catalog item');
-        }
-    };
+            const entries = await formAPI.getCatalogEntries(catalogForm.id);
+            setCatalogEntries(Array.isArray(entries) ? entries : []);
 
-    const handleCatalogItemToggle = async (item: CatalogItem, patch: { is_active?: boolean; price_editable?: boolean; is_mandatory?: boolean }) => {
-        if (!currentOrg || !projectId) return;
-
-        try {
-            let payload: any = { ...patch };
-            if (patch.is_mandatory !== undefined) {
-                payload = {
-                    metadata_json: {
-                        ...(item.metadata_json || {}),
-                        is_mandatory: patch.is_mandatory
+            const formDetail = await formAPI.get(catalogForm.id);
+            const uiFields: any[] = [];
+            if (formDetail.blueprint?.ui) {
+                formDetail.blueprint.ui.forEach((screen: any) => {
+                    if (screen.children) {
+                        screen.children.forEach((field: any) => {
+                            uiFields.push(field);
+                        });
                     }
-                };
+                });
             }
-            const updated = await projectAPI.updateCatalogItem(currentOrg.id, projectId, item.id, payload);
-            setCatalogItems(prev => prev.map(entry => entry.id === updated.id ? updated : entry));
-        } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || 'Failed to update catalog item');
+            setSelectedCatalogFields(uiFields);
+
+            const initialData: Record<string, any> = {};
+            uiFields.forEach(f => {
+                initialData[f.bind] = '';
+            });
+            setNewEntryData(initialData);
+        } catch (err) {
+            console.error('Failed to load catalog data', err);
+            setError('Failed to load catalog entries.');
+        } finally {
+            setEntriesLoading(false);
         }
     };
 
-    const handleDeleteCatalogItem = async (itemId: string) => {
-        if (!currentOrg || !projectId) return;
+    const handleCatalogSelect = (catalogForm: WorkspaceForm) => {
+        setSelectedCatalogForm(catalogForm);
+        loadCatalogData(catalogForm);
+    };
+
+    const handleToggleCatalogEntryActive = async (entry: any) => {
+        if (!selectedCatalogForm) return;
+        const nextActive = !entry.catalog_is_active;
+        try {
+            await formAPI.setCatalogEntryActive(selectedCatalogForm.id, entry.id, nextActive);
+            setCatalogEntries(prev => prev.map(item => item.id === entry.id ? { ...item, catalog_is_active: nextActive } : item));
+        } catch (err: any) {
+            console.error('Failed to toggle active state', err);
+            setError(err?.response?.data?.detail || err?.message || 'Failed to toggle catalog entry status.');
+        }
+    };
+
+    const handleAddCatalogEntrySubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedCatalogForm) return;
+
+        const keyFieldId = selectedCatalogForm.catalog_key_field_id;
+        const labelFieldId = selectedCatalogForm.catalog_label_field_id;
+        if (!keyFieldId || !labelFieldId) {
+            setError('This catalog form is missing key/label field designations.');
+            return;
+        }
+
+        if (!newEntryData[keyFieldId]?.toString().trim() || !newEntryData[labelFieldId]?.toString().trim()) {
+            setError('Key and Label field values are required.');
+            return;
+        }
 
         try {
-            await projectAPI.deleteCatalogItem(currentOrg.id, projectId, itemId);
-            setCatalogItems(prev => prev.filter(item => item.id !== itemId));
+            await formAPI.upsertCatalogEntry(selectedCatalogForm.id, newEntryData);
+            const entries = await formAPI.getCatalogEntries(selectedCatalogForm.id);
+            setCatalogEntries(Array.isArray(entries) ? entries : []);
+
+            setNewEntryData(() => {
+                const cleared: Record<string, any> = {};
+                selectedCatalogFields.forEach(f => {
+                    cleared[f.bind] = '';
+                });
+                return cleared;
+            });
         } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || 'Failed to delete catalog item');
+            console.error('Failed to add catalog entry', err);
+            setError(err?.response?.data?.detail || err?.message || 'Failed to add catalog entry.');
         }
     };
+
+
 
     const summariseSubmissionData = (data: Record<string, any>) => {
         const entries = Object.entries(data || {})
@@ -1162,7 +1190,7 @@ const ProjectWorkspace: React.FC = () => {
                                                 </div>
                                                 <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Forms</h2>
                                             </div>
-                                            <button onClick={handleCreateForm} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                            <button onClick={() => setIsCreateFormModalOpen(true)} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
                                                 <Plus className="h-4 w-4" />
                                                 <span className="text-xs font-semibold">New</span>
                                             </button>
@@ -1173,8 +1201,15 @@ const ProjectWorkspace: React.FC = () => {
                                             ) : forms.map(form => (
                                                 <div key={form.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                                     <div className="flex items-start justify-between gap-3">
-                                                        <div>
-                                                            <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{form.title}</h3>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{form.title}</h3>
+                                                                {form.kind === 'catalog' && (
+                                                                    <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600 border border-amber-500/20">
+                                                                        Catalog
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">v{form.version} • {new Date(form.updated_at).toLocaleDateString()}</p>
                                                         </div>
                                                         <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${formStatusTone[form.status] || formStatusTone.draft}`}>
@@ -1853,177 +1888,207 @@ const ProjectWorkspace: React.FC = () => {
                         {/* 5. CATALOG WORKSPACE */}
                         {activeTab === 'catalog' && (
                             <div className="grid gap-6 lg:grid-cols-12 items-start">
-                                {/* Left Column: Add Catalog Item Form (5/12) */}
+                                {/* Left Column: Catalog List & Add Entry */}
                                 <div className="lg:col-span-5 space-y-6">
                                     <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                        <div className="border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Add Catalog Item</h2>
-                                            <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Create project-scoped reference items and default metadata</p>
-                                        </div>
-                                        <div className="p-4 lg:p-5">
-                                            <form onSubmit={handleCreateCatalogItem} className="space-y-3.5 p-3.5 bg-[hsl(var(--surface-elevated))]/20 rounded-xl border border-[hsl(var(--border))]/30">
-                                                <div className="grid grid-cols-2 gap-2.5">
-                                                    <div className="flex flex-col">
-                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Code / ID</label>
-                                                        <input
-                                                            value={newCatalogItem.sku_code}
-                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, sku_code: event.target.value }))}
-                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none font-mono"
-                                                            placeholder="e.g. ITEM-001, HH-02"
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Name / Label</label>
-                                                        <input
-                                                            value={newCatalogItem.label}
-                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, label: event.target.value }))}
-                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                            placeholder="e.g. Coca Cola, John Doe"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-3 gap-2.5">
-                                                    <div className="flex flex-col">
-                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Value</label>
-                                                        <input
-                                                            value={newCatalogItem.default_price}
-                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, default_price: event.target.value }))}
-                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                            placeholder="0.00"
-                                                            type="number"
-                                                            step="0.01"
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Type</label>
-                                                        <input
-                                                            value={newCatalogItem.unit}
-                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, unit: event.target.value }))}
-                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                            placeholder="e.g. bottle, member"
-                                                        />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <label className="text-[9px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))] mb-1">Category</label>
-                                                        <input
-                                                            value={newCatalogItem.brand}
-                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, brand: event.target.value }))}
-                                                            className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
-                                                            placeholder="e.g. FMCG, Demographics"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-4 py-1">
-                                                    <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={newCatalogItem.is_mandatory}
-                                                            onChange={(event) => setNewCatalogItem(prev => ({ ...prev, is_mandatory: event.target.checked }))}
-                                                            className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
-                                                        />
-                                                        Mandatory
-                                                    </label>
-                                                </div>
-                                                <button
-                                                    type="submit"
-                                                    className="w-full rounded-lg bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] py-2 text-xs font-semibold text-white transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5"
-                                                >
-                                                    <Plus className="w-3.5 h-3.5" />
-                                                    Add Catalog Item
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </section>
-                                </div>
-
-                                {/* Right Column: Item Catalog list (7/12) */}
-                                <div className="lg:col-span-7 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                    <Tag className="h-4 w-4" />
-                                                </div>
-                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Catalog Items</h2>
+                                        <div className="border-b border-[hsl(var(--border))] p-4 lg:p-5 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Catalog Sources</h2>
+                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Forms configured as reference databases</p>
                                             </div>
-                                            <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                {catalogItems.length}
-                                            </span>
+                                            <button
+                                                onClick={() => setIsCreateFormModalOpen(true)}
+                                                className="flex items-center gap-1 text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/5 transition-colors px-2 py-1 rounded-lg border border-[hsl(var(--primary))]/30 text-xs font-semibold"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" /> New Catalog
+                                            </button>
                                         </div>
-                                        <div className="p-4 lg:p-5 flex flex-col gap-4">
-                                            {catalogItems.length === 0 ? (
-                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-6 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))]">
-                                                    No catalog items yet.
-                                                </p>
+                                        <div className="p-4 lg:p-5 flex flex-col gap-3">
+                                            {forms.filter(f => f.kind === 'catalog').length === 0 ? (
+                                                <div className="text-center py-6 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))] text-sm text-[hsl(var(--text-tertiary))]">
+                                                    No catalog forms created yet. Click New Catalog to begin.
+                                                </div>
                                             ) : (
-                                                <div className="max-h-[500px] overflow-y-auto space-y-2.5 pr-1 custom-scrollbar">
-                                                    {catalogItems.map(item => (
-                                                        <div key={item.id} className="rounded-xl border border-[hsl(var(--border))]/60 bg-[hsl(var(--background))] p-3.5 hover:border-[hsl(var(--primary))]/30 transition-all">
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div className="space-y-1">
-                                                                    <div className="flex flex-wrap items-center gap-1.5">
-                                                                        <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">{item.label}</h3>
-                                                                        <span className="rounded bg-[hsl(var(--surface-elevated))]/80 border border-[hsl(var(--border))]/30 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[hsl(var(--text-secondary))]">{item.sku_code}</span>
-                                                                    </div>
-                                                                    <p className="text-[10px] text-[hsl(var(--text-tertiary))] font-medium flex items-center gap-1.5 flex-wrap">
-                                                                        {item.brand && (
-                                                                            <>
-                                                                                <span>{item.brand}</span>
-                                                                                <span className="text-[hsl(var(--border))]/60">•</span>
-                                                                            </>
-                                                                        )}
-                                                                        {item.unit && (
-                                                                            <>
-                                                                                <span>{item.unit}</span>
-                                                                                <span className="text-[hsl(var(--border))]/60">•</span>
-                                                                            </>
-                                                                        )}
-                                                                        <span className="text-[hsl(var(--primary))] font-semibold font-mono">
-                                                                            {item.default_price != null ? `$${item.default_price}` : 'No default value'}
-                                                                        </span>
-                                                                    </p>
-                                                                </div>
-                                                                <button 
-                                                                    onClick={() => handleDeleteCatalogItem(item.id)} 
-                                                                    className="rounded-lg p-1 text-[hsl(var(--text-tertiary))] hover:text-red-500 transition-colors hover:bg-red-500/15"
-                                                                >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                                </button>
+                                                forms.filter(f => f.kind === 'catalog').map(catForm => {
+                                                    const isSelected = selectedCatalogForm?.id === catForm.id;
+                                                    const hasDesignations = catForm.catalog_key_field_id && catForm.catalog_label_field_id;
+                                                    return (
+                                                        <div
+                                                            key={catForm.id}
+                                                            onClick={() => handleCatalogSelect(catForm)}
+                                                            className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                                                                isSelected
+                                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5 shadow-sm'
+                                                                    : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">{catForm.title}</h3>
+                                                                <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider ${formStatusTone[catForm.status] || formStatusTone.draft}`}>
+                                                                    {catForm.status}
+                                                                </span>
                                                             </div>
-                                                            <div className="mt-3 flex items-center gap-4 pt-3 border-t border-[hsl(var(--border))]/30">
-                                                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={item.is_active}
-                                                                        onChange={(event) => handleCatalogItemToggle(item, { is_active: event.target.checked })}
-                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
-                                                                    />
-                                                                    Active
-                                                                </label>
-                                                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={item.price_editable}
-                                                                        onChange={(event) => handleCatalogItemToggle(item, { price_editable: event.target.checked })}
-                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
-                                                                    />
-                                                                    Price editable
-                                                                </label>
-                                                                <label className="flex items-center gap-1.5 text-[11px] font-medium text-[hsl(var(--text-secondary))] cursor-pointer">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={!!item.metadata_json?.is_mandatory}
-                                                                        onChange={(event) => handleCatalogItemToggle(item, { is_mandatory: event.target.checked })}
-                                                                        className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
-                                                                    />
-                                                                    Mandatory
-                                                                </label>
+                                                            <div className="mt-2.5 space-y-1 text-[10px] text-[hsl(var(--text-tertiary))]">
+                                                                {hasDesignations ? (
+                                                                    <div className="flex flex-wrap gap-x-2 gap-y-1">
+                                                                        <span className="bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium">
+                                                                            ⚿ Key: {catForm.catalog_key_field_id}
+                                                                        </span>
+                                                                        <span className="bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded border border-blue-500/20 font-medium">
+                                                                            🏷 Label: {catForm.catalog_label_field_id}
+                                                                        </span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-rose-500 font-semibold flex items-center gap-1">
+                                                                        ⚠️ Key/Label not set in builder
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                    ))}
-                                                </div>
+                                                    );
+                                                })
                                             )}
                                         </div>
+                                    </section>
+
+                                    {selectedCatalogForm && (
+                                        <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden animate-in fade-in duration-200">
+                                            <div className="border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                                <h2 className="text-base font-semibold text-[hsl(var(--text-primary))]">Add Catalog Entry</h2>
+                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                    Insert or update a record in <span className="font-semibold">{selectedCatalogForm.title}</span>
+                                                </p>
+                                            </div>
+                                            <div className="p-4 lg:p-5">
+                                                {selectedCatalogFields.length === 0 ? (
+                                                    <div className="text-center py-4 text-xs italic text-[hsl(var(--text-tertiary))]">
+                                                        No text or number fields defined in form canvas.
+                                                    </div>
+                                                ) : (
+                                                    <form onSubmit={handleAddCatalogEntrySubmit} className="space-y-4">
+                                                        {selectedCatalogFields.map(field => {
+                                                            const isKey = selectedCatalogForm.catalog_key_field_id === field.bind;
+                                                            const isLabel = selectedCatalogForm.catalog_label_field_id === field.bind;
+                                                            return (
+                                                                <div key={field.bind} className="flex flex-col">
+                                                                    <label className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] mb-1 flex items-center gap-1.5">
+                                                                        {field.label || field.bind}
+                                                                        {isKey && (
+                                                                            <span className="text-[8px] bg-amber-500/10 text-amber-600 border border-amber-500/20 px-1 rounded uppercase font-extrabold tracking-widest">
+                                                                                Key Field
+                                                                            </span>
+                                                                        )}
+                                                                        {isLabel && (
+                                                                            <span className="text-[8px] bg-blue-500/10 text-blue-600 border border-blue-500/20 px-1 rounded uppercase font-extrabold tracking-widest">
+                                                                                Label Field
+                                                                            </span>
+                                                                        )}
+                                                                    </label>
+                                                                    <input
+                                                                        type={field.type === 'input_number' ? 'number' : 'text'}
+                                                                        required={isKey || isLabel || field.required}
+                                                                        placeholder={field.placeholder || `Enter ${field.label}...`}
+                                                                        value={newEntryData[field.bind] || ''}
+                                                                        onChange={(e) => setNewEntryData(prev => ({ ...prev, [field.bind]: e.target.value }))}
+                                                                        className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))]/40 rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:ring-1 focus:ring-[hsl(var(--primary))] outline-none"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        <button
+                                                            type="submit"
+                                                            className="w-full rounded-lg bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] py-2 text-xs font-semibold text-white transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5"
+                                                        >
+                                                            <Plus className="w-3.5 h-3.5" /> Upsert Entry
+                                                        </button>
+                                                    </form>
+                                                )}
+                                            </div>
+                                        </section>
+                                    )}
+                                </div>
+
+                                {/* Right Column: Catalog Entries */}
+                                <div className="lg:col-span-7 space-y-6">
+                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden min-h-[450px]">
+                                        {!selectedCatalogForm ? (
+                                            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none">
+                                                <div className="w-14 h-14 rounded-full bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))]/40 flex items-center justify-center text-[hsl(var(--text-tertiary))] mb-4 shadow-sm">
+                                                    <Database className="w-6 h-6" />
+                                                </div>
+                                                <h3 className="text-sm font-bold text-[hsl(var(--text-primary))]">No Catalog Selected</h3>
+                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))] max-w-[240px] mt-1 leading-normal">
+                                                    Select a catalog data source on the left to view records and manage deactivation.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                            <Database className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <h2 className="text-base font-semibold text-[hsl(var(--text-primary))]">{selectedCatalogForm.title} Entries</h2>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Serves active records to dropdown search fields</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                        {catalogEntries.length} Records
+                                                    </span>
+                                                </div>
+
+                                                <div className="p-4 lg:p-5 flex-1 flex flex-col">
+                                                    {entriesLoading ? (
+                                                        <div className="flex-1 flex items-center justify-center py-12">
+                                                            <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
+                                                        </div>
+                                                    ) : catalogEntries.length === 0 ? (
+                                                        <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-xs italic text-[hsl(var(--text-tertiary))]">
+                                                            No entries found. Submit the form on the left to insert reference catalog rows.
+                                                        </div>
+                                                    ) : (
+                                                        <div className="overflow-x-auto border border-[hsl(var(--border))]/50 rounded-xl">
+                                                            <table className="w-full text-left border-collapse text-xs">
+                                                                <thead>
+                                                                    <tr className="bg-[hsl(var(--surface-elevated))]/30 border-b border-[hsl(var(--border))]/50 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))] select-none">
+                                                                        <th className="p-3">Key (ID)</th>
+                                                                        <th className="p-3">Label (Name)</th>
+                                                                        <th className="p-3">Created At</th>
+                                                                        <th className="p-3 text-center">Active Status</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-[hsl(var(--border))]/40">
+                                                                    {catalogEntries.map(entry => {
+                                                                        const keyVal = entry.data[selectedCatalogForm.catalog_key_field_id || ''] || '';
+                                                                        const labelVal = entry.data[selectedCatalogForm.catalog_label_field_id || ''] || '';
+                                                                        return (
+                                                                            <tr key={entry.id} className="hover:bg-[hsl(var(--surface-elevated))]/10 transition-colors">
+                                                                                <td className="p-3 font-mono font-medium text-[hsl(var(--text-primary))]">{keyVal}</td>
+                                                                                <td className="p-3 text-[hsl(var(--text-primary))]">{labelVal}</td>
+                                                                                <td className="p-3 text-[hsl(var(--text-tertiary))]">{new Date(entry.created_at).toLocaleString()}</td>
+                                                                                <td className="p-3 text-center">
+                                                                                    <button
+                                                                                        onClick={() => handleToggleCatalogEntryActive(entry)}
+                                                                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                                                                                            entry.catalog_is_active
+                                                                                                ? 'bg-emerald-500/15 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/25'
+                                                                                                : 'bg-rose-500/10 text-rose-500 border border-rose-500/25 hover:bg-rose-500/20'
+                                                                                        }`}
+                                                                                    >
+                                                                                        {entry.catalog_is_active ? '● Active' : '○ Deactivated'}
+                                                                                    </button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
                                     </section>
                                 </div>
                             </div>
@@ -2241,6 +2306,119 @@ const ProjectWorkspace: React.FC = () => {
                     </div>
                 </div>
             ) : null}
+
+            {isCreateFormModalOpen && (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-5 border-b border-[hsl(var(--border))] flex items-center justify-between">
+                            <h3 className="text-base font-bold text-[hsl(var(--text-primary))]">Create New Form</h3>
+                            <button
+                                onClick={() => {
+                                    setIsCreateFormModalOpen(false);
+                                    setNewFormTitle('');
+                                    setNewFormKind('standard');
+                                }}
+                                className="text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] text-sm"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateForm} className="p-5 space-y-5">
+                            <div className="space-y-1.5">
+                                <label className="text-[11px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
+                                    Form Title
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="e.g., Equipment Checklist or Material Catalog"
+                                    value={newFormTitle}
+                                    onChange={(e) => setNewFormTitle(e.target.value)}
+                                    className="w-full text-sm px-3 py-2 bg-[hsl(var(--background))] rounded-lg border border-[hsl(var(--border))]/60 outline-none text-[hsl(var(--text-primary))] placeholder-[hsl(var(--text-tertiary))]/70 focus:border-[hsl(var(--primary))]/60 focus:ring-2 focus:ring-[hsl(var(--primary))]/10 transition-all shadow-inner"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
+                                    Select Form Type
+                                </label>
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div
+                                        onClick={() => setNewFormKind('standard')}
+                                        className={`flex items-start gap-3.5 p-3.5 rounded-xl border cursor-pointer transition-all select-none ${
+                                            newFormKind === 'standard'
+                                                ? 'border-emerald-500 bg-emerald-500/5 shadow-md shadow-emerald-500/5'
+                                                : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                            newFormKind === 'standard'
+                                                ? 'bg-emerald-500 text-white'
+                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
+                                        }`}>
+                                            <FileText className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-[hsl(var(--text-primary))]">Standard Form</p>
+                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-0.5 leading-normal">
+                                                Standard flow for surveys, signatures, pictures, checklist workflows and audits.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        onClick={() => setNewFormKind('catalog')}
+                                        className={`flex items-start gap-3.5 p-3.5 rounded-xl border cursor-pointer transition-all select-none ${
+                                            newFormKind === 'catalog'
+                                                ? 'border-amber-500 bg-amber-500/5 shadow-md shadow-amber-500/5'
+                                                : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
+                                        }`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                            newFormKind === 'catalog'
+                                                ? 'bg-amber-500 text-white'
+                                                : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
+                                        }`}>
+                                            <Database className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-[hsl(var(--text-primary))] flex items-center gap-1.5">
+                                                Catalog Form
+                                                <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                                    Reference
+                                                </span>
+                                            </p>
+                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))] mt-0.5 leading-normal">
+                                                Restricted fields. Serves as lookup reference data (unique Key field required).
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[hsl(var(--border))]">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsCreateFormModalOpen(false);
+                                        setNewFormTitle('');
+                                        setNewFormKind('standard');
+                                    }}
+                                    className="px-3 py-2 rounded-lg border border-[hsl(var(--border))]/60 text-xs font-semibold text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]/60 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 rounded-lg bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white text-xs font-semibold shadow-sm transition-colors"
+                                >
+                                    Create Form
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </StudioLayout>
     );
 };

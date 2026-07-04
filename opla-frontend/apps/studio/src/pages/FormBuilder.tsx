@@ -1195,6 +1195,18 @@ const LookupCustomDataInput: React.FC<{
 };
 
 
+const CATALOG_BLOCKED_TYPES: Set<FieldType> = new Set([
+    'gps_capture',
+    'photo_capture',
+    'file_upload',
+    'signature_pad',
+    'audio_recorder',
+    'object_collection',
+    'object_instance',
+    'form_link',
+]);
+
+
 const FormBuilder: React.FC = () => {
     const { formId } = useParams<{ formId: string }>();
     const navigate = useNavigate();
@@ -1208,6 +1220,9 @@ const FormBuilder: React.FC = () => {
         is_public: boolean;
         status?: 'draft' | 'live' | 'archived';
         published_version?: number | null;
+        kind?: 'standard' | 'catalog';
+        catalog_key_field_id?: string | null;
+        catalog_label_field_id?: string | null;
     } | null>(null);
     const [title, setTitle] = useState('Untitled Form');
     const [, setTemplates] = useState<any[]>([]);
@@ -1301,7 +1316,7 @@ const FormBuilder: React.FC = () => {
 
     const quickButtons = useMemo(() => {
         const POOL: FieldType[] = ['input_text', 'input_number', 'date_picker', 'dropdown', 'checkbox_group'];
-        let recent = [...recentFields];
+        let recent = recentFields.filter(t => !(formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(t)));
         for (const item of POOL) {
             if (recent.length >= 2) break;
             if (!recent.includes(item)) {
@@ -1315,7 +1330,7 @@ const FormBuilder: React.FC = () => {
             left: common,  // Most common (front)
             right: recent  // Last 2 used (back)
         };
-    }, [recentFields]);
+    }, [recentFields, formMeta?.kind]);
 
     const handleQuickAddDirectly = (index: number, type: FieldType) => {
         trackUsedField(type);
@@ -2174,6 +2189,9 @@ const FormBuilder: React.FC = () => {
                     is_public: data.is_public,
                     status: data.status,
                     published_version: data.published_version,
+                    kind: data.kind,
+                    catalog_key_field_id: data.catalog_key_field_id,
+                    catalog_label_field_id: data.catalog_label_field_id,
                 });
                 setActiveVersions(Array.isArray(versions) ? versions : []);
                 setTitle(data.title || 'Untitled Form');
@@ -2575,6 +2593,19 @@ const FormBuilder: React.FC = () => {
     const _handlePublish = async () => {
         if (!formId || isPublishing) return;
         setIsPublishing(true);
+
+        if (formMeta?.kind === 'catalog') {
+            if (!formMeta.catalog_key_field_id) {
+                showToast('Publish failed', 'Catalog forms require a Key Field designation before publishing.', 'error');
+                setIsPublishing(false);
+                return;
+            }
+            if (!formMeta.catalog_label_field_id) {
+                showToast('Publish failed', 'Catalog forms require a Label Field designation before publishing.', 'error');
+                setIsPublishing(false);
+                return;
+            }
+        }
 
         try {
             if (hasUnsavedChanges) {
@@ -3076,7 +3107,11 @@ const FormBuilder: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
-
+                        {formMeta?.kind === 'catalog' && (
+                            <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-600">
+                                Catalog Mode
+                            </div>
+                        )}
                         <div className="rounded-md bg-[hsl(var(--surface-elevated))]/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
                             Studio Builder
                         </div>
@@ -3283,7 +3318,12 @@ const FormBuilder: React.FC = () => {
                                     <div className="flex-1 overflow-y-auto p-3 space-y-3 hide-scrollbar select-none">
                                         {(() => {
                                             const filteredCategories = ['Standard Inputs', 'Time & Date', 'Selection Fields', 'Device Metrics', 'Media Input', 'Advanced Inputs'].map(category => {
-                                                const categoryWidgets = widgetLibrary.filter(w => widgetCategoryMap[w.type] === category);
+                                                const categoryWidgets = widgetLibrary.filter(w => {
+                                                    if (formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(w.type)) {
+                                                        return false;
+                                                    }
+                                                    return widgetCategoryMap[w.type] === category;
+                                                });
                                                 const filteredWidgets = categoryWidgets.filter(widget => {
                                                     const query = widgetSearchQuery.toLowerCase();
                                                     const labelMatches = widget.label.toLowerCase().includes(query);
@@ -3859,12 +3899,24 @@ const FormBuilder: React.FC = () => {
                                                                     {getWidget(field.type)?.icon || <Smartphone className="w-[18px] h-[18px]" />}
                                                                 </div>
                                                                 {/* Name Input */}
-                                                                <input
-                                                                    type="text"
-                                                                    value={field.label}
-                                                                    onChange={(e) => updateFieldLabel(field.id, e.target.value)}
-                                                                    className="text-[15px] font-bold text-[hsl(var(--text-primary))] bg-transparent border-b border-transparent focus:outline-none flex-1 w-full"
-                                                                />
+                                                                <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={field.label}
+                                                                        onChange={(e) => updateFieldLabel(field.id, e.target.value)}
+                                                                        className="text-[15px] font-bold text-[hsl(var(--text-primary))] bg-transparent border-b border-transparent focus:outline-none flex-1 min-w-0"
+                                                                    />
+                                                                    {formMeta?.kind === 'catalog' && formMeta.catalog_key_field_id === field.id && (
+                                                                        <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shadow-sm whitespace-nowrap" title="Unique key identifier">
+                                                                            ⚿ Key
+                                                                        </span>
+                                                                    )}
+                                                                    {formMeta?.kind === 'catalog' && formMeta.catalog_label_field_id === field.id && (
+                                                                        <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 shadow-sm whitespace-nowrap" title="Dropdown display label">
+                                                                            🏷 Label
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
 
                                                             {/* BOTTOM ROW */}
@@ -4440,7 +4492,9 @@ const FormBuilder: React.FC = () => {
                                                             }
                                                         ];
 
-                                                        const categories = ['Appearance', 'Logic & Events', 'Behavior'];
+                                                        const categories = formMeta?.kind === 'catalog'
+                                                            ? ['Appearance', 'Behavior']
+                                                            : ['Appearance', 'Logic & Events', 'Behavior'];
 
                                                         return (
                                                             <div className="overflow-y-auto hide-scrollbar border-b border-[hsl(var(--border))]/25 bg-[hsl(var(--background))] select-none">
@@ -4719,6 +4773,92 @@ const FormBuilder: React.FC = () => {
                                                                                     />
                                                                                 </div>
                                                                             )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalogKey',
+                                                                            label: 'Catalog Key',
+                                                                            metaKey: undefined as any,
+                                                                            visible: formMeta?.kind === 'catalog' && ['input_text', 'input_number'].includes(selectedField.type),
+                                                                            render: () => {
+                                                                                const isKey = formMeta?.catalog_key_field_id === selectedField.id;
+                                                                                return (
+                                                                                    <div className="flex items-center justify-between w-full">
+                                                                                        <span className="text-[10px] text-[hsl(var(--text-tertiary))] italic leading-none max-w-[70%]">
+                                                                                            Designate as unique record ID
+                                                                                        </span>
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            checked={isKey}
+                                                                                            onChange={async (e) => {
+                                                                                                const checked = e.target.checked;
+                                                                                                const nextKeyId = checked ? selectedField.id : null;
+                                                                                                try {
+                                                                                                    await formAPI.updateCatalogDesignations(formId!, {
+                                                                                                        catalog_key_field_id: nextKeyId,
+                                                                                                        catalog_label_field_id: formMeta?.catalog_label_field_id
+                                                                                                    });
+                                                                                                    setFormMeta(prev => prev ? {
+                                                                                                        ...prev,
+                                                                                                        catalog_key_field_id: nextKeyId
+                                                                                                    } : null);
+                                                                                                    if (checked) {
+                                                                                                        updateField(selectedField.id, { required: true });
+                                                                                                    }
+                                                                                                    showToast('Designation updated', 'Catalog Key updated successfully.', 'success');
+                                                                                                } catch (err) {
+                                                                                                    console.error(err);
+                                                                                                    showToast('Error', 'Failed to update catalog designation.', 'error');
+                                                                                                }
+                                                                                            }}
+                                                                                            className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                        />
+                                                                                    </div>
+                                                                                );
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'catalogLabel',
+                                                                            label: 'Display Label',
+                                                                            metaKey: undefined as any,
+                                                                            visible: formMeta?.kind === 'catalog' && ['input_text', 'input_number'].includes(selectedField.type),
+                                                                            render: () => {
+                                                                                const isLabel = formMeta?.catalog_label_field_id === selectedField.id;
+                                                                                return (
+                                                                                    <div className="flex items-center justify-between w-full">
+                                                                                        <span className="text-[10px] text-[hsl(var(--text-tertiary))] italic leading-none max-w-[70%]">
+                                                                                            Designate as field dropdown label
+                                                                                        </span>
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            checked={isLabel}
+                                                                                            onChange={async (e) => {
+                                                                                                const checked = e.target.checked;
+                                                                                                const nextLabelId = checked ? selectedField.id : null;
+                                                                                                try {
+                                                                                                    await formAPI.updateCatalogDesignations(formId!, {
+                                                                                                        catalog_key_field_id: formMeta?.catalog_key_field_id,
+                                                                                                        catalog_label_field_id: nextLabelId
+                                                                                                    });
+                                                                                                    setFormMeta(prev => prev ? {
+                                                                                                        ...prev,
+                                                                                                        catalog_label_field_id: nextLabelId
+                                                                                                    } : null);
+                                                                                                    if (checked) {
+                                                                                                        updateField(selectedField.id, { required: true });
+                                                                                                    }
+                                                                                                    showToast('Designation updated', 'Display Label updated successfully.', 'success');
+                                                                                                } catch (err) {
+                                                                                                    console.error(err);
+                                                                                                    showToast('Error', 'Failed to update catalog designation.', 'error');
+                                                                                                }
+                                                                                            }}
+                                                                                            className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                        />
+                                                                                    </div>
+                                                                                );
+                                                                            }
                                                                         },
                                                                         {
                                                                             category: 'Data',
@@ -5676,7 +5816,7 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                     ];
 
-                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'Data Source', 'Form Link', 'Navigation', 'System Settings'];
+                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'Data Source', 'Form Link', 'Navigation', 'System Settings'].filter(cat => !(formMeta?.kind === 'catalog' && cat === 'Logic & Events'));
 
                                                                      return (
                                                                          <div className="overflow-y-auto hide-scrollbar border-b border-[hsl(var(--border))]/25 bg-[hsl(var(--background))]">
@@ -6280,10 +6420,12 @@ const FormBuilder: React.FC = () => {
                         className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => {
-                            const filteredWidgets = widgetLibrary.filter(w =>
-                                w.label.toLowerCase().includes(quickAddSearchQuery.toLowerCase()) ||
-                                w.type.toLowerCase().includes(quickAddSearchQuery.toLowerCase())
-                            );
+                            const filteredWidgets = widgetLibrary
+                                .filter(w => !(formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(w.type)))
+                                .filter(w =>
+                                    w.label.toLowerCase().includes(quickAddSearchQuery.toLowerCase()) ||
+                                    w.type.toLowerCase().includes(quickAddSearchQuery.toLowerCase())
+                                );
                             if (e.key === 'Escape') {
                                 e.preventDefault();
                                 setQuickAddOpen(false);
@@ -6337,10 +6479,12 @@ const FormBuilder: React.FC = () => {
                         {/* Modal Body with Categories/Results */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-4" id="quick-add-widgets-list">
                             {(() => {
-                                const filteredWidgets = widgetLibrary.filter(w =>
-                                    w.label.toLowerCase().includes(quickAddSearchQuery.toLowerCase()) ||
-                                    w.type.toLowerCase().includes(quickAddSearchQuery.toLowerCase())
-                                );
+                                const filteredWidgets = widgetLibrary
+                                    .filter(w => !(formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(w.type)))
+                                    .filter(w =>
+                                        w.label.toLowerCase().includes(quickAddSearchQuery.toLowerCase()) ||
+                                        w.type.toLowerCase().includes(quickAddSearchQuery.toLowerCase())
+                                    );
 
                                 if (filteredWidgets.length === 0) {
                                     return (

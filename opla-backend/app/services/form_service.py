@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.project import ProjectStatus
-from app.models.form import Form, FormStatus
+from app.models.form import Form, FormKind, FormStatus
 from app.models.form_dataset import (
     FormDataset,
     FormDatasetField,
@@ -590,7 +590,13 @@ class FormService:
         )
 
     @staticmethod
-    def create_form(db: Session, project_id: uuid.UUID, title: str, blueprint: Optional[Dict] = None) -> Form:
+    def create_form(
+        db: Session,
+        project_id: uuid.UUID,
+        title: str,
+        blueprint: Optional[Dict] = None,
+        kind: str = "standard",
+    ) -> Form:
         blueprint = FormService._normalize_blueprint(blueprint)
         base_slug = slugify(title)
         slug = base_slug
@@ -603,6 +609,7 @@ class FormService:
             project_id=project_id,
             title=title,
             slug=slug,
+            kind=FormKind(kind) if kind else FormKind.STANDARD,
             blueprint_draft=blueprint,
             version=0,
             status=FormStatus.DRAFT

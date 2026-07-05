@@ -2,11 +2,13 @@ import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrg } from '../contexts/OrgContext';
 import { useToast } from '../contexts/ToastContext';
-import { formAPI, projectAPI, reportAPI, teamAPI } from '../lib/api';
+import { formAPI, projectAPI, reportAPI, teamAPI, analyticsAPI } from '../lib/api';
 import StudioLayout from '../components/StudioLayout';
 import MembersManagement from '../components/MembersManagement';
 import TeamsManagement from '../components/TeamsManagement';
 import RolesManagement from '../components/RolesManagement';
+import DatasetsTab from '../components/DatasetsTab';
+import type { AnalyticsSource } from '../components/analytics/types';
 import {
     Plus, Settings, ChevronRight, ChevronLeft, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid
 } from 'lucide-react';
@@ -123,6 +125,9 @@ const Dashboard: React.FC = () => {
     const [reportTitle, setReportTitle] = useState('');
     const [reportDescription, setReportDescription] = useState('');
     const [savingReport, setSavingReport] = useState(false);
+    const [datasetSources, setDatasetSources] = useState<AnalyticsSource[]>([]);
+    const [datasetsLoading, setDatasetsLoading] = useState(false);
+    const [datasetsError, setDatasetsError] = useState<string | null>(null);
 
     const threadItems = useMemo<DashboardThread[]>(() => {
         const primaryProject = projects[0];
@@ -176,6 +181,19 @@ const Dashboard: React.FC = () => {
         ];
     }, [projects]);
 
+    const catalogFormSummaries = useMemo(
+        () => forms
+            .filter((form) => form.kind === 'catalog')
+            .map((form) => ({
+                id: form.id,
+                title: form.title,
+                project_id: form.project_id,
+                project_name: form.project_name,
+                status: form.status,
+            })),
+        [forms],
+    );
+
     const isAdmin = true;
 
     useEffect(() => {
@@ -214,7 +232,28 @@ const Dashboard: React.FC = () => {
         fetchForms();
     }, [projects]);
 
+    useEffect(() => {
+        const fetchDatasets = async () => {
+            if (!currentOrg) {
+                setDatasetSources([]);
+                return;
+            }
+            setDatasetsLoading(true);
+            setDatasetsError(null);
+            try {
+                const sources = await analyticsAPI.listSources(currentOrg.id);
+                setDatasetSources(Array.isArray(sources) ? sources : []);
+            } catch (err: any) {
+                console.error(err);
+                setDatasetsError(err?.response?.data?.detail || err?.message || 'Failed to load datasets');
+                setDatasetSources([]);
+            } finally {
+                setDatasetsLoading(false);
+            }
+        };
 
+        fetchDatasets();
+    }, [currentOrg]);
 
     useEffect(() => {
         const fetchTasks = async () => {
@@ -714,7 +753,7 @@ const Dashboard: React.FC = () => {
                 onSelectNav={handleShellNavSelect}
                 activeAnalyticsTool={activeAnalyticsTool}
                 onSelectAnalyticsTool={handleAnalyticsToolSelect}
-                counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, members: members?.length || 0 }}
+                counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, datasets: datasetSources.length, members: members?.length || 0 }}
                 contentClassName={activeTab === 'forms' ? "flex-1 overflow-hidden flex" : "flex-1 overflow-y-auto p-10"}
             >
                 {organizations.length === 0 && !isLoading && (
@@ -1347,6 +1386,16 @@ const Dashboard: React.FC = () => {
                     <Suspense fallback={<AnalyticsTabFallback />}>
                         <AnalyticsHub orgId={currentOrg.id} projectId={undefined} forms={forms} activeTool={activeAnalyticsTool} />
                     </Suspense>
+                )}
+
+                {activeTab === 'datasets' && (
+                    <DatasetsTab
+                        sources={datasetSources}
+                        catalogForms={catalogFormSummaries}
+                        loading={datasetsLoading}
+                        error={datasetsError}
+                        projects={projects}
+                    />
                 )}
 
                 {activeTab === 'threads' && (

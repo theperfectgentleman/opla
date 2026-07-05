@@ -28,7 +28,7 @@ import {
     getCatalogBlueprintFields,
     normalizeCatalogEntry,
 } from '../utils/catalogUtils';
-import { formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
+import { analyticsAPI, formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
 
 type ProjectAccessRule = {
     id: string;
@@ -350,10 +350,7 @@ const ProjectWorkspace: React.FC = () => {
     const [taskPlannerSource, setTaskPlannerSource] = useState<'all' | 'manual' | 'automated'>('all');
     const attendanceDay = useMemo(() => formatDateKey(new Date()), []);
 
-    const [datasets] = useState<WorkspaceDataset[]>([
-        { id: 'ds-1', name: 'Customer Feedback', records_count: 1240, updated_at: new Date().toISOString(), status: 'active' },
-        { id: 'ds-2', name: 'Site Inspections 2024', records_count: 85, updated_at: new Date().toISOString(), status: 'active' },
-    ]);
+    const [datasets, setDatasets] = useState<WorkspaceDataset[]>([]);
     const [threads] = useState<WorkspaceThread[]>([
         {
             id: 'thread-kickoff',
@@ -400,7 +397,7 @@ const ProjectWorkspace: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const [project, projectForms, projectTasks, projectAttendance, projectReports, projectAccess, orgTeams, templates] = await Promise.all([
+                const [project, projectForms, projectTasks, projectAttendance, projectReports, projectAccess, orgTeams, templates, analyticsSources] = await Promise.all([
                     refreshCurrentProject(currentOrg.id, projectId),
                     formAPI.list(projectId),
                     projectAPI.listTasks(currentOrg.id, projectId),
@@ -409,6 +406,7 @@ const ProjectWorkspace: React.FC = () => {
                     projectAPI.listAccess(currentOrg.id, projectId),
                     teamAPI.list(currentOrg.id),
                     projectAPI.listRoleTemplates(currentOrg.id),
+                    analyticsAPI.listSources(currentOrg.id).catch(() => []),
                 ]);
                 const pendingReviews = (
                     await Promise.all(
@@ -427,6 +425,16 @@ const ProjectWorkspace: React.FC = () => {
                 ).flat();
                 setCurrentProject(project);
                 setForms(projectForms);
+                const projectDatasets = (Array.isArray(analyticsSources) ? analyticsSources : [])
+                    .filter((source: any) => source.project_id === projectId)
+                    .map((source: any) => ({
+                        id: source.dataset_id,
+                        name: source.form_title || source.dataset_name,
+                        records_count: source.record_count || 0,
+                        updated_at: new Date().toISOString(),
+                        status: 'active' as const,
+                    }));
+                setDatasets(projectDatasets);
                 setReviewQueue(pendingReviews);
                 setTasks(projectTasks);
                 setAttendanceRecords(projectAttendance);
@@ -1828,8 +1836,8 @@ const ProjectWorkspace: React.FC = () => {
                                                 <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Datasets</h2>
                                             </div>
                                             <button onClick={() => navigate('/dashboard?tab=datasets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                                <Plus className="h-4 w-4" />
-                                                <span className="text-xs font-semibold">New</span>
+                                                <ChevronRight className="h-4 w-4" />
+                                                <span className="text-xs font-semibold">View all</span>
                                             </button>
                                         </div>
                                         <div className="flex flex-col gap-3 p-4 lg:p-5">

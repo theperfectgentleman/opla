@@ -691,6 +691,20 @@ export const analyticsAPI = {
         const response = await apiClient.delete(`/organizations/${orgId}/analytics/dashboards/${dashboardId}`);
         return response.data;
     },
+    comparePeriod: async (
+        orgId: string,
+        data: {
+            dataset_id: string;
+            measure_field: string;
+            agg_fn?: string;
+            date_field?: string;
+            period?: string;
+            filters?: unknown;
+        },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/analytics/compare`, data);
+        return response.data;
+    },
 };
 
 export default apiClient;

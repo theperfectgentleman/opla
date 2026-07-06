@@ -86,6 +86,54 @@ class AnalyticsService:
         return sources
 
     @staticmethod
+    def _compile_calculated_field(expression: str, allowed_fields: dict, meta_columns: dict):
+        import ast
+        import re
+        from sqlalchemy import Float, cast
+        from sqlalchemy.sql import expression
+
+        ops = {
+            ast.Add: lambda a, b: a + b,
+            ast.Sub: lambda a, b: a - b,
+            ast.Mult: lambda a, b: a * b,
+            ast.Div: lambda a, b: a / b,
+        }
+
+        def parse_node(node):
+            if isinstance(node, ast.Expression):
+                return parse_node(node.body)
+            if isinstance(node, ast.BinOp):
+                left = parse_node(node.left)
+                right = parse_node(node.right)
+                op_func = ops.get(type(node.op))
+                if not op_func:
+                    raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+                return op_func(left, right)
+            if isinstance(node, ast.Name):
+                key = node.id
+                if key in meta_columns:
+                    return meta_columns[key]
+                field = allowed_fields.get(key)
+                if not field:
+                    raise ValueError(f"FIELD_NOT_ALLOWED:{key}")
+                col = Submission.data[key].as_string()
+                if field.field_type == 'number':
+                    return cast(col, Float)
+                return col
+            if isinstance(node, ast.Constant):
+                if isinstance(node.value, (int, float)):
+                    return expression.literal(node.value)
+                return expression.literal(str(node.value))
+            if isinstance(node, ast.UnaryOp):
+                if isinstance(node.op, ast.USub):
+                    return -parse_node(node.operand)
+            raise ValueError(f"Unsupported expression: {type(node).__name__}")
+
+        clean = re.sub(r'\[([^\]]+)\]', r'\1', expression)
+        tree = ast.parse(clean, mode='eval')
+        return parse_node(tree)
+
+    @staticmethod
     def execute_query(
         db: Session,
         org_id: uuid.UUID,
@@ -97,6 +145,7 @@ class AnalyticsService:
         order_by: Optional[list[dict]] = None,
         limit: int = 500,
         offset: int = 0,
+        calculated_fields: Optional[list[dict]] = None,
     ) -> dict:
         dataset = (
             db.query(FormDataset)
@@ -125,9 +174,21 @@ class AnalyticsService:
             "_form_version": Submission.form_version_number.label("_form_version"),
         }
 
+        calculated_fields = calculated_fields or []
+        calc_field_exprs = {}
+        for cf in calculated_fields:
+            key = cf.get("key") or cf.get("field", "calc")
+            label = cf.get("label", key)
+            expr_str = cf.get("expression", cf.get("formula", ""))
+            compiled = AnalyticsService._compile_calculated_field(expr_str, allowed_fields, meta_columns)
+            calc_field_exprs[key] = compiled.label(key)
+            allowed_fields[key] = type('obj', (object,), {'field_key': key, 'label': label, 'field_type': 'number'})()
+
         def resolve_column(key: str):
             if key in meta_columns:
                 return meta_columns[key]
+            if key in calc_field_exprs:
+                return calc_field_exprs[key]
             if key not in allowed_fields:
                 raise ValueError(f"FIELD_NOT_ALLOWED:{key}")
             return Submission.data[key].as_string().label(key)
@@ -194,7 +255,7 @@ class AnalyticsService:
         query = select(*selected_columns).where(base_filter)
 
         if filters:
-            where_clause = AnalyticsService._build_where(filters, allowed_fields)
+            where_clause = AnalyticsService._build_where(filters, allowed_fields, meta_columns)
             if where_clause is not None:
                 query = query.where(where_clause)
 
@@ -278,14 +339,15 @@ class AnalyticsService:
         return meta
 
     @staticmethod
-    def _build_where(rule_group: dict, allowed_fields: dict[str, FormDatasetField]):
+    def _build_where(rule_group: dict, allowed_fields: dict[str, FormDatasetField], meta_columns: Optional[dict] = None):
         combinator = rule_group.get("combinator", "and")
         rules = rule_group.get("rules", [])
         clauses = []
+        meta_columns = meta_columns or {}
 
         for rule in rules:
             if "combinator" in rule:
-                nested = AnalyticsService._build_where(rule, allowed_fields)
+                nested = AnalyticsService._build_where(rule, allowed_fields, meta_columns)
                 if nested is not None:
                     clauses.append(nested)
                 continue
@@ -293,10 +355,16 @@ class AnalyticsService:
             field_key = rule.get("field")
             operator = rule.get("operator")
             value = rule.get("value")
-            if not field_key or not operator or field_key not in allowed_fields:
+            if not field_key or not operator:
                 continue
 
-            column = Submission.data[field_key].as_string()
+            if field_key in meta_columns:
+                column = meta_columns[field_key]
+            elif field_key in allowed_fields:
+                column = Submission.data[field_key].as_string()
+            else:
+                continue
+
             clause = AnalyticsService._apply_operator(column, operator, value)
             if clause is not None:
                 clauses.append(clause)
@@ -431,3 +499,70 @@ class AnalyticsService:
     def delete_dashboard(db: Session, dashboard: AnalyticsDashboard) -> None:
         db.delete(dashboard)
         db.commit()
+
+    @staticmethod
+    def compare_period(
+        db: Session,
+        org_id: uuid.UUID,
+        dataset_id: uuid.UUID,
+        measure_field: str,
+        agg_fn: str = "sum",
+        date_field: str = "_submitted_at",
+        period: str = "month",
+        filters: Optional[dict] = None,
+    ) -> dict:
+        from datetime import datetime, timedelta
+        from sqlalchemy import func as sa_func
+
+        now = datetime.utcnow()
+        period_map = {
+            "day": timedelta(days=1),
+            "week": timedelta(days=7),
+            "month": timedelta(days=30),
+            "quarter": timedelta(days=90),
+            "year": timedelta(days=365),
+        }
+        delta = period_map.get(period, timedelta(days=30))
+
+        current_start = now - delta
+        previous_start = now - 2 * delta
+        previous_end = now - delta
+
+        def run_for_range(start, end):
+            range_filters = {
+                "combinator": "and",
+                "rules": [
+                    {"field": date_field, "operator": ">=", "value": start.isoformat()},
+                    {"field": date_field, "operator": "<", "value": end.isoformat()},
+                ],
+            }
+            if filters:
+                range_filters = {
+                    "combinator": "and",
+                    "rules": [range_filters, filters],
+                }
+            result = AnalyticsService.execute_query(
+                db=db,
+                org_id=org_id,
+                dataset_id=dataset_id,
+                select_fields=[],
+                filters=range_filters,
+                group_by=[],
+                aggregates=[{"field": measure_field, "fn": agg_fn, "alias": "value"}],
+                limit=1,
+            )
+            rows = result.get("rows", [])
+            return rows[0]["value"] if rows else 0
+
+        current_value = run_for_range(current_start, now)
+        previous_value = run_for_range(previous_start, previous_end)
+
+        delta_pct = ((current_value - previous_value) / previous_value * 100) if previous_value else None
+
+        return {
+            "current_value": current_value,
+            "previous_value": previous_value,
+            "delta_pct": round(delta_pct, 2) if delta_pct is not None else None,
+            "direction": "up" if delta_pct and delta_pct > 0 else "down" if delta_pct and delta_pct < 0 else "flat",
+            "period": period,
+        }

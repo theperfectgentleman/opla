@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Calculator, Play, Save, GripVertical } from 'lucide-react';
 import { analyticsAPI } from '../../lib/api';
 import type { AnalyticsToolProps, QueryResult } from './types';
@@ -16,8 +16,8 @@ interface DragItem {
 
 export default function VisualQueryBuilder({ orgId, projectId, sources, initialSource, initialAnalysis }: AnalyticsToolProps) {
 	const defaultSrc = initialSource || sources[0];
-	const [selectedSourceId, setSelectedSourceId] = useState(initialAnalysis?.source_config?.dataset_id || defaultSrc?.dataset_id || '');
-	const [limit, setLimit] = useState(250);
+	const [selectedSourceId] = useState(initialAnalysis?.source_config?.dataset_id || defaultSrc?.dataset_id || '');
+	const [limit] = useState(250);
 
 	const [shelves, setShelves] = useState<{
 		x: DragItem[];
@@ -37,6 +37,9 @@ export default function VisualQueryBuilder({ orgId, projectId, sources, initialS
 	const [result, setResult] = useState<QueryResult | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
+	const [saveTitle, setSaveTitle] = useState('');
+	const [showSaveModal, setShowSaveModal] = useState(false);
+	const [saving, setSaving] = useState(false);
 
 	const selectedSource = useMemo(() => sources.find(s => s.dataset_id === selectedSourceId), [sources, selectedSourceId]);
 
@@ -117,6 +120,33 @@ export default function VisualQueryBuilder({ orgId, projectId, sources, initialS
 			setLoading(false);
 		}
 	};
+
+	const handleSave = useCallback(async () => {
+		if (!selectedSource || !saveTitle || !result) return;
+		setSaving(true);
+		try {
+			const groupBy = shelves.x.map(i => i.bucket ? { field: i.key, bucket: i.bucket } : i.key);
+			const aggregates = shelves.y.map(i => ({ field: i.key, fn: 'sum' as any }));
+			const calculated = calculatedFields.map(cf => ({ key: cf.key, label: cf.label, expression: (cf as any).expression || '' }));
+			const payload = {
+				title: saveTitle,
+				description: `Visual query on ${selectedSource.dataset_name}`,
+				project_id: projectId,
+				source_config: { dataset_id: selectedSource.dataset_id },
+				query_config: { group_by: groupBy, aggregates, calculated_fields: calculated, limit },
+				viz_type: 'chart' as const,
+				viz_config: { chart_type: 'bar' },
+			};
+			await analyticsAPI.createQuestion(orgId, payload as any);
+			setShowSaveModal(false);
+			setSaveTitle('');
+			setMessage('Saved successfully!');
+		} catch (e: any) {
+			setMessage(e?.response?.data?.detail || e.message);
+		} finally {
+			setSaving(false);
+		}
+	}, [selectedSource, saveTitle, result, shelves, calculatedFields, limit, orgId, projectId]);
 
 	if (!selectedSource) return <div className="p-8 text-center text-slate-500">No datasets available.</div>;
 
@@ -216,10 +246,44 @@ export default function VisualQueryBuilder({ orgId, projectId, sources, initialS
 			{/* Right: config (optional) */}
 			<section className={analyticsPanelClass}>
 				<AnalyticsPageHeader eyebrow="Save" title="Properties" description="Save this layout for reuse." />
-				<div className="mt-4">
-					<button className={`${analyticsButtonClass} w-full`}><Save className="mr-2 h-4 w-4"/> Save Question</button>
+				<div className="mt-4 space-y-4">
+					<div>
+						<label className={analyticsLabelClass}>Question Title</label>
+						<input 
+							value={saveTitle} 
+							onChange={e => setSaveTitle(e.target.value)} 
+							className={analyticsInputClass} 
+							placeholder="e.g. Revenue by Month" 
+							disabled={!result}
+						/>
+					</div>
+					<button 
+						onClick={() => { if (result) setShowSaveModal(true); }}
+						disabled={!result || !saveTitle} 
+						className={`${analyticsButtonClass} w-full`}
+					>
+						<Save className="mr-2 h-4 w-4"/> Save Question
+					</button>
 				</div>
 			</section>
+
+			{/* Save Confirmation Modal */}
+			{showSaveModal && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+					<div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+						<h3 className="text-lg font-semibold">Save Question</h3>
+						<p className="mt-2 text-sm text-slate-500">
+							Save "{saveTitle}" with {shelves.x.length} dimension{shelves.x.length !== 1 ? 's' : ''} and {shelves.y.length} metric{shelves.y.length !== 1 ? 's' : ''}?
+						</p>
+						<div className="mt-6 flex justify-end gap-2">
+							<button onClick={() => setShowSaveModal(false)} className={analyticsGhostButtonClass}>Cancel</button>
+							<button onClick={() => void handleSave()} disabled={saving} className={analyticsButtonClass}>
+								{saving ? 'Saving...' : 'Save'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{/* Calc Modal */}
 			{calcModalOpen && (

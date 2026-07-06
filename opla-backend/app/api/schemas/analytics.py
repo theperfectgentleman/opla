@@ -37,15 +37,21 @@ class OrderSpec(BaseModel):
     direction: str = Field("asc", pattern="^(asc|desc)$")
 
 
+class GroupBySpec(BaseModel):
+    field: str
+    bucket: str | None = None
+
+
 class AnalyticsQueryRequest(BaseModel):
     dataset_id: UUID
     select_fields: list[str] = Field(default_factory=list)
     filters: dict[str, Any] | None = None
-    group_by: list[str] = Field(default_factory=list)
+    group_by: list[str | GroupBySpec] = Field(default_factory=list)
     aggregates: list[AggregateSpec] = Field(default_factory=list)
     order_by: list[OrderSpec] = Field(default_factory=list)
     limit: int = Field(500, ge=1, le=10000)
     offset: int = Field(0, ge=0)
+    calculated_fields: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AnalyticsQueryResponse(BaseModel):
@@ -126,6 +132,23 @@ class AnalyticsDashboardUpdate(BaseModel):
     layout_config: list[dict[str, Any]] | None = None
     cards: list[DashboardCardCreate] | None = None
     is_archived: bool | None = None
+
+
+class ComparePeriodRequest(BaseModel):
+    dataset_id: UUID
+    measure_field: str
+    agg_fn: str = Field("sum", pattern="^(count|sum|avg|min|max|count_distinct)$")
+    date_field: str = "_submitted_at"
+    period: str = Field("month", pattern="^(day|week|month|quarter|year)$")
+    filters: dict[str, Any] | None = None
+
+
+class ComparePeriodResponse(BaseModel):
+    current_value: float
+    previous_value: float
+    delta_pct: float | None = None
+    direction: str
+    period: str
 
 
 class AnalyticsDashboardOut(BaseModel):

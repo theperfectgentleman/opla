@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Filter, X, ArrowLeft, Download, Maximize2, Table2 } from 'lucide-react';
-import type { AnalyticsDashboard, DashboardCard, SavedQuestion } from './types';
+import { useState, useEffect, useCallback } from 'react';
+import { Filter, X, ArrowLeft, Download, Table2, Loader2 } from 'lucide-react';
+import { analyticsAPI } from '../../lib/api';
+import type { AnalyticsDashboard, DashboardCard, SavedQuestion, QueryResult } from './types';
 import KPICard from './cards/KPICard';
 import GoalCard from './cards/GoalCard';
 import RichTextCard from './cards/RichTextCard';
@@ -9,63 +10,158 @@ import EChartCard from './cards/EChartCard';
 interface DashboardViewerProps {
 	dashboard: AnalyticsDashboard;
 	onClose: () => void;
+	orgId: string;
 }
 
-export default function DashboardViewer({ dashboard, onClose }: DashboardViewerProps) {
+function extractChartData(question: SavedQuestion, result: QueryResult) {
+	const cfg = question.query_config as Record<string, any> | undefined;
+	const groupField = cfg?.group_by?.[0];
+	const aggField = cfg?.aggregates?.[0];
+	if (!result.rows.length) return [];
+	const key = typeof groupField === 'object' ? groupField.field : (groupField || result.columns[0]?.key);
+	const valKey = aggField?.alias || result.columns.find(c => c.type === 'number')?.key || result.columns[1]?.key;
+	return result.rows.map(r => ({ category: String(r[key] || ''), metric: Number(r[valKey]) || 0 }));
+}
+
+function extractKPIValue(question: SavedQuestion, result: QueryResult): number {
+	const cfg = question.query_config as Record<string, any> | undefined;
+	const aggField = cfg?.aggregates?.[0];
+	const valKey = aggField?.alias || result.columns[0]?.key;
+	return result.rows.length > 0 ? Number(result.rows[0]?.[valKey]) || 0 : 0;
+}
+
+export default function DashboardViewer({ dashboard, onClose, orgId }: DashboardViewerProps) {
 	const [activeTab, setActiveTab] = useState<string>('0');
 	const [globalFilters, setGlobalFilters] = useState<Record<string, any>>({});
-	const [crossFilter, setCrossFilter] = useState<string | null>(null); // e.g. "April"
-
-	const [drillThrough, setDrillThrough] = useState<{ category: string; cardId: string; question: any } | null>(null);
+	const [crossFilter, setCrossFilter] = useState<{ field: string; value: string } | null>(null);
+	const [cardData, setCardData] = useState<Record<string, QueryResult>>({});
+	const [cardLoading, setCardLoading] = useState<Record<string, boolean>>({});
+	const [drillThrough, setDrillThrough] = useState<{ category: string; cardId: string; question: SavedQuestion; rows: Array<Record<string, unknown>> } | null>(null);
 	const [showRawData, setShowRawData] = useState(false);
 
-	// Mocking layout_config to contain tabs if it's empty
 	const tabs = Array.isArray(dashboard.layout_config) && dashboard.layout_config.length > 0 
 		? dashboard.layout_config 
 		: [{ id: '0', name: 'Overview' }];
 
-	// In a real app, we'd fetch data for each card here.
-	// For Phase 3 implementation demonstration, we simulate data fetching based on filters.
+	const fetchCardData = useCallback(async (card: DashboardCard) => {
+		const question = card.question;
+		if (!question) return;
+		const cardId = card.id;
+
+		setCardLoading(prev => ({ ...prev, [cardId]: true }));
+
+		try {
+			const cfg = question.query_config as Record<string, any> || {};
+			const src = question.source_config as Record<string, any> || {};
+			const existingFilters = cfg.filters as Record<string, any> | undefined;
+			const filters = { ...(existingFilters || {}) } as Record<string, any>;
+			const rules: any[] = filters.rules || [];
+
+			if (crossFilter) {
+				rules.push({ field: crossFilter.field, operator: '=', value: crossFilter.value });
+			}
+
+			const queryPayload: any = {
+				dataset_id: src.dataset_id,
+				select_fields: cfg.select_fields,
+				filters: rules.length > 0 ? { combinator: 'and', rules } : undefined,
+				group_by: cfg.group_by,
+				aggregates: cfg.aggregates,
+				order_by: cfg.order_by,
+				limit: cfg.limit || 500,
+			};
+
+			const result = await analyticsAPI.runQuery(orgId, queryPayload);
+			setCardData(prev => ({ ...prev, [cardId]: result }));
+		} catch {
+			// Silently handle errors per card
+		} finally {
+			setCardLoading(prev => ({ ...prev, [cardId]: false }));
+		}
+	}, [orgId, crossFilter]);
+
+	useEffect(() => {
+		dashboard.cards.forEach(card => {
+			if (card.question && card.question.viz_type !== 'markdown') {
+				fetchCardData(card);
+			}
+		});
+	}, [dashboard.cards, fetchCardData]);
+
+	const handleDrillThrough = async (question: SavedQuestion, category: string) => {
+		try {
+			const cfg = question.query_config as Record<string, any> || {};
+			const src = question.source_config as Record<string, any> || {};
+			const result = await analyticsAPI.runQuery(orgId, {
+				dataset_id: src.dataset_id,
+				select_fields: (cfg.select_fields as string[]) || [],
+				filters: {
+					combinator: 'and',
+					rules: cfg.group_by?.[0]
+						? [{ field: typeof cfg.group_by[0] === 'object' ? cfg.group_by[0].field : cfg.group_by[0], operator: '=', value: category }]
+						: [],
+				},
+				limit: 100,
+			});
+			setDrillThrough({ category, cardId: question.id, question, rows: result.rows });
+		} catch {
+			setDrillThrough({ category, cardId: question.id, question, rows: [] });
+		}
+	};
+
+	const exportCSV = (rows: Array<Record<string, unknown>>) => {
+		if (!rows.length) return;
+		const headers = Object.keys(rows[0]);
+		const csvContent = [
+			headers.join(','),
+			...rows.map(r => headers.map(h => String(r[h] ?? '')).join(','))
+		].join('\n');
+		const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+		const link = document.createElement('a');
+		link.href = URL.createObjectURL(blob);
+		link.download = `export_${drillThrough?.category || 'data'}.csv`;
+		link.click();
+		URL.revokeObjectURL(link.href);
+	};
 
 	const renderCard = (card: DashboardCard) => {
 		const question = card.question;
 		if (!question) return null;
-
-		// Mock data that reacts to crossFilter and globalFilters
-		const mockData = [
-			{ category: 'Jan', metric: crossFilter === 'Jan' ? 120 : 100 },
-			{ category: 'Feb', metric: crossFilter === 'Feb' ? 130 : 110 },
-			{ category: 'Mar', metric: crossFilter === 'Mar' ? 150 : 120 }
-		];
-
-		if (crossFilter && !mockData.find(d => d.category === crossFilter)) {
-			mockData.push({ category: crossFilter, metric: 200 });
-		}
-
-		// Calculate total based on filters to simulate reactivity
-		const kpiValue = mockData.reduce((acc, d) => acc + d.metric, 0) + (globalFilters.region === 'NA' ? 500 : 0);
+		const isLoading = cardLoading[card.id];
+		const result = cardData[card.id];
+		const chartData = result ? extractChartData(question, result) : [];
+		const kpiValue = result ? extractKPIValue(question, result) : 0;
 
 		return (
-			<div 
-				key={card.id} 
-				className="col-span-1 min-h-[300px] cursor-pointer"
-				onClick={() => {
-					// Implicit cross-filtering: clicking a card filters others
-					if (question.viz_type === 'chart') {
-						setCrossFilter(prev => prev === 'Feb' ? null : 'Feb'); // Mock click on 'Feb'
-					}
-				}}
-			>
-				{question.viz_type === 'kpi' && <KPICard question={question} currentValue={kpiValue} previousValue={kpiValue * 0.9} />}
-				{question.viz_type === 'goal' && <GoalCard question={question} currentValue={kpiValue} targetValue={1000} />}
-				{question.viz_type === 'markdown' && <RichTextCard question={question} content="This is an interactive dashboard demonstrating **Rich Text** cells for storytelling alongside charts." />}
-				{question.viz_type === 'chart' && <EChartCard question={question} data={mockData} onChartClick={(params) => setDrillThrough({ category: params.name, cardId: card.id, question })} />}
-				{question.viz_type === 'table' && (
-					<div className="flex h-full flex-col rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-						<h3 className="text-sm font-medium text-slate-500">{question.title}</h3>
-						<div className="mt-4 flex-1 border-t border-slate-100 pt-4 text-sm text-slate-600">
-							Table data reacts to cross-filter: {crossFilter || 'None'}
-						</div>
+			<div key={card.id} className="col-span-1 min-h-[200px]">
+				{isLoading && (
+					<div className="flex h-full items-center justify-center rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+						<Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+					</div>
+				)}
+				{!isLoading && question.viz_type === 'kpi' && (
+					<KPICard question={question} currentValue={kpiValue} />
+				)}
+				{!isLoading && question.viz_type === 'goal' && (
+					<GoalCard question={question} currentValue={kpiValue} targetValue={(question.viz_config as any)?.target || 1000} />
+				)}
+				{!isLoading && question.viz_type === 'markdown' && (
+					<RichTextCard question={question} content={(question.viz_config as any)?.content || ''} editable={false} />
+				)}
+				{!isLoading && (question.viz_type === 'chart' || question.viz_type === 'table') && (
+					<EChartCard 
+						question={question} 
+						data={chartData}
+						onChartClick={(params) => {
+							if (params.name) {
+								handleDrillThrough(question, params.name);
+							}
+						}}
+					/>
+				)}
+				{!isLoading && !result && question.viz_type !== 'markdown' && (
+					<div className="flex h-full items-center justify-center rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 text-sm text-slate-400">
+						No data
 					</div>
 				)}
 			</div>
@@ -84,7 +180,6 @@ export default function DashboardViewer({ dashboard, onClose }: DashboardViewerP
 					</div>
 				</div>
 				<div className="flex items-center gap-4">
-					{/* Global Filter Widget */}
 					<div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
 						<Filter className="h-4 w-4 text-slate-400" />
 						<select 
@@ -103,7 +198,7 @@ export default function DashboardViewer({ dashboard, onClose }: DashboardViewerP
 			{/* Cross-Filter Indicator */}
 			{crossFilter && (
 				<div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-					<span className="font-semibold">Cross-Filter Active:</span> {crossFilter}
+					<span className="font-semibold">Cross-Filter Active:</span> {crossFilter.field} = {crossFilter.value}
 					<button onClick={() => setCrossFilter(null)} className="ml-2 hover:text-emerald-900"><X className="h-4 w-4" /></button>
 				</div>
 			)}
@@ -145,7 +240,10 @@ export default function DashboardViewer({ dashboard, onClose }: DashboardViewerP
 						<div className="mt-6 flex flex-col gap-2">
 							<button 
 								onClick={() => {
-									setCrossFilter(drillThrough.category);
+									const qc = drillThrough.question.query_config as Record<string, any> || {};
+									const groupBy = qc.group_by?.[0];
+									const field = typeof groupBy === 'object' ? groupBy.field : (groupBy || '');
+									setCrossFilter({ field, value: drillThrough.category });
 									setDrillThrough(null);
 								}}
 								className="flex w-full items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-500"
@@ -174,17 +272,7 @@ export default function DashboardViewer({ dashboard, onClose }: DashboardViewerP
 							</div>
 							<div className="flex items-center gap-2">
 								<button 
-									onClick={() => {
-										// Simulated CSV export
-										const csvContent = "data:text/csv;charset=utf-8,ID,Category,Value\n1,Jan,120\n2,Feb,130";
-										const encodedUri = encodeURI(csvContent);
-										const link = document.createElement("a");
-										link.setAttribute("href", encodedUri);
-										link.setAttribute("download", `export_${drillThrough.category}.csv`);
-										document.body.appendChild(link);
-										link.click();
-										document.body.removeChild(link);
-									}}
+									onClick={() => exportCSV(drillThrough.rows)}
 									className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
 								>
 									<Download className="h-4 w-4" /> Export CSV
@@ -196,15 +284,22 @@ export default function DashboardViewer({ dashboard, onClose }: DashboardViewerP
 							<table className="w-full text-left text-sm text-slate-600">
 								<thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
 									<tr>
-										<th className="px-4 py-3">ID</th>
-										<th className="px-4 py-3">Category</th>
-										<th className="px-4 py-3">Value</th>
+										{drillThrough.rows.length > 0 && Object.keys(drillThrough.rows[0]).map(key => (
+											<th key={key} className="px-4 py-3">{key}</th>
+										))}
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-slate-100">
-									<tr><td className="px-4 py-3">1</td><td className="px-4 py-3">{drillThrough.category}</td><td className="px-4 py-3">120</td></tr>
-									<tr><td className="px-4 py-3">2</td><td className="px-4 py-3">{drillThrough.category}</td><td className="px-4 py-3">45</td></tr>
-									<tr><td className="px-4 py-3">3</td><td className="px-4 py-3">{drillThrough.category}</td><td className="px-4 py-3">35</td></tr>
+									{drillThrough.rows.length === 0 && (
+										<tr><td colSpan={99} className="px-4 py-8 text-center text-slate-400">No records found.</td></tr>
+									)}
+									{drillThrough.rows.map((row, i) => (
+										<tr key={i}>
+											{Object.values(row).map((val, j) => (
+												<td key={j} className="px-4 py-3">{String(val ?? '')}</td>
+											))}
+										</tr>
+									))}
 								</tbody>
 							</table>
 						</div>

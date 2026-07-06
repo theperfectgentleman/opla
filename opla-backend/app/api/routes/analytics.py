@@ -12,6 +12,9 @@ from app.api.schemas.analytics import (
     AnalyticsQueryRequest,
     AnalyticsQueryResponse,
     AnalyticsSource,
+    ComparePeriodRequest,
+    ComparePeriodResponse,
+    GroupBySpec,
     SavedQuestionCreate,
     SavedQuestionOut,
     SavedQuestionUpdate,
@@ -36,6 +39,7 @@ from fastapi import UploadFile, File
 import csv
 import io
 from app.models.form import Form, FormDataset
+from app.models.form_dataset import FormDatasetField, FormDatasetFieldStatus, FormDatasetStatus
 from app.models.submission import Submission
 
 @router.post("/upload-csv")
@@ -79,17 +83,33 @@ async def upload_csv_dataset(
     db.add(form)
     db.flush()
 
+    dataset_slug = f"csv_{form.id.hex[:8]}"
     dataset = FormDataset(
-        org_id=org_id,
-        project_id=project_id,
         form_id=form.id,
-        dataset_slug=f"csv_{form.id.hex[:8]}",
-        form_title=form.title,
-        form_version=1,
-        fields=fields,
-        row_count=len(rows)
+        name=form.title,
+        slug=dataset_slug,
+        status=FormDatasetStatus.ACTIVE,
+        current_schema_version_number=1,
     )
     db.add(dataset)
+    db.flush()
+
+    # Create FormDatasetField records
+    for idx, f in enumerate(fields):
+        field = FormDatasetField(
+            dataset_id=dataset.id,
+            field_identifier=f["field_identifier"],
+            field_key=f["field_key"],
+            label=f["label"],
+            field_type=f["field_type"],
+            status=FormDatasetFieldStatus.ACTIVE,
+            introduced_in_version_number=1,
+        )
+        db.add(field)
+
+    # Update form dataset slug with id
+    dataset.slug = dataset_slug
+    db.flush()
     
     # Create Submissions
     for row in rows:
@@ -104,6 +124,7 @@ async def upload_csv_dataset(
         db.add(sub)
     
     db.commit()
+    db.refresh(dataset)
     return {"status": "success", "dataset_id": dataset.id, "row_count": len(rows)}
 
 
@@ -117,17 +138,22 @@ def run_analytics_query(
     membership=Depends(get_user_org_role),
 ):
     try:
+        group_by = [
+            item.model_dump() if isinstance(item, GroupBySpec) else item
+            for item in body.group_by
+        ]
         return AnalyticsService.execute_query(
             db=db,
             org_id=org_id,
             dataset_id=body.dataset_id,
             select_fields=body.select_fields,
             filters=body.filters,
-            group_by=body.group_by,
+            group_by=group_by,
             aggregates=[item.model_dump() for item in body.aggregates],
             order_by=[item.model_dump() for item in body.order_by],
             limit=body.limit,
             offset=body.offset,
+            calculated_fields=body.calculated_fields,
         )
     except ValueError as exc:
         detail = str(exc)
@@ -138,6 +164,29 @@ def run_analytics_query(
         if detail.startswith("AGG_NOT_ALLOWED:"):
             raise HTTPException(status_code=400, detail=f"Aggregate not allowed: {detail.split(':', 1)[1]}") from exc
         raise HTTPException(status_code=400, detail=detail) from exc
+
+
+@router.post("/compare", response_model=ComparePeriodResponse)
+def compare_analytics_period(
+    org_id: uuid.UUID,
+    body: ComparePeriodRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    membership=Depends(get_user_org_role),
+):
+    try:
+        return AnalyticsService.compare_period(
+            db=db,
+            org_id=org_id,
+            dataset_id=body.dataset_id,
+            measure_field=body.measure_field,
+            agg_fn=body.agg_fn,
+            date_field=body.date_field,
+            period=body.period,
+            filters=body.filters,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/questions", response_model=SavedQuestionOut, status_code=status.HTTP_201_CREATED)

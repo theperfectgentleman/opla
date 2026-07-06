@@ -214,7 +214,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 	if (viewingDashboard) {
 		return (
 			<div className={analyticsPanelClass}>
-				<DashboardViewer dashboard={viewingDashboard} onClose={() => setViewingDashboard(null)} />
+				<DashboardViewer dashboard={viewingDashboard} onClose={() => setViewingDashboard(null)} orgId={orgId} />
 			</div>
 		);
 	}

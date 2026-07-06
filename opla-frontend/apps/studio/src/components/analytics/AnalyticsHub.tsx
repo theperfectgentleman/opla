@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BarChart3, FileSpreadsheet, FlaskConical, LayoutDashboard, Loader2, PanelsTopLeft, Table2 } from 'lucide-react';
+import { Suspense, lazy, useEffect, useMemo, useState, useRef } from 'react';
+import { ArrowRight, BarChart3, FileSpreadsheet, FlaskConical, LayoutDashboard, Loader2, PanelsTopLeft, Table2, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { analyticsAPI } from '../../lib/api';
@@ -12,7 +12,7 @@ const ChartBuilder = lazy(() => import('./ChartBuilder'));
 const AnalyticsSpreadsheet = lazy(() => import('./AnalyticsSpreadsheet'));
 const AnalyticsPivot = lazy(() => import('./AnalyticsPivot'));
 const DashboardCanvas = lazy(() => import('./DashboardCanvas'));
-const WalkerAnalysisLab = lazy(() => import('./WalkerAnalysisLab'));
+const VisualQueryBuilder = lazy(() => import('./VisualQueryBuilder'));
 
 type AnalyticsHubForm = {
   id: string;
@@ -115,6 +115,38 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
   const [sources, setSources] = useState<AnalyticsSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !projectId) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      // Use standard fetch to bypass json serialization
+      const token = localStorage.getItem('opla_auth_token') || '';
+      const res = await fetch(`http://localhost:8000/api/v1/organizations/${orgId}/analytics/upload-csv?project_id=${projectId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      // Reload sources
+      const response = await analyticsAPI.listSources(orgId);
+      setSources(response);
+    } catch (err: any) {
+      setError(err.message || 'Could not upload CSV.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const selectedTool = useMemo(
     () => toolCards.find(tool => tool.key === activeTool) ?? toolCards[0],
@@ -174,7 +206,11 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
             actions={
               <>
                 <button type="button" onClick={() => navigate('/dashboard?tab=forms')} className={analyticsGhostButtonClass}>Go To Forms</button>
-                <button type="button" onClick={() => navigate('/dashboard?tab=projects')} className={analyticsGhostButtonClass}>Go To Projects</button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} className={analyticsGhostButtonClass} disabled={uploading || !projectId}>
+                  {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                  Upload CSV
+                </button>
+                <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleCsvUpload} />
               </>
             }
           />
@@ -220,8 +256,8 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
     switch (activeTool) {
     case 'lab':
       return (
-        <Suspense fallback={<ToolWorkspaceFallback label="analysis lab" />}>
-          <WalkerAnalysisLab {...toolProps} />
+        <Suspense fallback={<ToolWorkspaceFallback label="visual query builder" />}>
+          <VisualQueryBuilder {...toolProps} />
         </Suspense>
       );
       case 'dashboard':
@@ -267,6 +303,16 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
           <p className="mt-1 max-w-3xl text-sm text-slate-500">{selectedTool.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+          <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleCsvUpload} />
+          <button 
+            type="button" 
+            onClick={() => fileInputRef.current?.click()} 
+            className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50"
+            disabled={uploading || !projectId}
+          >
+            {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <UploadCloud className="h-3 w-3" />}
+            Upload CSV
+          </button>
           <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
             Org {orgId.slice(0, 8)}{projectId ? ` • Project ${projectId.slice(0, 8)}` : ''}
           </span>

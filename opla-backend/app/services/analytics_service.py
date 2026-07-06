@@ -3,8 +3,9 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import Float, and_, cast, func, or_, select
+from sqlalchemy import Float, and_, cast, func, or_, select, Date, DateTime
 from sqlalchemy.orm import Session, selectinload
+from typing import Any
 
 from app.models.analytics import AnalyticsDashboard, DashboardCard, SavedQuestion
 from app.models.form import Form
@@ -91,7 +92,7 @@ class AnalyticsService:
         dataset_id: uuid.UUID,
         select_fields: list[str],
         filters: Optional[dict] = None,
-        group_by: Optional[list[str]] = None,
+        group_by: Optional[list[Any]] = None,
         aggregates: Optional[list[dict]] = None,
         order_by: Optional[list[dict]] = None,
         limit: int = 500,
@@ -131,6 +132,19 @@ class AnalyticsService:
                 raise ValueError(f"FIELD_NOT_ALLOWED:{key}")
             return Submission.data[key].as_string().label(key)
 
+        def get_group_col(group_item):
+            if isinstance(group_item, dict):
+                key = group_item["field"]
+                bucket = group_item.get("bucket")
+            else:
+                key = group_item
+                bucket = None
+
+            base_col = meta_columns[key] if key in meta_columns else Submission.data[key].as_string()
+            if bucket:
+                return func.date_trunc(bucket, cast(base_col, DateTime)).label(f"{key}_{bucket}")
+            return resolve_column(key)
+
         selected_columns = []
         order_aliases = {}
         group_by = group_by or []
@@ -138,9 +152,17 @@ class AnalyticsService:
         order_by = order_by or []
 
         if aggregates:
-            for group_key in group_by:
-                col = resolve_column(group_key)
+            for group_item in group_by:
+                if isinstance(group_item, dict):
+                    group_key = group_item["field"]
+                    alias = f"{group_key}_{group_item['bucket']}" if group_item.get("bucket") else group_key
+                else:
+                    group_key = group_item
+                    alias = group_key
+                
+                col = get_group_col(group_item)
                 selected_columns.append(col)
+                order_aliases[alias] = col
                 order_aliases[group_key] = col
             for aggregate in aggregates:
                 function_name = aggregate["fn"]
@@ -177,7 +199,7 @@ class AnalyticsService:
                 query = query.where(where_clause)
 
         if aggregates and group_by:
-            query = query.group_by(*(resolve_column(group_key) for group_key in group_by))
+            query = query.group_by(*(get_group_col(group_item) for group_item in group_by))
 
         for ordering in order_by:
             key = ordering["field"]
@@ -209,12 +231,20 @@ class AnalyticsService:
     def _build_columns_meta(allowed_fields: dict[str, FormDatasetField], meta_columns: dict, select_fields: list[str], group_by: list[str], aggregates: list[dict]) -> list[dict]:
         if aggregates:
             meta = []
-            for group_key in group_by:
+            for group_item in group_by:
+                if isinstance(group_item, dict):
+                    group_key = group_item["field"]
+                    bucket = group_item.get("bucket")
+                else:
+                    group_key = group_item
+                    bucket = None
+
                 field = allowed_fields.get(group_key)
+                alias = f"{group_key}_{bucket}" if bucket else group_key
                 meta.append({
-                    "key": group_key,
-                    "label": field.label if field and field.label else group_key,
-                    "type": field.field_type if field and field.field_type else "text",
+                    "key": alias,
+                    "label": (field.label if field and field.label else group_key) + (f" ({bucket})" if bucket else ""),
+                    "type": "datetime" if bucket else (field.field_type if field and field.field_type else "text"),
                 })
             for aggregate in aggregates:
                 alias = aggregate.get("alias") or f"{aggregate['fn']}_{aggregate['field']}"

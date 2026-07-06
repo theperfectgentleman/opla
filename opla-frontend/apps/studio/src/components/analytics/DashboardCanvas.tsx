@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, FileSpreadsheet, LayoutDashboard, Loader2, PanelsTopLeft, Plus, Table2, FlaskConical } from 'lucide-react';
+import { BarChart3, FileSpreadsheet, LayoutDashboard, Loader2, PanelsTopLeft, Plus, Table2, FlaskConical, Hash, Target, Type } from 'lucide-react';
 
 import { analyticsAPI } from '../../lib/api';
 import { defaultSource } from './queryUtils';
 import type { AnalyticsDashboard, AnalyticsToolProps, SavedQuestion } from './types';
 import { AnalyticsPageHeader, AnalyticsPanelSkeleton, analyticsButtonClass, analyticsGhostButtonClass, analyticsInputClass, analyticsInsetClass, analyticsLabelClass, analyticsPanelClass } from './ui';
+import DashboardViewer from './DashboardViewer';
 
 const vizMeta: Record<SavedQuestion['viz_type'], { label: string; icon: ReactNode }> = {
 	table: { label: 'Table', icon: <Table2 className="h-4 w-4" /> },
@@ -13,6 +14,9 @@ const vizMeta: Record<SavedQuestion['viz_type'], { label: string; icon: ReactNod
 	spreadsheet: { label: 'Spreadsheet', icon: <FileSpreadsheet className="h-4 w-4" /> },
 	pivot: { label: 'Pivot', icon: <LayoutDashboard className="h-4 w-4" /> },
 	walker: { label: 'Walker Analysis', icon: <FlaskConical className="h-4 w-4" /> },
+	kpi: { label: 'KPI', icon: <Hash className="h-4 w-4" /> },
+	goal: { label: 'Goal', icon: <Target className="h-4 w-4" /> },
+	markdown: { label: 'Rich Text', icon: <Type className="h-4 w-4" /> },
 };
 
 function formatDate(dateString: string) {
@@ -38,6 +42,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 	const [dashboardDescription, setDashboardDescription] = useState('');
 	const [submitLoading, setSubmitLoading] = useState(false);
 	const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+	const [viewingDashboard, setViewingDashboard] = useState<AnalyticsDashboard | null>(null);
 
 	async function handleAttachQuestion(questionId: string, dashboardId: string) {
 		const dashboard = dashboards.find(d => d.id === dashboardId);
@@ -206,6 +211,14 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 		return <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700 shadow-sm">{error}</div>;
 	}
 
+	if (viewingDashboard) {
+		return (
+			<div className={analyticsPanelClass}>
+				<DashboardViewer dashboard={viewingDashboard} onClose={() => setViewingDashboard(null)} />
+			</div>
+		);
+	}
+
 	if (dashboards.length === 0 && questions.length === 0) {
 		return (
 			<div className={analyticsPanelClass}>
@@ -241,6 +254,9 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 									<option value="chart">Chart</option>
 									<option value="spreadsheet">Spreadsheet</option>
 									<option value="pivot">Pivot</option>
+									<option value="kpi">KPI Tracker</option>
+									<option value="goal">Goal Progress</option>
+									<option value="markdown">Rich Text</option>
 								</select>
 							</div>
 						</div>
@@ -354,10 +370,13 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 						<article key={dashboard.id} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
 							<div className="flex items-start justify-between gap-4">
 								<div>
-									<h4 className="text-base font-bold text-slate-800">{dashboard.title}</h4>
+									<h4 className="text-base font-bold text-slate-800 cursor-pointer hover:text-emerald-700 transition-colors" onClick={() => setViewingDashboard(dashboard)}>{dashboard.title}</h4>
 									<p className="mt-1 text-sm text-slate-500">{dashboard.description || 'No dashboard description yet.'}</p>
 								</div>
-								<span className={analyticsGhostButtonClass}>{dashboard.cards.length} card{dashboard.cards.length === 1 ? '' : 's'}</span>
+								<div className="flex gap-2">
+									<span className={analyticsGhostButtonClass}>{dashboard.cards.length} card{dashboard.cards.length === 1 ? '' : 's'}</span>
+									<button className={analyticsButtonClass} onClick={() => setViewingDashboard(dashboard)}>View</button>
+								</div>
 							</div>
 
 							<div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
@@ -431,6 +450,9 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 									<option value="chart">Chart</option>
 									<option value="spreadsheet">Spreadsheet</option>
 									<option value="pivot">Pivot</option>
+									<option value="kpi">KPI Tracker</option>
+									<option value="goal">Goal Progress</option>
+									<option value="markdown">Rich Text</option>
 								</select>
 							</div>
 						</div>

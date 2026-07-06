@@ -32,6 +32,81 @@ def list_analytics_sources(
 ):
     return AnalyticsService.list_sources(db, org_id)
 
+from fastapi import UploadFile, File
+import csv
+import io
+from app.models.form import Form, FormDataset
+from app.models.submission import Submission
+
+@router.post("/upload-csv")
+async def upload_csv_dataset(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID = Query(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    membership=Depends(get_user_org_role),
+):
+    # Parse CSV
+    content = await file.read()
+    text = content.decode('utf-8')
+    reader = csv.DictReader(io.StringIO(text))
+    rows = list(reader)
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="CSV is empty")
+
+    # Determine fields
+    fields = []
+    for key in reader.fieldnames or []:
+        fields.append({
+            "field_key": key,
+            "label": key,
+            "field_type": "number" if all(row[key].replace('.','',1).isdigit() for row in rows if row.get(key)) else "string",
+            "field_identifier": f"csv_{key}"
+        })
+
+    # Create mock Form and FormDataset
+    form = Form(
+        org_id=org_id,
+        project_id=project_id,
+        title=f"Uploaded: {file.filename}",
+        created_by=current_user.id,
+        version=1,
+        published_version=1,
+        schema={"pages": [], "fields": fields}
+    )
+    db.add(form)
+    db.flush()
+
+    dataset = FormDataset(
+        org_id=org_id,
+        project_id=project_id,
+        form_id=form.id,
+        dataset_slug=f"csv_{form.id.hex[:8]}",
+        form_title=form.title,
+        form_version=1,
+        fields=fields,
+        row_count=len(rows)
+    )
+    db.add(dataset)
+    
+    # Create Submissions
+    for row in rows:
+        sub = Submission(
+            org_id=org_id,
+            project_id=project_id,
+            form_id=form.id,
+            form_version=1,
+            data=row,
+            created_by=current_user.id
+        )
+        db.add(sub)
+    
+    db.commit()
+    return {"status": "success", "dataset_id": dataset.id, "row_count": len(rows)}
+
+
 
 @router.post("/query", response_model=AnalyticsQueryResponse)
 def run_analytics_query(

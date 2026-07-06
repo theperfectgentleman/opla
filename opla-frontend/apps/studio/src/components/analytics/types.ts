@@ -41,7 +41,7 @@ export interface SavedQuestion {
 	description?: string | null;
 	source_config: Record<string, unknown>;
 	query_config: Record<string, unknown>;
-	viz_type: 'table' | 'chart' | 'spreadsheet' | 'pivot' | 'walker';
+	viz_type: 'table' | 'chart' | 'spreadsheet' | 'pivot' | 'walker' | 'kpi' | 'goal' | 'markdown';
 	viz_config?: Record<string, unknown> | null;
 	cache_ttl_seconds?: number | null;
 	is_archived: boolean;

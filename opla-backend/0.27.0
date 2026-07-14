@@ -1,0 +1,10 @@
+Collecting httpx
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Requirement already satisfied: anyio in c:\users\kings\appdata\local\temp\cursor-sandbox-cache\4c70073d1f1d4dd5d920468c31f69947\poetry\virtualenvs\opla-backend-skmwm517-py3.14\lib\site-packages (from httpx) (4.12.1)
+Requirement already satisfied: certifi in c:\users\kings\appdata\local\temp\cursor-sandbox-cache\4c70073d1f1d4dd5d920468c31f69947\poetry\virtualenvs\opla-backend-skmwm517-py3.14\lib\site-packages (from httpx) (2026.6.17)
+Requirement already satisfied: httpcore==1.* in c:\users\kings\appdata\local\temp\cursor-sandbox-cache\4c70073d1f1d4dd5d920468c31f69947\poetry\virtualenvs\opla-backend-skmwm517-py3.14\lib\site-packages (from httpx) (1.0.9)
+Requirement already satisfied: idna in c:\users\kings\appdata\local\temp\cursor-sandbox-cache\4c70073d1f1d4dd5d920468c31f69947\poetry\virtualenvs\opla-backend-skmwm517-py3.14\lib\site-packages (from httpx) (3.11)
+Requirement already satisfied: h11>=0.16 in c:\users\kings\appdata\local\temp\cursor-sandbox-cache\4c70073d1f1d4dd5d920468c31f69947\poetry\virtualenvs\opla-backend-skmwm517-py3.14\lib\site-packages (from httpcore==1.*->httpx) (0.16.0)
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Installing collected packages: httpx
+Successfully installed httpx-0.28.1

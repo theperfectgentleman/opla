@@ -262,7 +262,19 @@ export const roleAPI = {
 // ============= Project API Methods =============
 
 export const projectAPI = {
-    create: async (orgId: string, data: { name: string; description?: string }) => {
+    create: async (
+        orgId: string,
+        data: {
+            name: string;
+            description?: string;
+            collection_start_date: string;
+            collection_end_date: string;
+            collection_time_start?: string;
+            collection_time_end?: string;
+            expected_total_count?: number | null;
+            expected_weekly_count?: number | null;
+        },
+    ) => {
         const response = await apiClient.post(`/organizations/${orgId}/projects`, data);
         return response.data;
     },
@@ -281,6 +293,12 @@ export const projectAPI = {
             name?: string;
             description?: string;
             status?: 'planning' | 'active' | 'paused' | 'archived';
+            collection_start_date?: string;
+            collection_end_date?: string;
+            collection_time_start?: string;
+            collection_time_end?: string;
+            expected_total_count?: number | null;
+            expected_weekly_count?: number | null;
         },
     ) => {
         const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}`, data);

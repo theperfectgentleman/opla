@@ -32,11 +32,30 @@ class ProjectService:
         name: str,
         description: Optional[str] = None,
         created_by: Optional[uuid.UUID] = None,
+        *,
+        collection_start_date=None,
+        collection_end_date=None,
+        collection_time_start=None,
+        collection_time_end=None,
+        expected_total_count: Optional[int] = None,
+        expected_weekly_count: Optional[int] = None,
     ) -> Project:
+        from datetime import time as time_cls
+
         project = Project(
             org_id=org_id,
             name=name,
-            description=description
+            description=description,
+            collection_start_date=collection_start_date,
+            collection_end_date=collection_end_date,
+            collection_time_start=collection_time_start or time_cls(9, 0),
+            collection_time_end=collection_time_end or time_cls(17, 0),
+            expected_total_count=expected_total_count,
+            expected_weekly_count=(
+                expected_weekly_count
+                if expected_weekly_count is not None
+                else (1 if expected_total_count is None else None)
+            ),
         )
         db.add(project)
         db.flush()
@@ -71,11 +90,56 @@ class ProjectService:
         name: Optional[str] = None,
         description: Optional[str] = None,
         status: Optional[ProjectStatus] = None,
+        collection_start_date=None,
+        collection_end_date=None,
+        collection_time_start=None,
+        collection_time_end=None,
+        expected_total_count: Optional[int] = None,
+        expected_weekly_count: Optional[int] = None,
+        clear_expected_total: bool = False,
+        clear_expected_weekly: bool = False,
     ) -> Project:
         if name is not None:
             project.name = name
         if description is not None:
             project.description = description
+        if collection_start_date is not None:
+            project.collection_start_date = collection_start_date
+        if collection_end_date is not None:
+            project.collection_end_date = collection_end_date
+        if collection_time_start is not None:
+            project.collection_time_start = collection_time_start
+        if collection_time_end is not None:
+            project.collection_time_end = collection_time_end
+        if clear_expected_total:
+            project.expected_total_count = None
+        elif expected_total_count is not None:
+            project.expected_total_count = expected_total_count
+        if clear_expected_weekly:
+            project.expected_weekly_count = None
+        elif expected_weekly_count is not None:
+            project.expected_weekly_count = expected_weekly_count
+
+        # Keep expectation invariant after updates.
+        total = project.expected_total_count
+        weekly = project.expected_weekly_count
+        if not ((total is not None and total >= 1) or (weekly is not None and weekly >= 1)):
+            raise HTTPException(
+                status_code=400,
+                detail="Set at least one of expected_total_count or expected_weekly_count (minimum 1)",
+            )
+        if project.collection_start_date and project.collection_end_date:
+            if project.collection_end_date < project.collection_start_date:
+                raise HTTPException(
+                    status_code=400,
+                    detail="collection_end_date must be on or after collection_start_date",
+                )
+        if project.collection_time_end <= project.collection_time_start:
+            raise HTTPException(
+                status_code=400,
+                detail="collection_time_end must be after collection_time_start",
+            )
+
         if status is not None and status != project.status:
             project.status = status
             now = datetime.utcnow()

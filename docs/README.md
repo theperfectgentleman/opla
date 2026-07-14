@@ -50,6 +50,11 @@ Read in this order to understand the project:
    - **Purpose:** Track completion of tasks across all phases
    - **Use:** Mark checkboxes as you complete tasks
 
+9. **`Project-Command-Centre-Phases.md`** 🧭 PROJECT HUB ROADMAP
+   - **Purpose:** Phased plan for the project command centre (ProjectHub)
+   - **Process:** Clarify → Build in ProjectHub → Wire APIs → Close; cut over to live project page when complete
+   - **Use:** Before starting each phase, answer that phase’s clarifying questions in the doc
+
 ---
 
 ## **📂 Document Quick Reference**
@@ -66,6 +71,7 @@ Read in this order to understand the project:
 | `PROJECT Opla_AI Start Guide.md` | Quick Start | You want high-level implementation phases |
 | `Backend-Studio Development Roadmap.md` | Dev Plan | **You're actively developing the backend or studio** |
 | `DEVELOPMENT_CHECKLIST.md` | Tracker | You want to track progress or plan next session |
+| `Project-Command-Centre-Phases.md` | Hub Roadmap | **You're building the project command centre / ProjectHub** |
 
 ---
 
@@ -80,6 +86,7 @@ Read in this order to understand the project:
 | Tech stack | `Opine Platform Rebuild_Technical Architecture.md` | Section 2 |
 | How to build auth | `Backend-Studio Development Roadmap.md` | Phase 1 |
 | How to build form builder | `Backend-Studio Development Roadmap.md` | Phase 4 |
+| Project command centre / ProjectHub phases | `Project-Command-Centre-Phases.md` | Phase list + clarifying gates |
 | Widget types | `Form Blueprint.md` | UI section (lines 50-105) |
 | Access control rules | `Opine Platform Rebuild_Backend Specification.md` | Section 3 |
 | Environment setup | `Backend-Studio Development Roadmap.md` | Quick Reference |

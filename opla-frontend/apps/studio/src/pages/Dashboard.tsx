@@ -110,6 +110,12 @@ const Dashboard: React.FC = () => {
     const [reports, setReports] = useState<DashboardReport[]>([]);
     const [showCreateProject, setShowCreateProject] = useState(false);
     const [projectName, setProjectName] = useState('');
+    const [projectCollectionStart, setProjectCollectionStart] = useState('');
+    const [projectCollectionEnd, setProjectCollectionEnd] = useState('');
+    const [projectTimeStart, setProjectTimeStart] = useState('09:00');
+    const [projectTimeEnd, setProjectTimeEnd] = useState('17:00');
+    const [projectExpectedTotal, setProjectExpectedTotal] = useState('');
+    const [projectExpectedWeekly, setProjectExpectedWeekly] = useState('1');
     const [savingForm, setSavingForm] = useState(false);
     const [teams, setTeams] = useState<{ id: string; name: string }[]>([]);
     const [taskProjectId, setTaskProjectId] = useState('');
@@ -389,12 +395,34 @@ const Dashboard: React.FC = () => {
 
     const handleCreateProject = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!projectName.trim()) return;
+        if (!projectName.trim() || !projectCollectionStart || !projectCollectionEnd) return;
+        const total = projectExpectedTotal.trim() ? Number(projectExpectedTotal) : null;
+        const weekly = projectExpectedWeekly.trim() ? Number(projectExpectedWeekly) : null;
+        if (!((total != null && total >= 1) || (weekly != null && weekly >= 1))) {
+            alert('Set at least one expected target (total or weekly) to 1 or more.');
+            return;
+        }
 
         try {
-            await createProject(projectName, '');
+            const created = await createProject({
+                name: projectName.trim(),
+                description: '',
+                collection_start_date: projectCollectionStart,
+                collection_end_date: projectCollectionEnd,
+                collection_time_start: `${projectTimeStart}:00`,
+                collection_time_end: `${projectTimeEnd}:00`,
+                expected_total_count: total,
+                expected_weekly_count: weekly,
+            });
             setProjectName('');
+            setProjectCollectionStart('');
+            setProjectCollectionEnd('');
+            setProjectTimeStart('09:00');
+            setProjectTimeEnd('17:00');
+            setProjectExpectedTotal('');
+            setProjectExpectedWeekly('1');
             setShowCreateProject(false);
+            navigate(`/projects/${created.id}/hub`);
         } catch (err) {
             alert('Failed to create project');
         }
@@ -414,6 +442,11 @@ const Dashboard: React.FC = () => {
     const openProjectWorkspace = (project: typeof projects[number]) => {
         setCurrentProject(project);
         navigate(`/projects/${project.id}`);
+    };
+
+    const openProjectHub = (project: typeof projects[number]) => {
+        setCurrentProject(project);
+        navigate(`/projects/${project.id}/hub`);
     };
 
     const taskAssignableAccessors = taskAssigneeType === 'team'
@@ -1110,20 +1143,23 @@ const Dashboard: React.FC = () => {
 
                         <button
                             type="button"
-                            onClick={() => navigate('/pdemo')}
+                            onClick={() => {
+                                if (projects[0]) openProjectHub(projects[0]);
+                                else alert('Create a project first to open ProjectHub.');
+                            }}
                             className="w-full text-left rounded-2xl border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 px-5 py-4 hover:bg-[hsl(var(--primary))]/12 transition-colors"
                         >
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                     <p className="text-sm font-bold text-[hsl(var(--text-primary))]">
-                                        PDemo — Project Command Centre
+                                        ProjectHub — Command Centre
                                     </p>
                                     <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">
-                                        Mock read-only home: KPIs, hub assets, progress, gallery, map, catalogs, activity feed.
+                                        Opens `/projects/:id/hub` for your first project (Phase 1 live wiring).
                                     </p>
                                 </div>
                                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))]">
-                                    Open prototype
+                                    Open ProjectHub
                                     <ChevronRight className="w-4 h-4" />
                                 </span>
                             </div>
@@ -1183,6 +1219,15 @@ const Dashboard: React.FC = () => {
                                         )}
 
                                         <div className="mt-auto space-y-2">
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    openProjectHub(project);
+                                                }}
+                                                className="w-full flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-4 py-2.5 rounded-md transition-all text-sm"
+                                            >
+                                                <span>Open ProjectHub</span>
+                                            </button>
                                             <button
                                                 onClick={(event) => {
                                                     event.stopPropagation();
@@ -1676,9 +1721,9 @@ const Dashboard: React.FC = () => {
 
             {showCreateProject && (
                 <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-[32px] p-8 w-full max-w-md shadow-2xl">
+                    <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-[32px] p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
                         <h2 className="text-2xl font-bold mb-6">Create New Project</h2>
-                        <form onSubmit={handleCreateProject} className="space-y-6">
+                        <form onSubmit={handleCreateProject} className="space-y-5">
                             <div>
                                 <label className="label">Project Name</label>
                                 <input
@@ -1687,9 +1732,79 @@ const Dashboard: React.FC = () => {
                                     className="input"
                                     placeholder="e.g. Q1 Customer Survey"
                                     autoFocus
+                                    required
                                 />
                             </div>
-                            <div className="flex space-x-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="label">Collection start</label>
+                                    <input
+                                        type="date"
+                                        value={projectCollectionStart}
+                                        onChange={(event) => setProjectCollectionStart(event.target.value)}
+                                        className="input"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Collection end</label>
+                                    <input
+                                        type="date"
+                                        value={projectCollectionEnd}
+                                        onChange={(event) => setProjectCollectionEnd(event.target.value)}
+                                        className="input"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="label">Daily start (default 09:00)</label>
+                                    <input
+                                        type="time"
+                                        value={projectTimeStart}
+                                        onChange={(event) => setProjectTimeStart(event.target.value)}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Daily end (default 17:00)</label>
+                                    <input
+                                        type="time"
+                                        value={projectTimeEnd}
+                                        onChange={(event) => setProjectTimeEnd(event.target.value)}
+                                        className="input"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="label">Expected total (optional)</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={projectExpectedTotal}
+                                        onChange={(event) => setProjectExpectedTotal(event.target.value)}
+                                        className="input"
+                                        placeholder="e.g. 500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Expected weekly (optional)</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={projectExpectedWeekly}
+                                        onChange={(event) => setProjectExpectedWeekly(event.target.value)}
+                                        className="input"
+                                        placeholder="e.g. 40"
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                                Set at least one expected target (total or weekly) to 1 or more.
+                            </p>
+                            <div className="flex space-x-3 pt-2">
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateProject(false)}

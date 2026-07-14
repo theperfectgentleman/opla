@@ -17,6 +17,12 @@ interface Project {
     description?: string;
     org_id: string;
     status: 'planning' | 'active' | 'paused' | 'archived';
+    collection_start_date?: string | null;
+    collection_end_date?: string | null;
+    collection_time_start?: string;
+    collection_time_end?: string;
+    expected_total_count?: number | null;
+    expected_weekly_count?: number | null;
     activated_at?: string | null;
     paused_at?: string | null;
     archived_at?: string | null;
@@ -39,10 +45,29 @@ interface OrgContextType {
     refreshMembers: (orgId: string) => Promise<void>;
     refreshCurrentProject: (orgId: string, projectId: string) => Promise<Project>;
     createOrganization: (name: string) => Promise<Organization>;
-    createProject: (name: string, description?: string) => Promise<Project>;
+    createProject: (data: {
+        name: string;
+        description?: string;
+        collection_start_date: string;
+        collection_end_date: string;
+        collection_time_start?: string;
+        collection_time_end?: string;
+        expected_total_count?: number | null;
+        expected_weekly_count?: number | null;
+    }) => Promise<Project>;
     updateProject: (
         projectId: string,
-        data: { name?: string; description?: string; status?: 'planning' | 'active' | 'paused' | 'archived' },
+        data: {
+            name?: string;
+            description?: string;
+            status?: 'planning' | 'active' | 'paused' | 'archived';
+            collection_start_date?: string;
+            collection_end_date?: string;
+            collection_time_start?: string;
+            collection_time_end?: string;
+            expected_total_count?: number | null;
+            expected_weekly_count?: number | null;
+        },
     ) => Promise<Project>;
 }
 
@@ -150,10 +175,19 @@ export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }, [currentOrg]);
 
-    const createProject = useCallback(async (name: string, description?: string) => {
+    const createProject = useCallback(async (data: {
+        name: string;
+        description?: string;
+        collection_start_date: string;
+        collection_end_date: string;
+        collection_time_start?: string;
+        collection_time_end?: string;
+        expected_total_count?: number | null;
+        expected_weekly_count?: number | null;
+    }) => {
         if (!currentOrg) throw new Error('No organization selected');
         try {
-            const newProject = await projectAPI.create(currentOrg.id, { name, description });
+            const newProject = await projectAPI.create(currentOrg.id, data);
             setProjects(prev => [...prev, newProject]);
             setCurrentProject(newProject);
             return newProject;
@@ -183,7 +217,17 @@ export const OrgProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const updateProject = useCallback(async (
         projectId: string,
-        data: { name?: string; description?: string; status?: 'planning' | 'active' | 'paused' | 'archived' },
+        data: {
+            name?: string;
+            description?: string;
+            status?: 'planning' | 'active' | 'paused' | 'archived';
+            collection_start_date?: string;
+            collection_end_date?: string;
+            collection_time_start?: string;
+            collection_time_end?: string;
+            expected_total_count?: number | null;
+            expected_weekly_count?: number | null;
+        },
     ) => {
         if (!currentOrg) throw new Error('No organization selected');
         try {

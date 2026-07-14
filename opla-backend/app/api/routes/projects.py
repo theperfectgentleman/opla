@@ -85,6 +85,12 @@ def create_project(
         name=project_in.name,
         description=project_in.description,
         created_by=current_user.id,
+        collection_start_date=project_in.collection_start_date,
+        collection_end_date=project_in.collection_end_date,
+        collection_time_start=project_in.collection_time_start,
+        collection_time_end=project_in.collection_time_end,
+        expected_total_count=project_in.expected_total_count,
+        expected_weekly_count=project_in.expected_weekly_count,
     )
 
 @router.get("", response_model=List[ProjectOut])
@@ -217,12 +223,21 @@ def update_project(
     if project.org_id != org_id:
         raise HTTPException(status_code=404, detail="Project not found")
     ProjectAccessService.ensure_project_is_mutable(project)
+    payload = project_in.model_dump(exclude_unset=True)
     return ProjectService.update_project(
         db,
         project,
-        name=project_in.name,
-        description=project_in.description,
-        status=project_in.status,
+        name=payload.get("name"),
+        description=payload.get("description"),
+        status=payload.get("status"),
+        collection_start_date=payload.get("collection_start_date"),
+        collection_end_date=payload.get("collection_end_date"),
+        collection_time_start=payload.get("collection_time_start"),
+        collection_time_end=payload.get("collection_time_end"),
+        expected_total_count=payload.get("expected_total_count"),
+        expected_weekly_count=payload.get("expected_weekly_count"),
+        clear_expected_total="expected_total_count" in payload and payload.get("expected_total_count") is None,
+        clear_expected_weekly="expected_weekly_count" in payload and payload.get("expected_weekly_count") is None,
     )
 
 

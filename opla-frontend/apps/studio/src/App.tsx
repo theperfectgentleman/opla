@@ -12,7 +12,7 @@ import FormBuilder from './pages/FormBuilder';
 import FormSimulator from './pages/FormSimulator';
 import PublicForm from './pages/PublicForm';
 import ProjectWorkspace from './pages/ProjectWorkspace';
-import ProjectDemo from './pages/ProjectDemo';
+import ProjectHub from './pages/ProjectHub';
 import AiSurveyWizard from './pages/AiSurveyWizard';
 import InvitationAccept from './pages/InvitationAccept';
 import ReportDetail from './pages/ReportDetail';
@@ -58,12 +58,16 @@ function App() {
                 }
               />
               <Route
-                path="/pdemo"
+                path="/projects/:projectId/hub"
                 element={
                   <ProtectedRoute>
-                    <ProjectDemo />
+                    <ProjectHub />
                   </ProtectedRoute>
                 }
+              />
+              <Route
+                path="/pdemo"
+                element={<Navigate to="/dashboard?tab=projects" replace />}
               />
               <Route
                 path="/projects/:projectId"

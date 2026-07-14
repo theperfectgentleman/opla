@@ -1108,6 +1108,27 @@ const Dashboard: React.FC = () => {
                             </button>
                         </div>
 
+                        <button
+                            type="button"
+                            onClick={() => navigate('/pdemo')}
+                            className="w-full text-left rounded-2xl border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 px-5 py-4 hover:bg-[hsl(var(--primary))]/12 transition-colors"
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-sm font-bold text-[hsl(var(--text-primary))]">
+                                        PDemo — Project Command Centre
+                                    </p>
+                                    <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">
+                                        Mock read-only home: KPIs, hub assets, progress, gallery, map, catalogs, activity feed.
+                                    </p>
+                                </div>
+                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))]">
+                                    Open prototype
+                                    <ChevronRight className="w-4 h-4" />
+                                </span>
+                            </div>
+                        </button>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {projects.map(project => (
                                 <div

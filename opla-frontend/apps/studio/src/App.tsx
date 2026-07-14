@@ -12,6 +12,7 @@ import FormBuilder from './pages/FormBuilder';
 import FormSimulator from './pages/FormSimulator';
 import PublicForm from './pages/PublicForm';
 import ProjectWorkspace from './pages/ProjectWorkspace';
+import ProjectDemo from './pages/ProjectDemo';
 import AiSurveyWizard from './pages/AiSurveyWizard';
 import InvitationAccept from './pages/InvitationAccept';
 import ReportDetail from './pages/ReportDetail';
@@ -53,6 +54,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/pdemo"
+                element={
+                  <ProtectedRoute>
+                    <ProjectDemo />
                   </ProtectedRoute>
                 }
               />

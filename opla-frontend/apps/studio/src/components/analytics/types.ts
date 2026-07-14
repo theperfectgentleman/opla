@@ -5,6 +5,20 @@ export interface AnalyticsSourceField {
 	field_key: string;
 	label?: string | null;
 	field_type?: string | null;
+	options?: Array<{ label: string; value: string }> | null;
+}
+
+export interface AnalyticsSourceDerived {
+	kind: 'derived' | string;
+	mode: 'snapshot' | 'linked' | string;
+	parent_dataset_id?: string | null;
+	columns?: Array<{
+		key: string;
+		label: string;
+		field_type?: string | null;
+		calculated?: boolean;
+		formula?: string | null;
+	}>;
 }
 
 export interface AnalyticsSource {
@@ -17,6 +31,7 @@ export interface AnalyticsSource {
 	project_name?: string | null;
 	fields: AnalyticsSourceField[];
 	record_count: number;
+	derived?: AnalyticsSourceDerived | null;
 }
 
 export interface QueryColumn {
@@ -41,7 +56,7 @@ export interface SavedQuestion {
 	description?: string | null;
 	source_config: Record<string, unknown>;
 	query_config: Record<string, unknown>;
-	viz_type: 'table' | 'chart' | 'spreadsheet' | 'pivot' | 'walker' | 'kpi' | 'goal' | 'markdown';
+	viz_type: 'table' | 'chart' | 'walker' | 'kpi' | 'goal' | 'markdown';
 	viz_config?: Record<string, unknown> | null;
 	cache_ttl_seconds?: number | null;
 	is_archived: boolean;
@@ -88,4 +103,5 @@ export interface AnalyticsToolProps {
 	sources: AnalyticsSource[];
 	initialSource?: AnalyticsSource | null;
 	initialAnalysis?: SavedQuestion | null;
+	onSourcesChanged?: () => Promise<void> | void;
 }

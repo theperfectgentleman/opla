@@ -82,7 +82,8 @@ export default function DashboardViewer({ dashboard, onClose, orgId }: Dashboard
 
 	useEffect(() => {
 		dashboard.cards.forEach(card => {
-			if (card.question && card.question.viz_type !== 'markdown') {
+			const vizType = card.question?.viz_type;
+			if (card.question && vizType !== 'markdown' && vizType !== 'walker') {
 				fetchCardData(card);
 			}
 		});
@@ -159,7 +160,15 @@ export default function DashboardViewer({ dashboard, onClose, orgId }: Dashboard
 						}}
 					/>
 				)}
-				{!isLoading && !result && question.viz_type !== 'markdown' && (
+				{!isLoading && question.viz_type === 'walker' && (
+					<div className="flex h-full flex-col justify-center rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+						<p className="text-sm font-semibold text-slate-800">{question.title}</p>
+						<p className="mt-2 text-sm text-slate-500">
+							Walker analyses open in Analysis Lab. Dashboard rendering for Walker cards comes next.
+						</p>
+					</div>
+				)}
+				{!isLoading && !result && question.viz_type !== 'markdown' && question.viz_type !== 'walker' && (
 					<div className="flex h-full items-center justify-center rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 text-sm text-slate-400">
 						No data
 					</div>

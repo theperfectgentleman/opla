@@ -1,18 +1,24 @@
 import type { ReactNode } from 'react';
-import { Suspense, lazy, useEffect, useMemo, useState, useRef } from 'react';
-import { ArrowRight, BarChart3, FileSpreadsheet, FlaskConical, LayoutDashboard, Loader2, PanelsTopLeft, Table2, UploadCloud } from 'lucide-react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, FlaskConical, Loader2, PanelsTopLeft, Table2, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { analyticsAPI } from '../../lib/api';
 import type { AnalyticsSource } from './types';
-import { AnalyticsHubSkeleton, AnalyticsPageHeader, AnalyticsPanelSkeleton, analyticsGhostButtonClass, analyticsInsetClass, analyticsPanelClass } from './ui';
+import {
+  AnalyticsHubSkeleton,
+  AnalyticsPageHeader,
+  AnalyticsPanelSkeleton,
+  analyticsGhostButtonClass,
+  analyticsInsetClass,
+  analyticsPanelClass,
+} from './ui';
 
-const DataExplorer = lazy(() => import('./DataExplorer'));
-const ChartBuilder = lazy(() => import('./ChartBuilder'));
-const AnalyticsSpreadsheet = lazy(() => import('./AnalyticsSpreadsheet'));
-const AnalyticsPivot = lazy(() => import('./AnalyticsPivot'));
+const WalkerAnalysisLab = lazy(() => import('./WalkerAnalysisLab'));
+const PrepTable = lazy(() => import('./PrepTable'));
 const DashboardCanvas = lazy(() => import('./DashboardCanvas'));
-const VisualQueryBuilder = lazy(() => import('./VisualQueryBuilder'));
+
+export type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard';
 
 type AnalyticsHubForm = {
   id: string;
@@ -29,72 +35,31 @@ interface AnalyticsHubProps {
   activeTool?: AnalyticsToolKey;
 }
 
-type AnalyticsToolKey = 'lab' | 'explorer' | 'chart' | 'spreadsheet' | 'pivot' | 'dashboard';
-
 type AnalyticsToolCard = {
   key: AnalyticsToolKey;
   label: string;
   icon: ReactNode;
-  color: string;
-  accent: string;
   description: string;
-  bullets: string[];
 };
 
 const toolCards: AnalyticsToolCard[] = [
   {
     key: 'lab',
     label: 'Analysis Lab',
-    icon: <FlaskConical className="h-7 w-7" />,
-    color: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30',
-    accent: 'text-emerald-700 dark:text-emerald-300',
-    description: 'Analyze one published dataset in Graphic Walker through the first user-facing Opla analysis flow.',
-    bullets: ['Single-form analysis', 'Local capped row loading', 'Phase 1 analysis workflow'],
+    icon: <FlaskConical className="h-5 w-5" />,
+    description: 'Explore with Graphic Walker.',
   },
   {
-    key: 'explorer',
-    label: 'Data Explorer',
-    icon: <Table2 className="h-7 w-7" />,
-    color: 'from-sky-500/20 to-sky-500/5 border-sky-500/30',
-    accent: 'text-sky-700 dark:text-sky-300',
-    description: 'Inspect raw submission rows, choose a dataset, and prepare ad hoc tables.',
-    bullets: ['Dataset field browsing', 'Tabular query results', 'Saved question workflow is being restored'],
-  },
-  {
-    key: 'chart',
-    label: 'Chart Builder',
-    icon: <BarChart3 className="h-7 w-7" />,
-    color: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30',
-    accent: 'text-emerald-700 dark:text-emerald-300',
-    description: 'Configure grouped metrics and preview chart-oriented summaries.',
-    bullets: ['Dimension and metric mapping', 'Aggregation setup', 'Chart rendering slice needs to be reconnected'],
-  },
-  {
-    key: 'spreadsheet',
-    label: 'Spreadsheet',
-    icon: <FileSpreadsheet className="h-7 w-7" />,
-    color: 'from-violet-500/20 to-violet-500/5 border-violet-500/30',
-    accent: 'text-violet-700 dark:text-violet-300',
-    description: 'Open analytics results in a spreadsheet-style surface for review and cleanup.',
-    bullets: ['Syncfusion spreadsheet surface', 'Result export and manipulation', 'Spreadsheet module content needs restoring'],
+    key: 'prep',
+    label: 'Data Prep',
+    icon: <Table2 className="h-5 w-5" />,
+    description: 'Transform rows with Excel-like formulas, then open in Lab.',
   },
   {
     key: 'dashboard',
     label: 'Dashboards',
-    icon: <PanelsTopLeft className="h-7 w-7" />,
-    color: 'from-slate-200 to-slate-50 border-slate-300',
-    accent: 'text-slate-700',
-    description: 'Review saved dashboards and reusable questions already persisted for this workspace.',
-    bullets: ['Saved dashboard inventory', 'Question reuse visibility', 'Compact read-only analytics catalog'],
-  },
-  {
-    key: 'pivot',
-    label: 'Pivot Table',
-    icon: <LayoutDashboard className="h-7 w-7" />,
-    color: 'from-amber-500/20 to-amber-500/5 border-amber-500/30',
-    accent: 'text-amber-700 dark:text-amber-300',
-    description: 'Slice dataset rows into cross-tab summaries with row, column, and value fields.',
-    bullets: ['Pivot summarization flow', 'Aggregation controls', 'Syncfusion pivot module content needs restoring'],
+    icon: <PanelsTopLeft className="h-5 w-5" />,
+    description: 'Organize saved questions into dashboards.',
   },
 ];
 
@@ -118,28 +83,38 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const selectedTool = useMemo(
+    () => toolCards.find(tool => tool.key === activeTool) ?? toolCards[0],
+    [activeTool],
+  );
+
+  const reloadSources = async () => {
+    const response = await analyticsAPI.listSources(orgId);
+    setSources(response);
+  };
+
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !projectId) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
+    setError(null);
     try {
-      // Use standard fetch to bypass json serialization
       const token = localStorage.getItem('opla_auth_token') || '';
-      const res = await fetch(`http://localhost:8000/api/v1/organizations/${orgId}/analytics/upload-csv?project_id=${projectId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
+      const res = await fetch(
+        `http://localhost:8000/api/v1/organizations/${orgId}/analytics/upload-csv?project_id=${projectId}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: (() => {
+            const formData = new FormData();
+            formData.append('file', file);
+            return formData;
+          })(),
         },
-        body: formData
-      });
+      );
       if (!res.ok) throw new Error('Upload failed');
-      // Reload sources
-      const response = await analyticsAPI.listSources(orgId);
-      setSources(response);
+      await reloadSources();
     } catch (err: any) {
       setError(err.message || 'Could not upload CSV.');
     } finally {
@@ -147,11 +122,6 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
-
-  const selectedTool = useMemo(
-    () => toolCards.find(tool => tool.key === activeTool) ?? toolCards[0],
-    [activeTool],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -161,17 +131,13 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
       setError(null);
       try {
         const response = await analyticsAPI.listSources(orgId);
-        if (!cancelled) {
-          setSources(response);
-        }
+        if (!cancelled) setSources(response);
       } catch (loadError: any) {
         if (!cancelled) {
           setError(loadError?.response?.data?.detail || loadError?.message || 'Could not load analytics datasets.');
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -182,9 +148,7 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
   }, [orgId]);
 
   const workspace = useMemo(() => {
-    if (loading) {
-      return <AnalyticsHubSkeleton />;
-    }
+    if (loading) return <AnalyticsHubSkeleton />;
 
     if (error) {
       return (
@@ -200,13 +164,20 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
       return (
         <div className={analyticsPanelClass}>
           <AnalyticsPageHeader
-            eyebrow="Analytics Setup"
-            title="No Published Datasets Yet"
-            description="Publish at least one form to generate a dataset that the analytics workbenches can query."
+            eyebrow="Analytics"
+            title="No datasets yet"
+            description="Publish a form or upload a CSV to create a dataset for Analysis Lab."
             actions={
               <>
-                <button type="button" onClick={() => navigate('/dashboard?tab=forms')} className={analyticsGhostButtonClass}>Go To Forms</button>
-                <button type="button" onClick={() => fileInputRef.current?.click()} className={analyticsGhostButtonClass} disabled={uploading || !projectId}>
+                <button type="button" onClick={() => navigate('/dashboard?tab=forms')} className={analyticsGhostButtonClass}>
+                  Go to forms
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={analyticsGhostButtonClass}
+                  disabled={uploading || !projectId}
+                >
                   {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                   Upload CSV
                 </button>
@@ -217,13 +188,15 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
 
           <div className={`${analyticsInsetClass} mt-4 p-4`}>
             <p className="max-w-3xl text-sm leading-6 text-slate-500">
-              Analytics reads from published form datasets. This organization currently has {forms.length} form{forms.length === 1 ? '' : 's'} and 0 published datasets,
-              so the workbenches cannot query anything yet.
+              Analytics reads published form datasets. This organization has {forms.length} form
+              {forms.length === 1 ? '' : 's'} and 0 queryable datasets.
             </p>
 
             {unpublishedForms.length > 0 ? (
               <>
-                <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Publish one of these forms to unlock analytics</p>
+                <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                  Publish one of these forms
+                </p>
                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {unpublishedForms.slice(0, 6).map(form => (
                     <button
@@ -233,9 +206,11 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
                       className="rounded-md border border-slate-200 bg-white p-3 text-left transition hover:border-emerald-700 hover:bg-emerald-50/40"
                     >
                       <span className="block text-sm font-semibold text-slate-800">{form.title}</span>
-                      <span className="mt-1 block text-xs text-slate-500">Draft version {form.version ?? 0} • Not yet published</span>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        Draft version {form.version ?? 0} · Not published
+                      </span>
                       <span className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                        Open Builder
+                        Open builder
                         <ArrowRight className="h-4 w-4" />
                       </span>
                     </button>
@@ -244,7 +219,7 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
               </>
             ) : (
               <div className="mt-4 rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-500">
-                No forms are available to publish from this view. Create or reopen a form from the Forms tab, then publish it.
+                Create or reopen a form from the Forms tab, then publish it.
               </div>
             )}
           </div>
@@ -252,75 +227,67 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
       );
     }
 
-    const toolProps = { orgId, projectId, sources };
-    switch (activeTool) {
-    case 'lab':
+    const toolProps = { orgId, projectId, sources, onSourcesChanged: reloadSources };
+
+    if (activeTool === 'dashboard') {
       return (
-        <Suspense fallback={<ToolWorkspaceFallback label="visual query builder" />}>
-          <VisualQueryBuilder {...toolProps} />
+        <Suspense fallback={<ToolWorkspaceFallback label="dashboards" />}>
+          <DashboardCanvas {...toolProps} />
         </Suspense>
       );
-      case 'dashboard':
-        return (
-          <Suspense fallback={<ToolWorkspaceFallback label="dashboards" />}>
-            <DashboardCanvas {...toolProps} />
-          </Suspense>
-        );
-      case 'chart':
-        return (
-          <Suspense fallback={<ToolWorkspaceFallback label="chart builder" />}>
-            <ChartBuilder {...toolProps} />
-          </Suspense>
-        );
-      case 'spreadsheet':
-        return (
-          <Suspense fallback={<ToolWorkspaceFallback label="spreadsheet" />}>
-            <AnalyticsSpreadsheet {...toolProps} />
-          </Suspense>
-        );
-      case 'pivot':
-        return (
-          <Suspense fallback={<ToolWorkspaceFallback label="pivot table" />}>
-            <AnalyticsPivot {...toolProps} />
-          </Suspense>
-        );
-      case 'explorer':
-      default:
-        return (
-          <Suspense fallback={<ToolWorkspaceFallback label="data explorer" />}>
-            <DataExplorer {...toolProps} />
-          </Suspense>
-        );
     }
-  }, [activeTool, error, forms, loading, navigate, orgId, projectId, sources]);
+
+    if (activeTool === 'prep') {
+      return (
+        <Suspense fallback={<ToolWorkspaceFallback label="data prep" />}>
+          <PrepTable {...toolProps} />
+        </Suspense>
+      );
+    }
+
+    return (
+      <Suspense fallback={<ToolWorkspaceFallback label="analysis lab" />}>
+        <WalkerAnalysisLab {...toolProps} />
+      </Suspense>
+    );
+  }, [activeTool, error, forms, loading, navigate, orgId, projectId, sources, uploading]);
 
   return (
-    <div className="space-y-4" data-org={orgId} data-project={projectId}>
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Insights Workspace</p>
-          <h2 className="mt-1 text-xl font-bold text-slate-800">{selectedTool.label}</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">{selectedTool.description}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+    <div className="space-y-3" data-org={orgId} data-project={projectId}>
+      {activeTool === 'lab' || activeTool === 'prep' ? (
+        <div className="flex items-center justify-end gap-2">
           <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleCsvUpload} />
-          <button 
-            type="button" 
-            onClick={() => fileInputRef.current?.click()} 
-            className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50"
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             disabled={uploading || !projectId}
+            title={!projectId ? 'Open a project to upload CSV' : 'Upload CSV'}
           >
-            {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <UploadCloud className="h-3 w-3" />}
-            Upload CSV
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+            CSV
           </button>
-          <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-            Org {orgId.slice(0, 8)}{projectId ? ` • Project ${projectId.slice(0, 8)}` : ''}
-          </span>
-          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
-            {selectedTool.label}
-          </span>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+          <h2 className="text-lg font-bold text-slate-800">{selectedTool.label}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleCsvUpload} />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              disabled={uploading || !projectId}
+            >
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+              Upload CSV
+            </button>
+            <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              {sources.length} datasets
+            </span>
+          </div>
+        </div>
+      )}
 
       {workspace}
     </div>

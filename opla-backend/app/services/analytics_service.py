@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import re
 import uuid
-from typing import Optional
+from datetime import datetime
+from typing import Any, Optional
 
 from sqlalchemy import Float, and_, cast, func, or_, select, Date, DateTime
 from sqlalchemy.orm import Session, selectinload
-from typing import Any
 
 from app.models.analytics import AnalyticsDashboard, DashboardCard, SavedQuestion
-from app.models.form import Form
-from app.models.form_dataset import FormDataset, FormDatasetField, FormDatasetFieldStatus, FormDatasetStatus
-from app.models.project import Project
+from app.models.form import Form, FormStatus
+from app.models.form_dataset import (
+    FormDataset,
+    FormDatasetField,
+    FormDatasetFieldStatus,
+    FormDatasetSchemaVersion,
+    FormDatasetStatus,
+)
+from app.models.project import Project, ProjectStatus
 from app.models.submission import Submission
+from app.services.form_service import slugify
 
 
 ALLOWED_AGG_FNS = {
@@ -22,6 +30,121 @@ ALLOWED_AGG_FNS = {
     "max": lambda col: func.max(col),
     "count_distinct": lambda col: func.count(col.distinct()),
 }
+
+
+def _derived_meta(dataset: FormDataset) -> dict | None:
+    meta = dataset.metadata_json or {}
+    if meta.get("kind") != "derived":
+        return None
+    return {
+        "kind": "derived",
+        "mode": meta.get("mode") or "snapshot",
+        "parent_dataset_id": meta.get("parent_dataset_id"),
+        "columns": meta.get("columns") or [],
+    }
+
+
+def _option_entry(raw: Any) -> dict[str, str] | None:
+    if isinstance(raw, dict):
+        if raw.get("value") is None and raw.get("label") is None:
+            return None
+        value = raw.get("value")
+        label = raw.get("label")
+        if value is None:
+            value = label
+        if label is None:
+            label = value
+        return {"label": str(label), "value": str(value)}
+    if isinstance(raw, str) and raw.strip():
+        return {"label": raw, "value": raw}
+    return None
+
+
+def _field_options(metadata_json: Any) -> list[dict[str, str]]:
+    """Extract choice value/label pairs from dataset field metadata."""
+    if not isinstance(metadata_json, dict):
+        return []
+
+    collected: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def add_option(raw: Any) -> None:
+        entry = _option_entry(raw)
+        if not entry:
+            return
+        if entry["value"] in seen:
+            return
+        seen.add(entry["value"])
+        collected.append(entry)
+
+    options = metadata_json.get("options")
+    if isinstance(options, list):
+        for option in options:
+            add_option(option)
+
+    cascade = metadata_json.get("cascade_options_map")
+    if isinstance(cascade, dict):
+        for nested in cascade.values():
+            if isinstance(nested, list):
+                for option in nested:
+                    add_option(option)
+
+    return collected
+
+
+def _blueprint_option_maps(blueprint: Any) -> dict[str, list[dict[str, str]]]:
+    """
+    Choice options usually live on blueprint.ui nodes (radio/dropdown/checkbox),
+    while dataset field metadata often only has the schema type. Index by bind/key/id.
+    """
+    if not isinstance(blueprint, dict):
+        return {}
+
+    maps: dict[str, list[dict[str, str]]] = {}
+
+    def remember(keys: list[str], options: list[dict[str, str]]) -> None:
+        if not options:
+            return
+        for key in keys:
+            if not key:
+                continue
+            existing = maps.get(key)
+            if not existing or len(options) > len(existing):
+                maps[key] = options
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            raw_options = node.get("options")
+            parsed: list[dict[str, str]] = []
+            if isinstance(raw_options, list):
+                seen: set[str] = set()
+                for raw in raw_options:
+                    entry = _option_entry(raw)
+                    if not entry or entry["value"] in seen:
+                        continue
+                    seen.add(entry["value"])
+                    parsed.append(entry)
+
+            if parsed:
+                keys = [
+                    str(node.get("bind") or ""),
+                    str(node.get("key") or ""),
+                    str(node.get("id") or ""),
+                    str(node.get("field_id") or ""),
+                    str(node.get("dataset_field_id") or ""),
+                ]
+                remember(keys, parsed)
+
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(blueprint.get("ui"))
+    # Fallback: some blueprints may put options on schema nodes too.
+    walk(blueprint.get("schema"))
+    return maps
 
 
 class AnalyticsService:
@@ -43,31 +166,84 @@ class AnalyticsService:
             .all()
         )
 
+        # Preload parent record counts for linked derived tables
+        parent_ids: list[uuid.UUID] = []
+        for dataset in datasets:
+            meta = dataset.metadata_json or {}
+            if meta.get("kind") == "derived" and meta.get("mode") == "linked" and meta.get("parent_dataset_id"):
+                try:
+                    parent_ids.append(uuid.UUID(str(meta["parent_dataset_id"])))
+                except (ValueError, TypeError):
+                    pass
+
+        parent_counts: dict[uuid.UUID, int] = {}
+        if parent_ids:
+            rows = (
+                db.query(Submission.dataset_id, func.count(Submission.id))
+                .filter(Submission.dataset_id.in_(parent_ids))
+                .group_by(Submission.dataset_id)
+                .all()
+            )
+            parent_counts = {row[0]: int(row[1]) for row in rows if row[0]}
+
         sources: list[dict] = []
         for dataset in datasets:
-            record_count = (
-                db.query(func.count(Submission.id))
-                .filter(Submission.dataset_id == dataset.id)
-                .scalar()
-            )
-            if record_count is None:
+            derived = _derived_meta(dataset)
+            record_count = 0
+            if derived and derived["mode"] == "linked" and derived.get("parent_dataset_id"):
+                try:
+                    pid = uuid.UUID(str(derived["parent_dataset_id"]))
+                    record_count = parent_counts.get(pid, 0)
+                    if record_count == 0:
+                        parent_ds = db.query(FormDataset).filter(FormDataset.id == pid).first()
+                        if parent_ds:
+                            record_count = (
+                                db.query(func.count(Submission.id))
+                                .filter(Submission.form_id == parent_ds.form_id)
+                                .scalar()
+                                or 0
+                            )
+                except (ValueError, TypeError):
+                    record_count = 0
+            else:
                 record_count = (
                     db.query(func.count(Submission.id))
-                    .filter(Submission.form_id == dataset.form_id)
+                    .filter(Submission.dataset_id == dataset.id)
                     .scalar()
-                    or 0
                 )
+                if record_count is None:
+                    record_count = (
+                        db.query(func.count(Submission.id))
+                        .filter(Submission.form_id == dataset.form_id)
+                        .scalar()
+                        or 0
+                    )
 
-            fields = [
-                {
-                    "field_identifier": field.field_identifier,
-                    "field_key": field.field_key,
-                    "label": field.label,
-                    "field_type": field.field_type,
-                }
-                for field in dataset.fields
-                if field.status == FormDatasetFieldStatus.ACTIVE
-            ]
+            ui_option_maps = _blueprint_option_maps(
+                (dataset.form.blueprint_live if dataset.form else None)
+                or (dataset.form.blueprint_draft if dataset.form else None)
+            )
+
+            fields = []
+            for field in dataset.fields:
+                if field.status != FormDatasetFieldStatus.ACTIVE:
+                    continue
+                options = _field_options(field.metadata_json)
+                if not options:
+                    options = (
+                        ui_option_maps.get(field.field_key)
+                        or ui_option_maps.get(field.field_identifier)
+                        or []
+                    )
+                fields.append(
+                    {
+                        "field_identifier": field.field_identifier,
+                        "field_key": field.field_key,
+                        "label": field.label,
+                        "field_type": field.field_type,
+                        "options": options,
+                    }
+                )
 
             sources.append(
                 {
@@ -79,18 +255,224 @@ class AnalyticsService:
                     "project_id": dataset.form.project_id if dataset.form else None,
                     "project_name": dataset.form.project.name if dataset.form and dataset.form.project else None,
                     "fields": fields,
-                    "record_count": record_count,
+                    "record_count": record_count or 0,
+                    "derived": derived,
                 }
             )
 
         return sources
 
     @staticmethod
+    def create_derived_dataset(
+        db: Session,
+        org_id: uuid.UUID,
+        *,
+        name: str,
+        mode: str,
+        parent_dataset_id: uuid.UUID,
+        columns: list[dict],
+        rows: list[dict] | None = None,
+        project_id: uuid.UUID | None = None,
+        user_id: uuid.UUID | None = None,
+    ) -> dict:
+        if mode not in ("snapshot", "linked"):
+            raise ValueError("INVALID_MODE")
+
+        parent = (
+            db.query(FormDataset)
+            .options(selectinload(FormDataset.form).selectinload(Form.project))
+            .join(Form, Form.id == FormDataset.form_id)
+            .join(Project, Project.id == Form.project_id)
+            .filter(
+                FormDataset.id == parent_dataset_id,
+                Project.org_id == org_id,
+                FormDataset.status == FormDatasetStatus.ACTIVE,
+            )
+            .first()
+        )
+        if not parent or not parent.form:
+            raise ValueError("PARENT_DATASET_NOT_FOUND")
+
+        target_project_id = project_id or parent.form.project_id
+        project = (
+            db.query(Project)
+            .filter(Project.id == target_project_id, Project.org_id == org_id)
+            .first()
+        )
+        if not project:
+            raise ValueError("PROJECT_NOT_FOUND")
+        if project.status != ProjectStatus.ACTIVE:
+            raise ValueError("PROJECT_NOT_ACTIVE")
+
+        if not columns:
+            raise ValueError("COLUMNS_REQUIRED")
+
+        if mode == "snapshot" and not rows:
+            raise ValueError("ROWS_REQUIRED_FOR_SNAPSHOT")
+
+        clean_columns = []
+        seen_keys: set[str] = set()
+        for col in columns:
+            key = str(col.get("key") or "").strip()
+            label = str(col.get("label") or key).strip()
+            if not key or key in seen_keys:
+                continue
+            seen_keys.add(key)
+            clean_columns.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "field_type": col.get("field_type") or "string",
+                    "calculated": bool(col.get("calculated")),
+                    "formula": col.get("formula"),
+                }
+            )
+        if not clean_columns:
+            raise ValueError("COLUMNS_REQUIRED")
+
+        base_slug = slugify(name) or "prep-table"
+        form_slug = f"prep-{base_slug}"
+        counter = 1
+        while db.query(Form).filter(Form.slug == form_slug).first():
+            form_slug = f"prep-{base_slug}-{counter}"
+            counter += 1
+
+        schema_fields = [
+            {
+                "id": f"q_{c['key']}",
+                "key": c["key"],
+                "type": "number" if c.get("field_type") == "number" else "string",
+                "label": c["label"],
+            }
+            for c in clean_columns
+        ]
+        blueprint = {
+            "meta": {"title": name, "source": "prep_derived"},
+            "schema": schema_fields,
+            "ui": [],
+            "rules": [],
+        }
+
+        form = Form(
+            project_id=project.id,
+            title=name,
+            slug=form_slug,
+            blueprint_draft=blueprint,
+            blueprint_live=blueprint,
+            version=1,
+            status=FormStatus.LIVE,
+            published_version=1,
+            published_at=datetime.utcnow(),
+        )
+        db.add(form)
+        db.flush()
+
+        metadata = {
+            "kind": "derived",
+            "mode": mode,
+            "parent_dataset_id": str(parent_dataset_id),
+            "columns": clean_columns,
+            "created_from": "prep",
+            "created_by": str(user_id) if user_id else None,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+        dataset = FormDataset(
+            form_id=form.id,
+            name=name,
+            slug=form_slug,
+            status=FormDatasetStatus.ACTIVE,
+            current_schema_version_number=1,
+            last_form_version_number=1,
+            metadata_json=metadata,
+        )
+        db.add(dataset)
+        db.flush()
+
+        schema_version = FormDatasetSchemaVersion(
+            dataset_id=dataset.id,
+            form_version_id=None,
+            version_number=1,
+            schema_snapshot=schema_fields,
+            blueprint_snapshot=blueprint,
+            change_summary_json={"source": "prep_derived", "mode": mode},
+            published_at=datetime.utcnow(),
+        )
+        db.add(schema_version)
+        db.flush()
+
+        for col in clean_columns:
+            db.add(
+                FormDatasetField(
+                    dataset_id=dataset.id,
+                    field_identifier=f"prep_{col['key']}",
+                    field_key=col["key"],
+                    label=col["label"],
+                    field_type=col["field_type"] or "string",
+                    status=FormDatasetFieldStatus.ACTIVE,
+                    introduced_in_version_number=1,
+                    metadata_json={
+                        "calculated": col.get("calculated"),
+                        "formula": col.get("formula"),
+                    },
+                )
+            )
+
+        row_count = 0
+        if mode == "snapshot":
+            for raw in rows or []:
+                data: dict[str, Any] = {}
+                for col in clean_columns:
+                    if col["key"] in raw:
+                        data[col["key"]] = raw[col["key"]]
+                db.add(
+                    Submission(
+                        form_id=form.id,
+                        user_id=user_id,
+                        dataset_id=dataset.id,
+                        dataset_schema_version_id=schema_version.id,
+                        data=data,
+                        metadata_json={"source": "prep_snapshot"},
+                        form_version_number=1,
+                    )
+                )
+                row_count += 1
+
+        db.commit()
+        db.refresh(dataset)
+
+        # Linked tables report parent live count
+        record_count = row_count
+        if mode == "linked":
+            record_count = (
+                db.query(func.count(Submission.id))
+                .filter(Submission.dataset_id == parent_dataset_id)
+                .scalar()
+                or 0
+            )
+            if record_count == 0:
+                record_count = (
+                    db.query(func.count(Submission.id))
+                    .filter(Submission.form_id == parent.form_id)
+                    .scalar()
+                    or 0
+                )
+
+        return {
+            "dataset_id": dataset.id,
+            "form_id": form.id,
+            "name": name,
+            "mode": mode,
+            "parent_dataset_id": parent_dataset_id,
+            "row_count": row_count,
+            "record_count": record_count,
+        }
+
+    @staticmethod
     def _compile_calculated_field(expression: str, allowed_fields: dict, meta_columns: dict):
         import ast
-        import re
         from sqlalchemy import Float, cast
-        from sqlalchemy.sql import expression
+        from sqlalchemy.sql import expression as sql_expression
 
         ops = {
             ast.Add: lambda a, b: a + b,
@@ -117,20 +499,20 @@ class AnalyticsService:
                 if not field:
                     raise ValueError(f"FIELD_NOT_ALLOWED:{key}")
                 col = Submission.data[key].as_string()
-                if field.field_type == 'number':
+                if getattr(field, "field_type", None) == "number":
                     return cast(col, Float)
                 return col
             if isinstance(node, ast.Constant):
                 if isinstance(node.value, (int, float)):
-                    return expression.literal(node.value)
-                return expression.literal(str(node.value))
+                    return sql_expression.literal(node.value)
+                return sql_expression.literal(str(node.value))
             if isinstance(node, ast.UnaryOp):
                 if isinstance(node.op, ast.USub):
                     return -parse_node(node.operand)
             raise ValueError(f"Unsupported expression: {type(node).__name__}")
 
-        clean = re.sub(r'\[([^\]]+)\]', r'\1', expression)
-        tree = ast.parse(clean, mode='eval')
+        clean = re.sub(r"\[([^\]]+)\]", r"\1", expression)
+        tree = ast.parse(clean, mode="eval")
         return parse_node(tree)
 
     @staticmethod
@@ -162,6 +544,56 @@ class AnalyticsService:
         if not dataset:
             raise ValueError("DATASET_NOT_FOUND")
 
+        derived = _derived_meta(dataset)
+
+        # Linked derived tables always query the live parent; formulas are client-applied.
+        if derived and derived["mode"] == "linked" and derived.get("parent_dataset_id"):
+            try:
+                parent_id = uuid.UUID(str(derived["parent_dataset_id"]))
+            except (ValueError, TypeError) as exc:
+                raise ValueError("PARENT_DATASET_NOT_FOUND") from exc
+
+            parent = (
+                db.query(FormDataset)
+                .options(selectinload(FormDataset.fields))
+                .filter(FormDataset.id == parent_id, FormDataset.status == FormDatasetStatus.ACTIVE)
+                .first()
+            )
+            if not parent:
+                raise ValueError("PARENT_DATASET_NOT_FOUND")
+
+            parent_keys = [
+                field.field_key
+                for field in parent.fields
+                if field.status == FormDatasetFieldStatus.ACTIVE
+            ]
+            # Allow selecting any parent field (Prep column picker may request more than the saved set).
+            if select_fields:
+                query_select = [key for key in select_fields if key in parent_keys] or parent_keys
+            else:
+                saved_base = [
+                    c["key"]
+                    for c in (derived.get("columns") or [])
+                    if c.get("key") and not c.get("calculated") and c["key"] in parent_keys
+                ]
+                query_select = saved_base or parent_keys
+
+            result = AnalyticsService.execute_query(
+                db=db,
+                org_id=org_id,
+                dataset_id=parent_id,
+                select_fields=query_select,
+                filters=filters,
+                group_by=group_by,
+                aggregates=aggregates,
+                order_by=order_by,
+                limit=limit,
+                offset=offset,
+                calculated_fields=None,
+            )
+            result["derived"] = derived
+            return result
+
         allowed_fields = {
             field.field_key: field
             for field in dataset.fields
@@ -182,7 +614,7 @@ class AnalyticsService:
             expr_str = cf.get("expression", cf.get("formula", ""))
             compiled = AnalyticsService._compile_calculated_field(expr_str, allowed_fields, meta_columns)
             calc_field_exprs[key] = compiled.label(key)
-            allowed_fields[key] = type('obj', (object,), {'field_key': key, 'label': label, 'field_type': 'number'})()
+            allowed_fields[key] = type("obj", (object,), {"field_key": key, "label": label, "field_type": "number"})()
 
         def resolve_column(key: str):
             if key in meta_columns:
@@ -220,7 +652,7 @@ class AnalyticsService:
                 else:
                     group_key = group_item
                     alias = group_key
-                
+
                 col = get_group_col(group_item)
                 selected_columns.append(col)
                 order_aliases[alias] = col
@@ -280,13 +712,18 @@ class AnalyticsService:
                 elif hasattr(value, "isoformat"):
                     row[key] = value.isoformat()
 
-        columns_meta = AnalyticsService._build_columns_meta(allowed_fields, meta_columns, select_fields, group_by, aggregates)
-        return {
+        columns_meta = AnalyticsService._build_columns_meta(
+            allowed_fields, meta_columns, select_fields, group_by, aggregates
+        )
+        payload = {
             "columns": columns_meta,
             "rows": rows,
             "total_count": total_count,
             "truncated": total_count > offset + limit,
         }
+        if derived:
+            payload["derived"] = derived
+        return payload
 
     @staticmethod
     def _build_columns_meta(allowed_fields: dict[str, FormDatasetField], meta_columns: dict, select_fields: list[str], group_by: list[str], aggregates: list[dict]) -> list[dict]:

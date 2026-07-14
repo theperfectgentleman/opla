@@ -16,6 +16,7 @@ import {
     XCircle,
     MapPin,
     Tag,
+    Sparkles,
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
@@ -2349,6 +2350,19 @@ const ProjectWorkspace: React.FC = () => {
                             </div>
 
                             <div className="flex items-center justify-end gap-2 pt-3 border-t border-[hsl(var(--border))]">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsCreateFormModalOpen(false);
+                                        setNewFormTitle('');
+                                        setNewFormKind('standard');
+                                        if (projectId) navigate(`/projects/${projectId}/ai-survey`);
+                                    }}
+                                    className="mr-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[hsl(var(--border))]/60 text-xs font-semibold text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]/60 transition-colors"
+                                >
+                                    <Sparkles className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                                    Create with AI
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => {

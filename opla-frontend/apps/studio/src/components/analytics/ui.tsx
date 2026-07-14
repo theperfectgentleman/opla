@@ -178,38 +178,3 @@ export function AnalyticsChartSkeleton() {
     </div>
   );
 }
-
-export function AnalyticsSheetSkeleton() {
-  return (
-    <div className="mt-4 overflow-hidden rounded-md border border-slate-200 bg-white p-2">
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
-        <div className="mb-2 flex gap-2 border-b border-slate-200 pb-2">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <AnalyticsSkeletonLine key={index} className="h-6 w-16 rounded-md" />
-          ))}
-        </div>
-        <AnalyticsTableSkeleton columns={6} rows={8} />
-      </div>
-    </div>
-  );
-}
-
-export function AnalyticsPivotSkeleton() {
-  return (
-    <div className="mt-4 overflow-hidden rounded-md border border-slate-200 bg-white p-2">
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-        <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
-          <div className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index}>
-                <AnalyticsSkeletonLine className="h-2.5 w-14" />
-                <AnalyticsSkeletonLine className="mt-2 h-8 w-full rounded-md" />
-              </div>
-            ))}
-          </div>
-          <AnalyticsTableSkeleton columns={5} rows={7} />
-        </div>
-      </div>
-    </div>
-  );
-}

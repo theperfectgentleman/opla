@@ -1,119 +1,233 @@
-import { useEffect, useMemo, useState, useCallback, useRef, type ComponentType } from 'react';
-import { FlaskConical, Loader2, Play, Sparkles, Save } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { Loader2, RotateCcw, Save } from 'lucide-react';
 import { configure } from 'mobx';
 
 try {
 	configure({ isolateGlobalState: true });
 } catch {
-	// Already running reactions – fine, the isolation was likely set earlier.
+	// MobX may already be configured in this session.
 }
 
 import '@kanaries/graphic-walker/dist/style.css';
+import './walkerHost.css';
 import type { IMutField } from '@kanaries/graphic-walker';
 
 import { analyticsAPI } from '../../lib/api';
 import { defaultSource } from './queryUtils';
-import type { AnalyticsSource, AnalyticsToolProps, QueryResult } from './types';
-import { buildWalkerFields, buildWalkerRows } from './walkerAdapters';
-import { AnalyticsPageHeader, analyticsButtonClass, analyticsGhostButtonClass, analyticsInputClass, analyticsInsetClass, analyticsLabelClass, analyticsPanelClass } from './ui';
+import type { AnalyticsToolProps, QueryResult } from './types';
+import { buildWalkerFields, buildWalkerFieldsFromPrep, buildWalkerRows } from './walkerAdapters';
+import { consumePrepSession, type PrepColumn } from './prepSession';
+import QuickChart from './QuickChart';
+import {
+	buildValueLabelMaps,
+	remapRowsForDisplay,
+	type DisplayMode,
+} from './valueLabels';
+import { analyticsButtonClass, analyticsGhostButtonClass, analyticsInputClass, analyticsLabelClass } from './ui';
 
-const DEFAULT_LIMIT = 250;
-const MAX_LIMIT = 5000;
+const LOCAL_ROW_LIMIT = 2000;
+const SERVER_PREVIEW_ROWS = 25;
+
+type LabMode = 'quick' | 'explore';
 
 type GraphicWalkerProps = {
 	data?: Array<Record<string, unknown>>;
-	computation?: any;
+	computation?: (payload: unknown) => Promise<Array<Record<string, unknown>>>;
 	fields: unknown[];
 	appearance?: 'light' | 'dark';
 	hideProfiling?: boolean;
 	defaultRenderer?: string;
 	vizThemeConfig?: string;
-	storeRef?: React.MutableRefObject<any>;
-	chart?: any;
+	storeRef?: React.MutableRefObject<unknown>;
+	chart?: unknown;
 };
 
-export default function WalkerAnalysisLab({ orgId, projectId, sources, initialSource, initialAnalysis }: AnalyticsToolProps) {
-	const initialS = defaultSource(sources, initialSource);
-	const defaultDatasetIds = Array.isArray(initialAnalysis?.source_config?.dataset_ids) 
-		? (initialAnalysis.source_config.dataset_ids as string[]) 
-		: (initialS ? [initialS.dataset_id] : []);
-		
-	const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>(defaultDatasetIds);
-	const [limit, setLimit] = useState(
-		(initialAnalysis?.query_config?.limit as number) || DEFAULT_LIMIT
-	);
-	
-	const [results, setResults] = useState<{ source: AnalyticsSource; response: QueryResult }[]>([]);
-	const [loading, setLoading] = useState(false);
-	const [message, setMessage] = useState<string | null>(null);
-	const [loadedSources, setLoadedSources] = useState<AnalyticsSource[]>([]);
-	const [walkerLoadError, setWalkerLoadError] = useState<string | null>(null);
-	const [walkerLoading, setWalkerLoading] = useState(false);
-	const [WalkerComponent, setWalkerComponent] = useState<ComponentType<GraphicWalkerProps> | null>(null);
-	const [useServerCompute, setUseServerCompute] = useState(false);
+export default function WalkerAnalysisLab({
+	orgId,
+	projectId,
+	sources,
+	initialSource,
+	initialAnalysis,
+}: AnalyticsToolProps) {
+	const fallbackSource = defaultSource(sources, initialSource);
+	const initialDatasetId =
+		(typeof initialAnalysis?.source_config?.dataset_id === 'string'
+			? initialAnalysis.source_config.dataset_id
+			: Array.isArray(initialAnalysis?.source_config?.dataset_ids)
+				? (initialAnalysis.source_config.dataset_ids[0] as string | undefined)
+				: undefined) ?? fallbackSource?.dataset_id ?? '';
 
-	// Phase 4 Save State
+	const [selectedDatasetId, setSelectedDatasetId] = useState(initialDatasetId);
+	const [loadedSource, setLoadedSource] = useState<(typeof sources)[number] | null>(null);
+	const [result, setResult] = useState<QueryResult | null>(null);
+	const [useServerCompute, setUseServerCompute] = useState(false);
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [prepColumns, setPrepColumns] = useState<PrepColumn[] | null>(null);
+	const [prepLabel, setPrepLabel] = useState<string | null>(null);
+
+	const [WalkerComponent, setWalkerComponent] = useState<ComponentType<GraphicWalkerProps> | null>(null);
+	const [walkerLoading, setWalkerLoading] = useState(false);
+	const [walkerLoadError, setWalkerLoadError] = useState<string | null>(null);
+
 	const storeRef = useRef<any>(null);
+	const loadGeneration = useRef(0);
+	const prepApplied = useRef(false);
+	const prepDatasetIdRef = useRef<string | null>(null);
 	const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [analysisName, setAnalysisName] = useState(initialAnalysis?.title ?? '');
+	const [labMode, setLabMode] = useState<LabMode>('quick');
+	const [displayMode, setDisplayMode] = useState<DisplayMode>('label');
 
-	const computation = useCallback(async (payload: any) => {
-		if (loadedSources.length !== 1) return [];
-		try {
-			const response = await analyticsAPI.walkerCompute(orgId, loadedSources[0].dataset_id, payload);
-			return response.data || [];
-		} catch (e: any) {
-			console.error('Computation failed:', e);
-			return [];
-		}
-	}, [orgId, loadedSources]);
+	const selectedSource = useMemo(
+		() => sources.find(source => source.dataset_id === selectedDatasetId) ?? null,
+		[selectedDatasetId, sources],
+	);
 
-	const selectedSources = useMemo(
-		() => sources.filter(source => selectedSourceIds.includes(source.dataset_id)),
-		[selectedSourceIds, sources],
+	const walkerRows = useMemo(() => {
+		if (!result) return [];
+		if (prepColumns) return result.rows ?? [];
+		if (!loadedSource) return [];
+		return buildWalkerRows(loadedSource, result.rows ?? []);
+	}, [loadedSource, prepColumns, result]);
+
+	const walkerFields = useMemo(() => {
+		if (prepColumns) return buildWalkerFieldsFromPrep(prepColumns);
+		if (!loadedSource) return [] as IMutField[];
+		return buildWalkerFields(loadedSource);
+	}, [loadedSource, prepColumns]);
+
+	const valueLabelMaps = useMemo(() => {
+		if (prepColumns) return buildValueLabelMaps(prepColumns);
+		if (loadedSource) return buildValueLabelMaps(loadedSource.fields);
+		return buildValueLabelMaps([]);
+	}, [loadedSource, prepColumns]);
+
+	const hasChoiceFields = valueLabelMaps.size > 0;
+
+	const displayRows = useMemo(
+		() => remapRowsForDisplay(walkerRows, valueLabelMaps, displayMode),
+		[displayMode, valueLabelMaps, walkerRows],
+	);
+
+	const computation = useCallback(
+		async (payload: unknown) => {
+			if (!loadedSource || prepColumns) return [];
+			try {
+				const response = await analyticsAPI.walkerCompute(orgId, loadedSource.dataset_id, payload);
+				return response.data || [];
+			} catch (computeError) {
+				console.error('Walker server compute failed:', computeError);
+				return [];
+			}
+		},
+		[loadedSource, orgId, prepColumns],
+	);
+
+	const loadDataset = useCallback(
+		async (source: (typeof sources)[number]) => {
+			const generation = ++loadGeneration.current;
+			setLoading(true);
+			setError(null);
+			setWalkerLoadError(null);
+			setPrepColumns(null);
+			setPrepLabel(null);
+
+			try {
+				const needsServer = source.record_count > LOCAL_ROW_LIMIT;
+				const response = await analyticsAPI.runQuery(orgId, {
+					dataset_id: source.dataset_id,
+					select_fields: source.fields.map(field => field.field_key),
+					limit: needsServer ? SERVER_PREVIEW_ROWS : LOCAL_ROW_LIMIT,
+					offset: 0,
+				});
+
+				if (generation !== loadGeneration.current) return;
+
+				setUseServerCompute(needsServer);
+				setResult(response);
+				setLoadedSource(source);
+
+				if ((response.rows ?? []).length === 0) {
+					setError('Dataset has no rows yet.');
+				}
+			} catch (loadError: any) {
+				if (generation !== loadGeneration.current) return;
+				setResult(null);
+				setLoadedSource(null);
+				setUseServerCompute(false);
+				setError(loadError?.response?.data?.detail || loadError?.message || 'Could not load dataset.');
+			} finally {
+				if (generation === loadGeneration.current) setLoading(false);
+			}
+		},
+		[orgId],
 	);
 
 	useEffect(() => {
-		const nextSource = defaultSource(sources, initialSource);
-		// If no ids selected, fallback to default
-		if (selectedSourceIds.length === 0 && nextSource && !initialAnalysis) {
-			setSelectedSourceIds([nextSource.dataset_id]);
+		if (prepApplied.current) return;
+		const prep = consumePrepSession(orgId);
+		if (!prep) return;
+		prepApplied.current = true;
+		prepDatasetIdRef.current = prep.datasetId;
+		loadGeneration.current += 1;
+		setSelectedDatasetId(prep.datasetId);
+		setPrepColumns(prep.columns);
+		setPrepLabel(prep.datasetLabel);
+		if (prep.displayMode === 'value' || prep.displayMode === 'label') {
+			setDisplayMode(prep.displayMode);
 		}
-	}, [initialSource, selectedSourceIds.length, sources, initialAnalysis]);
-
-	useEffect(() => {
-		setResults([]);
-		setLoadedSources([]);
-		setMessage(null);
-		setWalkerLoadError(null);
-	}, [selectedSourceIds]);
-
-	const walkerRows = useMemo(() => {
-		if (loadedSources.length === 0 || results.length === 0) {
-			return [];
-		}
-		return results.flatMap(r => buildWalkerRows(r.source, r.response.rows ?? []));
-	}, [loadedSources, results]);
-
-	const walkerFields = useMemo(() => {
-		if (loadedSources.length === 0) {
-			return [];
-		}
-		const fieldsMap = new Map<string, IMutField>();
-		loadedSources.forEach(source => {
-			const srcFields = buildWalkerFields(source);
-			srcFields.forEach(f => {
-				if (!fieldsMap.has(f.fid)) {
-					fieldsMap.set(f.fid, f);
-				}
-			});
+		setUseServerCompute(false);
+		setLoadedSource(sources.find(source => source.dataset_id === prep.datasetId) ?? fallbackSource);
+		setResult({
+			columns: prep.columns.map(column => ({
+				key: column.key,
+				label: column.label,
+				type: column.calculated ? 'number' : column.field_type || 'string',
+			})),
+			rows: prep.rows,
+			total_count: prep.rows.length,
+			truncated: false,
 		});
-		return Array.from(fieldsMap.values());
-	}, [loadedSources]);
+		setError(null);
+		setLoading(false);
+	}, [fallbackSource, orgId, sources]);
 
 	useEffect(() => {
-		if (walkerRows.length === 0 || WalkerComponent || walkerLoading || walkerLoadError) {
+		if (!selectedDatasetId && fallbackSource) {
+			setSelectedDatasetId(fallbackSource.dataset_id);
+		}
+	}, [fallbackSource, selectedDatasetId]);
+
+	useEffect(() => {
+		if (prepApplied.current && selectedDatasetId === prepDatasetIdRef.current) {
+			return;
+		}
+		prepApplied.current = false;
+		prepDatasetIdRef.current = null;
+		setResult(null);
+		setLoadedSource(null);
+		setUseServerCompute(false);
+		setError(null);
+		setWalkerLoadError(null);
+		setPrepColumns(null);
+		setPrepLabel(null);
+	}, [selectedDatasetId]);
+
+	useEffect(() => {
+		if (prepApplied.current) return;
+		if (!selectedSource) return;
+		void loadDataset(selectedSource);
+	}, [selectedSource, loadDataset]);
+
+	useEffect(() => {
+		if (labMode !== 'explore') return;
+		if (walkerRows.length === 0) {
+			setWalkerLoading(false);
+			return;
+		}
+		if (WalkerComponent || walkerLoadError) {
 			return;
 		}
 
@@ -126,325 +240,248 @@ export default function WalkerAnalysisLab({ orgId, projectId, sources, initialSo
 					setWalkerComponent(() => module.GraphicWalker as ComponentType<GraphicWalkerProps>);
 					setWalkerLoadError(null);
 				}
-			} catch (error: any) {
+			} catch (loadError: any) {
 				if (!cancelled) {
-					setWalkerLoadError(error?.message || 'Graphic Walker could not be loaded in this browser session.');
+					setWalkerLoadError(loadError?.message || 'Graphic Walker failed to load.');
 				}
 			} finally {
-				if (!cancelled) {
-					setWalkerLoading(false);
-				}
+				if (!cancelled) setWalkerLoading(false);
 			}
 		};
+
 		void loadWalker();
 		return () => {
 			cancelled = true;
 		};
-	}, [WalkerComponent, walkerLoadError, walkerLoading, walkerRows.length]);
-
-	const totalLoadedRows = results.reduce((acc, r) => acc + (r.response.rows?.length ?? 0), 0);
-	const anyTruncated = results.some(r => r.response.truncated || r.source.record_count > (r.response.rows?.length ?? 0));
-	const isCapped = !!results.length && anyTruncated;
-
-	// Initial load trigger when restoring from a saved analysis
-	useEffect(() => {
-		if (initialAnalysis && selectedSources.length > 0 && loadedSources.length === 0) {
-			void handleLoad();
-		}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [initialAnalysis]); // Intentionally triggers only once on mount payload matching
-
-	async function handleLoad() {
-		if (selectedSources.length === 0) {
-			setMessage('Choose at least one published dataset before opening the analysis lab.');
-			return;
-		}
-
-		setLoading(true);
-		setMessage(null);
-		try {
-			const useServer = selectedSources.length === 1 && selectedSources[0].record_count > limit;
-			setUseServerCompute(useServer);
-
-			if (useServer) {
-				const source = selectedSources[0];
-				const response = await analyticsAPI.runQuery(orgId, {
-					dataset_id: source.dataset_id,
-					select_fields: source.fields.map(field => field.field_key),
-					limit: 10,
-					offset: 0,
-				});
-				setResults([{ source, response }]);
-				setLoadedSources([source]);
-				setMessage(`Using server-side computation via Opla Backend. Found ${source.record_count.toLocaleString()} rows.`);
-			} else {
-				const limitPerSource = Math.max(10, Math.floor(limit / selectedSources.length));
-				const allResults = await Promise.all(
-					selectedSources.map(async source => {
-						const response = await analyticsAPI.runQuery(orgId, {
-							dataset_id: source.dataset_id,
-							select_fields: source.fields.map(field => field.field_key),
-							limit: limitPerSource,
-							offset: 0,
-						});
-						return { source, response };
-					})
-				);
-
-				setResults(allResults);
-				setLoadedSources(selectedSources);
-
-				const totalFetched = allResults.reduce((acc, r) => acc + (r.response.rows ?? []).length, 0);
-				const someTruncated = allResults.some(r => r.response.truncated || r.source.record_count > (r.response.rows ?? []).length);
-				
-				if (totalFetched === 0) {
-					setMessage('The selected datasets have no rows yet. Publish and collect submissions, then reopen the lab.');
-				} else if (someTruncated) {
-					setMessage(`Loaded the first ${totalFetched.toLocaleString()} rows across ${selectedSources.length} forms for local exploration. Run a single large dataset to use server compute.`);
-				}
-			}
-		} catch (error: any) {
-			setResults([]);
-			setLoadedSources([]);
-			setMessage(error?.response?.data?.detail || error?.message || 'Could not load dataset rows into the analysis lab.');
-		} finally {
-			setLoading(false);
-		}
-	}
+	}, [WalkerComponent, labMode, walkerLoadError, walkerRows.length]);
 
 	function handleReset() {
-		setResults([]);
-		setLoadedSources([]);
-		setMessage(null);
+		prepApplied.current = false;
+		prepDatasetIdRef.current = null;
+		loadGeneration.current += 1;
+		setResult(null);
+		setLoadedSource(null);
+		setUseServerCompute(false);
+		setError(null);
+		setWalkerLoadError(null);
+		setPrepColumns(null);
+		setPrepLabel(null);
+		if (selectedSource) void loadDataset(selectedSource);
 	}
 
 	async function handleSaveAnalysis() {
-		if (!analysisName.trim()) {
-			setMessage('Please provide a name for this analysis.');
+		if (!analysisName.trim() || !selectedDatasetId) {
+			setError('Name this analysis before saving.');
 			return;
 		}
 
 		setIsSaving(true);
-		setMessage(null);
+		setError(null);
 		try {
-			// Extract Visual Specifications straight from Walker's component internal store ref
-			let charts = [];
+			let charts: unknown[] = [];
 			if (storeRef.current?.vizStore?.exportCode) {
 				charts = storeRef.current.vizStore.exportCode();
 			} else if (storeRef.current?.exportChartSpec) {
 				charts = [storeRef.current.exportChartSpec()];
 			}
-			
-			const payload: any = {
-				title: analysisName,
+
+			const payload: Record<string, unknown> = {
+				title: analysisName.trim(),
 				source_config: {
-					mode: useServerCompute ? 'server' : 'local',
-					dataset_ids: selectedSourceIds,
+					mode: prepColumns ? 'prep' : useServerCompute ? 'server' : 'local',
+					dataset_id: selectedDatasetId,
+					dataset_ids: [selectedDatasetId],
+					prep_columns: prepColumns ?? undefined,
 				},
-				query_config: { limit },
+				query_config: { limit: useServerCompute && !prepColumns ? undefined : LOCAL_ROW_LIMIT },
 				viz_type: 'walker',
 				viz_config: { charts },
 			};
-			if (projectId) {
-				payload.project_id = projectId;
-			}
+			if (projectId) payload.project_id = projectId;
 
 			if (initialAnalysis?.id) {
 				await analyticsAPI.updateQuestion(orgId, initialAnalysis.id, payload);
-				setMessage('Analysis updated safely to the database.');
 			} else {
 				await analyticsAPI.createQuestion(orgId, payload);
-				setMessage('Analysis saved as a new database question successfully!');
 			}
 			setIsSaveModalOpen(false);
-		} catch (error: any) {
-			console.error('Failed to save analysis', error);
-			setMessage(error?.response?.data?.detail || error?.message || 'Failed to save analysis properties.');
+		} catch (saveError: any) {
+			setError(saveError?.response?.data?.detail || saveError?.message || 'Failed to save.');
 		} finally {
 			setIsSaving(false);
 		}
 	}
 
-	if (selectedSources.length === 0 && sources.length === 0) {
-		return (
-			<div className="rounded-lg border border-dashed border-slate-200 p-8 text-sm text-slate-500">
-				No analytics datasets are available yet. Publish a form dataset first, then reopen Analysis Lab.
-			</div>
-		);
+	if (sources.length === 0) {
+		return <div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">No datasets yet.</div>;
 	}
 
+	const sessionReady = Boolean(walkerRows.length > 0);
+	const statusLabel = loading
+		? 'Loading…'
+		: sessionReady
+			? `${prepColumns ? 'Prep' : useServerCompute ? 'Server' : 'Local'} · ${walkerRows.length.toLocaleString()} rows${prepLabel ? ` · ${prepLabel}` : ''}`
+			: 'Idle';
+
 	return (
-		<div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-			<section className={analyticsPanelClass}>
-				<AnalyticsPageHeader
-					eyebrow="Phase 1 & 3"
-					title="Analysis Lab"
-					description="Explore datasets naturally in Graphic Walker. Single large forms map to the database natively for scale; multiple forms union records locally."
-					actions={<span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[hsl(var(--primary-light))] text-[hsl(var(--primary))]"><FlaskConical className="h-4 w-4" /></span>}
-				/>
+		<div className="flex min-h-[calc(100vh-11rem)] flex-col gap-2">
+			<div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+				<select
+					value={selectedDatasetId}
+					onChange={event => setSelectedDatasetId(event.target.value)}
+					className="h-8 min-w-[14rem] flex-1 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-emerald-700 focus:ring-1 focus:ring-emerald-100 sm:max-w-md"
+					aria-label="Dataset"
+				>
+					{sources.map(source => (
+						<option key={source.dataset_id} value={source.dataset_id}>
+							{source.form_title} ({source.record_count.toLocaleString()})
+						</option>
+					))}
+				</select>
 
-				<div className="mt-4 space-y-4">
-					<div className="space-y-2">
-						<label className={analyticsLabelClass}>Datasets (Multi-Select Union)</label>
-						<div className="max-h-48 overflow-y-auto rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-2 shadow-sm">
-							{sources.map(source => (
-								<label key={source.dataset_id} className="flex cursor-pointer items-center space-x-3 rounded p-2 hover:bg-[hsl(var(--surface))]">
-									<input 
-										type="checkbox" 
-										checked={selectedSourceIds.includes(source.dataset_id)}
-										onChange={(e) => {
-											if (e.target.checked) setSelectedSourceIds(prev => [...prev, source.dataset_id]);
-											else setSelectedSourceIds(prev => prev.filter(id => id !== source.dataset_id));
-										}}
-										className="rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-									/>
-									<span className="text-sm font-medium text-[hsl(var(--text-primary))]">{source.form_title}</span>
-								</label>
-							))}
-						</div>
-					</div>
+				<span className="hidden text-xs text-slate-500 sm:inline">{statusLabel}</span>
 
-					<div>
-						<label className={analyticsLabelClass}>Local Row Limit</label>
-						<input type="number" min={25} max={MAX_LIMIT} value={limit} onChange={event => setLimit(Math.max(25, Math.min(MAX_LIMIT, Number(event.target.value) || DEFAULT_LIMIT)))} className={analyticsInputClass} />
-						<p className="mt-2 text-xs leading-5 text-slate-500">
-							Controls how many rows fit into standard client-side memory. Ignored for single-form server compute mode.
-						</p>
-					</div>
-
-					<div className="flex flex-wrap gap-2 pt-2">
-						<button type="button" onClick={() => void handleLoad()} disabled={loading} className={analyticsButtonClass}>
-							{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-							{loading ? 'Preparing analysis...' : 'Analyze'}
+				{hasChoiceFields ? (
+					<div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5" title="Toggle choice codes vs readable labels">
+						<button
+							type="button"
+							onClick={() => setDisplayMode('label')}
+							className={`rounded px-2 py-1 text-[11px] font-semibold ${displayMode === 'label' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+						>
+							Labels
 						</button>
-						<button type="button" onClick={handleReset} className={analyticsGhostButtonClass} disabled={loading || totalLoadedRows === 0}>
-							Reset
+						<button
+							type="button"
+							onClick={() => setDisplayMode('value')}
+							className={`rounded px-2 py-1 text-[11px] font-semibold ${displayMode === 'value' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+						>
+							Values
 						</button>
-					</div>
-
-					{message ? <p className="text-sm font-medium text-rose-600">{message}</p> : null}
-				</div>
-			</section>
-
-			<section className={analyticsPanelClass}>
-				<AnalyticsPageHeader
-					eyebrow={useServerCompute ? "Server-Side Engine" : "Local Walker Engine"}
-					title={loadedSources.length > 0 && walkerRows.length > 0 ? `${totalLoadedRows.toLocaleString()} rows ready` : 'Awaiting dataset load'}
-					description={useServerCompute ? "Opla backend handles queries natively because dataset scale exceeds local bounds." : "Multi-dataset union mode processes rows entirely in your local browser sandbox."}
-					actions={walkerRows.length > 0 ? (
-						<div className="flex items-center space-x-2">
-							<span className={analyticsGhostButtonClass}><Sparkles className="h-4 w-4 text-[hsl(var(--primary))]" /> Beta</span>
-							<button onClick={() => setIsSaveModalOpen(true)} className={`${analyticsButtonClass} bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-dark))] text-white`}>
-								<Save className="h-4 w-4 mr-2" />
-								Save
-							</button>
-						</div>
-					) : null}
-				/>
-
-				{loadedSources.length > 0 && walkerRows.length > 0 ? (
-					<div className={`${analyticsInsetClass} mt-4 flex flex-wrap items-center justify-between gap-3 p-3 text-sm text-[hsl(var(--text-secondary))]`}>
-						<div>
-							<p><span className="font-semibold text-[hsl(var(--text-primary))]">Used sources:</span> {loadedSources.map(s => s.form_title).join(', ')}</p>
-							<p className="mt-1"><span className="font-semibold text-[hsl(var(--text-primary))]">Rows fetched:</span> {totalLoadedRows.toLocaleString()}</p>
-						</div>
-						{isCapped && !useServerCompute ? (
-							<p className="max-w-md text-xs leading-5 text-amber-700">
-								This session is using a capped local sample.
-							</p>
-						) : !useServerCompute ? (
-							<p className="max-w-md text-xs leading-5 text-[hsl(var(--text-secondary))]">
-								Full datasets safely fit in browser memory.
-							</p>
-						) : null}
-					</div>
-				) : null}
-
-				{loading ? (
-					<div className="mt-4 flex min-h-[680px] items-center justify-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] text-sm text-[hsl(var(--text-secondary))]">
-						<Loader2 className="mr-2 h-4 w-4 animate-spin text-[hsl(var(--primary))]" />
-						Preparing Walker session...
-					</div>
-				) : walkerRows.length > 0 ? (
-					<div className="mt-4 overflow-hidden rounded-md border border-[hsl(var(--border))] bg-white shadow-sm ring-1 ring-[hsl(var(--border))]">
-						{walkerLoading ? (
-							<div className="flex h-[720px] min-h-[720px] items-center justify-center text-sm text-[hsl(var(--text-secondary))]">
-								<Loader2 className="mr-2 h-4 w-4 animate-spin text-[hsl(var(--primary))]" />
-								Loading Walker canvas...
-							</div>
-						) : walkerLoadError ? (
-							<div className="flex h-[720px] min-h-[720px] flex-col items-center justify-center gap-3 px-6 text-center text-sm text-[hsl(var(--text-secondary))]">
-								<p className="font-semibold text-[hsl(var(--text-primary))]">Walker canvas is unavailable in this browser session</p>
-								<p className="max-w-2xl leading-6">{walkerLoadError}</p>
-								<p className="max-w-2xl leading-6">The selected dataset is still loaded, so the rest of the dashboard remains usable while the browser-incompatible module is isolated.</p>
-							</div>
-						) : WalkerComponent ? (
-							<div className="h-[720px] min-h-[720px] w-full">
-								<WalkerComponent
-									storeRef={storeRef}
-									chart={initialAnalysis?.viz_config?.charts}
-									data={useServerCompute ? undefined : walkerRows}
-									computation={useServerCompute ? computation : undefined}
-									fields={walkerFields}
-									appearance="light"
-									hideProfiling
-									defaultRenderer="vega-lite"
-									vizThemeConfig="g2"
-								/>
-							</div>
-						) : null}
 					</div>
 				) : (
-					<div className="mt-4 flex min-h-[680px] flex-col items-center justify-center rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-6 text-center text-sm text-[hsl(var(--text-secondary))]">
-						<p className="font-semibold text-[hsl(var(--text-primary))]">No Walker session yet</p>
-						<p className="mt-2 max-w-xl leading-6">
-							Choose one or more datasets and click Analyze to start a session.
-						</p>
+					<div
+						className="flex items-center gap-1 rounded-md border border-dashed border-slate-200 px-2 py-1 text-[11px] text-slate-400"
+						title="No choice options found on this dataset yet"
+					>
+						Labels/Values
 					</div>
 				)}
 
-				{isSaveModalOpen && (
-					<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-						<div className="w-full max-w-md rounded-xl border border-[hsl(var(--border))] bg-white p-6 shadow-xl">
-							<h3 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Save Analysis</h3>
-							<p className="mt-2 text-sm text-[hsl(var(--text-secondary))]">
-								This fully saves the Walker canvas state (configurations, layers, dragged fields) back to Opla. You or your team can revisit this exact query layout anytime.
-							</p>
+				<div className="flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
+					<button
+						type="button"
+						onClick={() => setLabMode('quick')}
+						className={`rounded px-2.5 py-1 text-xs font-semibold ${labMode === 'quick' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+					>
+						Charts
+					</button>
+					<button
+						type="button"
+						onClick={() => setLabMode('explore')}
+						className={`rounded px-2.5 py-1 text-xs font-semibold ${labMode === 'explore' ? 'bg-white text-emerald-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+					>
+						Explore
+					</button>
+				</div>
 
-							<div className="mt-6">
-								<label className={analyticsLabelClass}>Analysis Title</label>
-								<input
-									type="text"
-									value={analysisName}
-									onChange={(e) => setAnalysisName(e.target.value)}
-									placeholder="e.g., Client Responses over Q3"
-									className={`${analyticsInputClass} mt-1`}
-									autoFocus
-								/>
-							</div>
+				<div className="ml-auto flex items-center gap-1.5">
+					{error ? <span className="max-w-[16rem] truncate text-xs text-rose-600" title={error}>{error}</span> : null}
+					<button
+						type="button"
+						onClick={handleReset}
+						disabled={loading || !selectedSource}
+						className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+						title="Reload"
+					>
+						{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+						Reload
+					</button>
+					<button
+						type="button"
+						onClick={() => setIsSaveModalOpen(true)}
+						disabled={!sessionReady || labMode !== 'explore'}
+						className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-700 bg-emerald-700 px-2.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+						title={labMode === 'quick' ? 'Save is available in Explore for now' : 'Save analysis'}
+					>
+						<Save className="h-3.5 w-3.5" />
+						Save
+					</button>
+				</div>
+			</div>
 
-							<div className="mt-8 flex justify-end gap-3">
-								<button
-									type="button"
-									onClick={() => setIsSaveModalOpen(false)}
-									className={analyticsGhostButtonClass}
-								>
-									Cancel
-								</button>
-								<button
-									type="button"
-									onClick={() => void handleSaveAnalysis()}
-									disabled={isSaving || !analysisName.trim()}
-									className={`${analyticsButtonClass} bg-[hsl(var(--primary))] text-white hover:bg-[hsl(var(--primary-dark))]`}
-								>
-									{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-									{isSaving ? 'Saving...' : 'Confirm Save'}
-								</button>
-							</div>
+			<div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
+				{loading && !sessionReady ? (
+					<div className="flex h-full min-h-[28rem] items-center justify-center text-sm text-slate-500">
+						<Loader2 className="mr-2 h-4 w-4 animate-spin text-emerald-700" />
+						Loading data…
+					</div>
+				) : !sessionReady ? (
+					<div className="flex h-full min-h-[28rem] items-center justify-center text-sm text-slate-500">
+						Select a dataset to begin.
+					</div>
+				) : labMode === 'quick' ? (
+					<div className="h-[calc(100vh-13rem)] min-h-[28rem] w-full">
+						<QuickChart rows={displayRows} fields={walkerFields} />
+					</div>
+				) : walkerLoadError ? (
+					<div className="flex h-full min-h-[28rem] items-center justify-center px-6 text-center text-sm text-rose-600">
+						{walkerLoadError}
+					</div>
+				) : walkerLoading || !WalkerComponent ? (
+					<div className="flex h-full min-h-[28rem] items-center justify-center text-sm text-slate-500">
+						<Loader2 className="mr-2 h-4 w-4 animate-spin text-emerald-700" />
+						Opening Explore…
+					</div>
+				) : (
+					<div className="opla-walker-host h-[calc(100vh-13rem)] min-h-[28rem] w-full">
+						<WalkerComponent
+							key={`walker-${displayMode}-${displayRows.length}`}
+							storeRef={storeRef}
+							chart={initialAnalysis?.viz_config?.charts}
+							data={useServerCompute && !prepColumns ? undefined : displayRows}
+							computation={useServerCompute && !prepColumns ? computation : undefined}
+							fields={walkerFields}
+							appearance="light"
+							hideProfiling
+							defaultRenderer="vega-lite"
+							vizThemeConfig="g2"
+						/>
+					</div>
+				)}
+			</div>
+
+			{isSaveModalOpen ? (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+					<div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+						<h3 className="text-base font-semibold text-slate-800">Save analysis</h3>
+						<div className="mt-4">
+							<label className={analyticsLabelClass}>Title</label>
+							<input
+								type="text"
+								value={analysisName}
+								onChange={event => setAnalysisName(event.target.value)}
+								placeholder="Analysis name"
+								className={`${analyticsInputClass} mt-1`}
+								autoFocus
+							/>
+						</div>
+						<div className="mt-5 flex justify-end gap-2">
+							<button type="button" onClick={() => setIsSaveModalOpen(false)} className={analyticsGhostButtonClass}>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => void handleSaveAnalysis()}
+								disabled={isSaving || !analysisName.trim()}
+								className={analyticsButtonClass}
+							>
+								{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+								{isSaving ? 'Saving…' : 'Save'}
+							</button>
 						</div>
 					</div>
-				)}
-			</section>
+				</div>
+			) : null}
 		</div>
 	);
 }

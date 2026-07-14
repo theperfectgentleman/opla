@@ -541,6 +541,37 @@ export const formAPI = {
     },
 };
 
+export type AiSurveyInterviewQuestion = {
+    id: string;
+    prompt: string;
+    kind: 'text' | 'choice' | string;
+    options?: string[] | null;
+};
+
+export const aiSurveyAPI = {
+    interview: async (brief: string): Promise<{ questions: AiSurveyInterviewQuestion[] }> => {
+        const response = await apiClient.post('/ai/survey/interview', { brief }, { timeout: 60000 });
+        return response.data;
+    },
+    draft: async (brief: string, answers?: Record<string, string>): Promise<{ title: string; markdown: string }> => {
+        // Chunked drafts (e.g. ~50 questions) call the LLM many times.
+        const response = await apiClient.post('/ai/survey/draft', { brief, answers }, { timeout: 300000 });
+        return response.data;
+    },
+    revise: async (markdown: string, instruction: string): Promise<{ markdown: string }> => {
+        const response = await apiClient.post('/ai/survey/revise', { markdown, instruction }, { timeout: 180000 });
+        return response.data;
+    },
+    compile: async (markdown: string): Promise<{ title: string; blueprint: any; warnings: string[] }> => {
+        const response = await apiClient.post('/ai/survey/compile', { markdown }, { timeout: 30000 });
+        return response.data;
+    },
+    generate: async (projectId: string, data: { markdown: string; title?: string }) => {
+        const response = await apiClient.post(`/projects/${projectId}/ai-survey/generate`, data, { timeout: 60000 });
+        return response.data;
+    },
+};
+
 export const reportAPI = {
     list: async (orgId: string, projectId: string) => {
         const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/reports`);
@@ -704,6 +735,34 @@ export const analyticsAPI = {
     ) => {
         const response = await apiClient.post(`/organizations/${orgId}/analytics/compare`, data);
         return response.data;
+    },
+    saveDerivedDataset: async (
+        orgId: string,
+        data: {
+            name: string;
+            mode: 'snapshot' | 'linked';
+            parent_dataset_id: string;
+            project_id?: string | null;
+            columns: Array<{
+                key: string;
+                label: string;
+                field_type?: string | null;
+                calculated?: boolean;
+                formula?: string | null;
+            }>;
+            rows?: Array<Record<string, unknown>>;
+        },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/analytics/derived-datasets`, data);
+        return response.data as {
+            dataset_id: string;
+            form_id: string;
+            name: string;
+            mode: string;
+            parent_dataset_id?: string;
+            row_count: number;
+            record_count: number;
+        };
     },
 };
 

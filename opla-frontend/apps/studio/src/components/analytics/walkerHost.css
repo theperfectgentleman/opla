@@ -1,0 +1,42 @@
+/* Soften Graphic Walker chart chrome so long facet/axis titles don't collide. */
+.opla-walker-host {
+	width: 100%;
+	height: 100%;
+	overflow: auto;
+	font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.opla-walker-host .flex-1,
+.opla-walker-host [class*="vis"],
+.opla-walker-host [class*="chart"] {
+	min-width: 0;
+}
+
+.opla-walker-host svg {
+	overflow: hidden;
+}
+
+/* Axis / facet titles: lighter, smaller, less shouty than Walker defaults */
+.opla-walker-host svg .role-column-title text,
+.opla-walker-host svg .role-row-title text,
+.opla-walker-host svg .role-axis-title text {
+	font-size: 10px !important;
+	font-weight: 500 !important;
+	fill: #64748b !important;
+	letter-spacing: 0.01em;
+}
+
+/* Tick / category labels */
+.opla-walker-host svg .role-axis-label text,
+.opla-walker-host svg .mark-text text,
+.opla-walker-host svg g.mark-text text {
+	font-size: 10px !important;
+	font-weight: 400 !important;
+	fill: #475569 !important;
+}
+
+/* Prefer wrapping/scrolling the walker board instead of overlapping panels. */
+.opla-walker-host [role="tabpanel"],
+.opla-walker-host .overflow-auto {
+	overflow: auto !important;
+}

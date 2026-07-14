@@ -23,20 +23,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('@syncfusion/ej2-react-spreadsheet')) {
-            return 'analytics-spreadsheet'
-          }
-
-          if (id.includes('@syncfusion/ej2-react-pivotview')) {
-            return 'analytics-pivot'
-          }
-
-          if (id.includes('@syncfusion/ej2-base')) {
-            return 'analytics-syncfusion-license'
-          }
-
           if (id.includes('echarts') || id.includes('zrender')) {
             return 'analytics-charts'
+          }
+
+          if (id.includes('@kanaries/graphic-walker')) {
+            return 'analytics-walker'
           }
 
           return undefined

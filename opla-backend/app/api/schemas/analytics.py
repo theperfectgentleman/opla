@@ -7,11 +7,24 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class AnalyticsSourceFieldOption(BaseModel):
+    label: str
+    value: str
+
+
 class AnalyticsSourceField(BaseModel):
     field_identifier: str
     field_key: str
     label: str | None = None
     field_type: str | None = None
+    options: list[AnalyticsSourceFieldOption] = Field(default_factory=list)
+
+
+class AnalyticsSourceDerived(BaseModel):
+    kind: str = "derived"
+    mode: str  # snapshot | linked
+    parent_dataset_id: UUID | None = None
+    columns: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AnalyticsSource(BaseModel):
@@ -23,6 +36,35 @@ class AnalyticsSource(BaseModel):
     project_id: UUID | None = None
     project_name: str | None = None
     fields: list[AnalyticsSourceField] = Field(default_factory=list)
+    record_count: int = 0
+    derived: AnalyticsSourceDerived | None = None
+
+
+class PrepColumnSpec(BaseModel):
+    key: str = Field(..., min_length=1, max_length=200)
+    label: str = Field(..., min_length=1, max_length=200)
+    field_type: str | None = None
+    calculated: bool = False
+    formula: str | None = None
+
+
+class DerivedDatasetCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    mode: str = Field(..., pattern="^(snapshot|linked)$")
+    parent_dataset_id: UUID
+    project_id: UUID | None = None
+    columns: list[PrepColumnSpec] = Field(..., min_length=1)
+    """Required for snapshot mode — current prep rows with calculated values baked in."""
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DerivedDatasetOut(BaseModel):
+    dataset_id: UUID
+    form_id: UUID
+    name: str
+    mode: str
+    parent_dataset_id: UUID | None = None
+    row_count: int = 0
     record_count: int = 0
 
 
@@ -59,6 +101,7 @@ class AnalyticsQueryResponse(BaseModel):
     rows: list[dict[str, Any]]
     total_count: int
     truncated: bool = False
+    derived: AnalyticsSourceDerived | None = None
 
 
 class SavedQuestionCreate(BaseModel):
@@ -67,7 +110,7 @@ class SavedQuestionCreate(BaseModel):
     project_id: UUID | None = None
     source_config: dict[str, Any]
     query_config: dict[str, Any]
-    viz_type: str = Field("table", pattern="^(table|chart|spreadsheet|pivot|walker)$")
+    viz_type: str = Field("table", pattern="^(table|chart|walker|kpi|goal|markdown)$")
     viz_config: dict[str, Any] | None = None
     cache_ttl_seconds: int | None = None
 
@@ -77,7 +120,7 @@ class SavedQuestionUpdate(BaseModel):
     description: str | None = None
     source_config: dict[str, Any] | None = None
     query_config: dict[str, Any] | None = None
-    viz_type: str | None = Field(None, pattern="^(table|chart|spreadsheet|pivot|walker)$")
+    viz_type: str | None = Field(None, pattern="^(table|chart|walker|kpi|goal|markdown)$")
     viz_config: dict[str, Any] | None = None
     cache_ttl_seconds: int | None = None
     is_archived: bool | None = None

@@ -177,11 +177,11 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
                                                         )}
                                                         <button
                                                             type="button"
-                                                            onClick={() => navigate('/dashboard?tab=analysis&tool=explorer')}
+                                                            onClick={() => navigate('/dashboard?tab=analysis&tool=lab')}
                                                             className="inline-flex items-center gap-1 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/20"
                                                         >
                                                             <BarChart3 className="w-3.5 h-3.5" />
-                                                            Explore
+                                                            Analyze
                                                         </button>
                                                     </div>
                                                 </td>

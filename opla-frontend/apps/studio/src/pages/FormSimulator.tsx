@@ -9,6 +9,7 @@ import {
     Plus, Trash2, Layers, Database
 } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
+import SyntheticDataPanel from '../components/simulator/SyntheticDataPanel';
 import {
     evaluateAllRules,
     isFieldVisibleByRules,
@@ -1032,8 +1033,8 @@ const FormSimulator: React.FC = () => {
             onSelectNav={handleShellNavSelect}
             contentClassName="flex-1 overflow-auto"
         >
-            <div className="h-full bg-[hsl(var(--background))] flex items-center justify-center p-8">
-                <div className="flex flex-col items-center">
+            <div className="h-full bg-[hsl(var(--background))] flex items-start justify-center gap-8 p-8 overflow-auto">
+                <div className="flex flex-col items-center shrink-0">
                     {/* Simulator Controls */}
                     <div className="mb-8 flex space-x-4 items-center">
                         <button
@@ -1682,6 +1683,16 @@ const FormSimulator: React.FC = () => {
                         <span className="text-xs font-bold uppercase tracking-widest">Mobile Preview Engine v2.0</span>
                     </div>
                 </div>
+
+                {blueprint && formId && (
+                    <div className="pt-[72px] shrink-0 sticky top-8 self-start">
+                        <SyntheticDataPanel
+                            formId={formId}
+                            blueprint={blueprint}
+                            catalogItems={catalogItems}
+                        />
+                    </div>
+                )}
             </div>
         </StudioLayout>
     );

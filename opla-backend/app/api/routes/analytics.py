@@ -14,6 +14,8 @@ from app.api.schemas.analytics import (
     AnalyticsSource,
     ComparePeriodRequest,
     ComparePeriodResponse,
+    DerivedDatasetCreate,
+    DerivedDatasetOut,
     GroupBySpec,
     SavedQuestionCreate,
     SavedQuestionOut,
@@ -35,11 +37,48 @@ def list_analytics_sources(
 ):
     return AnalyticsService.list_sources(db, org_id)
 
+
+@router.post("/derived-datasets", response_model=DerivedDatasetOut, status_code=status.HTTP_201_CREATED)
+def create_derived_dataset(
+    org_id: uuid.UUID,
+    body: DerivedDatasetCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    membership=Depends(get_user_org_role),
+):
+    try:
+        return AnalyticsService.create_derived_dataset(
+            db,
+            org_id,
+            name=body.name.strip(),
+            mode=body.mode,
+            parent_dataset_id=body.parent_dataset_id,
+            columns=[c.model_dump() for c in body.columns],
+            rows=body.rows,
+            project_id=body.project_id,
+            user_id=current_user.id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_map = {
+            "PARENT_DATASET_NOT_FOUND": (404, "Parent dataset not found"),
+            "PROJECT_NOT_FOUND": (404, "Project not found"),
+            "PROJECT_NOT_ACTIVE": (409, "Project is not active"),
+            "INVALID_MODE": (400, "Mode must be snapshot or linked"),
+            "COLUMNS_REQUIRED": (400, "At least one column is required"),
+            "ROWS_REQUIRED_FOR_SNAPSHOT": (400, "Snapshot mode requires row data"),
+        }
+        if detail in status_map:
+            code, message = status_map[detail]
+            raise HTTPException(status_code=code, detail=message) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
 from fastapi import UploadFile, File
 import csv
 import io
-from app.models.form import Form, FormDataset
-from app.models.form_dataset import FormDatasetField, FormDatasetFieldStatus, FormDatasetStatus
+from app.models.form import Form
+from app.models.form_dataset import FormDataset, FormDatasetField, FormDatasetFieldStatus, FormDatasetStatus
 from app.models.submission import Submission
 
 @router.post("/upload-csv")

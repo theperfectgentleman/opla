@@ -10,7 +10,7 @@ import RolesManagement from '../components/RolesManagement';
 import DatasetsTab from '../components/DatasetsTab';
 import type { AnalyticsSource } from '../components/analytics/types';
 import {
-    Plus, Settings, ChevronRight, ChevronLeft, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid
+    Plus, Settings, ChevronRight, ChevronLeft, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid, Sparkles
 } from 'lucide-react';
 import FontProfileSelector from '../components/FontProfileSelector';
 import { AnalyticsHubSkeleton } from '../components/analytics/ui';
@@ -61,10 +61,10 @@ type DashboardAsset = {
     updated_at: string;
 };
 
-type AnalyticsToolKey = 'lab' | 'explorer' | 'chart' | 'spreadsheet' | 'dashboard' | 'pivot';
+type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard';
 
 const validDashboardTabs = ['projects', 'tasks', 'forms', 'datasets', 'members', 'audience', 'analysis', 'threads', 'assets', 'reports', 'settings'] as const;
-const validAnalyticsTools: AnalyticsToolKey[] = ['lab', 'explorer', 'chart', 'spreadsheet', 'dashboard', 'pivot'];
+const validAnalyticsTools: AnalyticsToolKey[] = ['lab', 'prep', 'dashboard'];
 
 const taskTone: Record<DashboardTask['status'], string> = {
     todo: 'bg-slate-500/10 text-slate-300 border border-slate-500/20',
@@ -368,6 +368,8 @@ const Dashboard: React.FC = () => {
                 const tool = searchParams.get('tool');
                 if (tool && validAnalyticsTools.includes(tool as AnalyticsToolKey)) {
                     setActiveAnalyticsTool(tool as AnalyticsToolKey);
+                } else {
+                    setActiveAnalyticsTool('lab');
                 }
             }
         }
@@ -754,7 +756,13 @@ const Dashboard: React.FC = () => {
                 activeAnalyticsTool={activeAnalyticsTool}
                 onSelectAnalyticsTool={handleAnalyticsToolSelect}
                 counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, datasets: datasetSources.length, members: members?.length || 0 }}
-                contentClassName={activeTab === 'forms' ? "flex-1 overflow-hidden flex" : "flex-1 overflow-y-auto p-10"}
+                contentClassName={
+                    activeTab === 'forms'
+                        ? 'flex-1 overflow-hidden flex'
+                        : activeTab === 'analysis'
+                            ? 'flex-1 overflow-y-auto p-4'
+                            : 'flex-1 overflow-y-auto p-10'
+                }
             >
                 {organizations.length === 0 && !isLoading && (
                     <div className="mb-10 card border-dashed border-2">
@@ -987,6 +995,23 @@ const Dashboard: React.FC = () => {
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+                                            {formsSubTab !== 'catalog' ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const projectToUse = selectedProjectId === 'all' ? inlineFormProjectId : selectedProjectId;
+                                                        if (!projectToUse) return;
+                                                        setIsCreatingFormInline(false);
+                                                        setInlineFormTitle('');
+                                                        navigate(`/projects/${projectToUse}/ai-survey`);
+                                                    }}
+                                                    disabled={selectedProjectId === 'all' && !inlineFormProjectId}
+                                                    className="inline-flex items-center gap-1.5 px-4 py-1.5 border border-[hsl(var(--border))] rounded-lg text-xs font-semibold text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] transition-colors disabled:opacity-50"
+                                                >
+                                                    <Sparkles className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
+                                                    Create with AI
+                                                </button>
+                                            ) : null}
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -1136,7 +1161,7 @@ const Dashboard: React.FC = () => {
                                             </div>
                                         )}
 
-                                        <div className="mt-auto">
+                                        <div className="mt-auto space-y-2">
                                             <button
                                                 onClick={(event) => {
                                                     event.stopPropagation();
@@ -1146,6 +1171,16 @@ const Dashboard: React.FC = () => {
                                             >
                                                 <PlusCircle className="w-4 h-4" />
                                                 <span>New Form</span>
+                                            </button>
+                                            <button
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    navigate(`/projects/${project.id}/ai-survey`);
+                                                }}
+                                                className="w-full bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))] font-semibold py-2.5 rounded-md border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 transition-all flex items-center justify-center space-x-2 text-sm"
+                                            >
+                                                <Sparkles className="w-4 h-4 text-[hsl(var(--primary))]" />
+                                                <span>Create with AI</span>
                                             </button>
                                         </div>
                                     </div>

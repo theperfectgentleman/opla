@@ -12,6 +12,7 @@ import FormBuilder from './pages/FormBuilder';
 import FormSimulator from './pages/FormSimulator';
 import PublicForm from './pages/PublicForm';
 import ProjectWorkspace from './pages/ProjectWorkspace';
+import AiSurveyWizard from './pages/AiSurveyWizard';
 import InvitationAccept from './pages/InvitationAccept';
 import ReportDetail from './pages/ReportDetail';
 
@@ -60,6 +61,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ProjectWorkspace />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/ai-survey"
+                element={
+                  <ProtectedRoute>
+                    <AiSurveyWizard />
                   </ProtectedRoute>
                 }
               />

@@ -36,7 +36,7 @@ type StudioNavKey =
     | 'reports'
     | 'settings';
 
-type AnalyticsNavTool = 'lab' | 'explorer' | 'chart' | 'spreadsheet' | 'dashboard' | 'pivot';
+type AnalyticsNavTool = 'lab' | 'prep' | 'dashboard';
 
 type NavCounts = {
     projects?: number;
@@ -73,11 +73,8 @@ const navItems: Array<{ key: StudioNavKey; label: string; icon: React.ReactNode;
 
 const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
     { key: 'lab', label: 'Analysis Lab' },
-    { key: 'explorer', label: 'Data Explorer' },
-    { key: 'chart', label: 'Chart Builder' },
-    { key: 'spreadsheet', label: 'Spreadsheet' },
+    { key: 'prep', label: 'Data Prep' },
     { key: 'dashboard', label: 'Dashboards' },
-    { key: 'pivot', label: 'Pivot Table' },
 ];
 
 const StudioLayout: React.FC<StudioLayoutProps> = ({

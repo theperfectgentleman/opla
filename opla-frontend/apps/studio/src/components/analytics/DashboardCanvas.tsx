@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, FileSpreadsheet, LayoutDashboard, Loader2, PanelsTopLeft, Plus, Table2, FlaskConical, Hash, Target, Type } from 'lucide-react';
+import { BarChart3, FlaskConical, Hash, Loader2, PanelsTopLeft, Plus, Table2, Target, Type } from 'lucide-react';
 
 import { analyticsAPI } from '../../lib/api';
 import { defaultSource } from './queryUtils';
@@ -11,8 +11,6 @@ import DashboardViewer from './DashboardViewer';
 const vizMeta: Record<SavedQuestion['viz_type'], { label: string; icon: ReactNode }> = {
 	table: { label: 'Table', icon: <Table2 className="h-4 w-4" /> },
 	chart: { label: 'Chart', icon: <BarChart3 className="h-4 w-4" /> },
-	spreadsheet: { label: 'Spreadsheet', icon: <FileSpreadsheet className="h-4 w-4" /> },
-	pivot: { label: 'Pivot', icon: <LayoutDashboard className="h-4 w-4" /> },
 	walker: { label: 'Walker Analysis', icon: <FlaskConical className="h-4 w-4" /> },
 	kpi: { label: 'KPI', icon: <Hash className="h-4 w-4" /> },
 	goal: { label: 'Goal', icon: <Target className="h-4 w-4" /> },
@@ -250,10 +248,9 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 							<div>
 								<label className={analyticsLabelClass}>View type</label>
 								<select value={questionVizType} onChange={event => setQuestionVizType(event.target.value as SavedQuestion['viz_type'])} className={analyticsInputClass}>
-									<option value="table">Table</option>
+									<option value="walker">Walker Analysis</option>
 									<option value="chart">Chart</option>
-									<option value="spreadsheet">Spreadsheet</option>
-									<option value="pivot">Pivot</option>
+									<option value="table">Table</option>
 									<option value="kpi">KPI Tracker</option>
 									<option value="goal">Goal Progress</option>
 									<option value="markdown">Rich Text</option>
@@ -388,7 +385,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 								<div className={`${analyticsInsetClass} mt-3 grid gap-3 p-3 md:grid-cols-2`}>
 									{dashboard.cards.slice(0, 4).map(card => {
 										const question = card.question;
-										const meta = vizMeta[question?.viz_type ?? 'table'];
+										const meta = vizMeta[(question?.viz_type as SavedQuestion['viz_type']) ?? 'table'] ?? vizMeta.table;
 										return (
 											<div key={card.id} className="rounded-md border border-slate-200 bg-white p-3">
 												<div className="flex items-center gap-2 text-emerald-700">
@@ -446,10 +443,9 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 							<div>
 								<label className={analyticsLabelClass}>View type</label>
 								<select value={questionVizType} onChange={event => setQuestionVizType(event.target.value as SavedQuestion['viz_type'])} className={analyticsInputClass}>
-									<option value="table">Table</option>
+									<option value="walker">Walker Analysis</option>
 									<option value="chart">Chart</option>
-									<option value="spreadsheet">Spreadsheet</option>
-									<option value="pivot">Pivot</option>
+									<option value="table">Table</option>
 									<option value="kpi">KPI Tracker</option>
 									<option value="goal">Goal Progress</option>
 									<option value="markdown">Rich Text</option>
@@ -470,7 +466,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 				<div className="mt-4 space-y-3">
 					{orphanQuestions.length > 0 ? (
 						orphanQuestions.map(question => {
-							const meta = vizMeta[question.viz_type];
+							const meta = vizMeta[question.viz_type] ?? vizMeta.table;
 							return (
 								<article key={question.id} className="rounded-md border border-slate-200 bg-white p-3">
 									<div className="flex items-center gap-2 text-emerald-700">

@@ -149,7 +149,7 @@ const ReportDetail: React.FC = () => {
 
     const isDirty = Boolean(report) && editorSnapshot !== persistedEditorSnapshot;
 
-    const handleShellNavSelect = (key: 'projects' | 'tasks' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
+    const handleShellNavSelect = (key: 'projects' | 'ops' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
         navigate(`/dashboard?tab=${key}`);
     };
 

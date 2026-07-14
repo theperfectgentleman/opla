@@ -20,6 +20,10 @@ from app.models.project_task import ProjectTask
 from app.models.project_report import ProjectReport
 from app.models.project_asset import ProjectAsset
 from app.models.project_thread import ProjectThread
+from app.models.project_thread_message import ProjectThreadMessage, ProjectThreadNotification
+from app.models.project_pinned_analytics import ProjectPinnedAnalytics
+from app.models.project_attention import ProjectAttentionHook, ProjectAttentionItem
+from app.models.form_submission_media import FormSubmissionMedia
 from app.models.analytics import SavedQuestion, AnalyticsDashboard, DashboardCard
 
 # OrgRole and OrgRoleAssignment are defined in role_template.py according to service imports

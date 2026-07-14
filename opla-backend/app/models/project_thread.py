@@ -14,9 +14,14 @@ class ProjectThread(Base):
     title = Column(String, nullable=False)
     summary = Column(Text, nullable=True)
     reply_count = Column(Integer, nullable=False, default=0, server_default="0")
+    kind = Column(String, nullable=False, default="general", index=True)  # general | team
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)
+    archived_at = Column(DateTime, nullable=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     project = relationship("Project", back_populates="threads")
-    creator = relationship("User")
+    creator = relationship("User", foreign_keys=[created_by])
+    team = relationship("Team")
+    messages = relationship("ProjectThreadMessage", back_populates="thread", cascade="all, delete-orphan")

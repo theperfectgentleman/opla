@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Dict
@@ -17,6 +17,8 @@ from app.api.schemas.form import (
     FormRuntimeOut,
     FormVersionOut,
     FormStatsOut,
+    FormSubmissionMediaListOut,
+    FormSubmissionMediaOut,
     PublishFormIn,
     FormResponsibilityUpdateIn,
 )
@@ -24,6 +26,7 @@ from app.services.catalog_form_service import CatalogFormService
 from app.services.dataset_service import DatasetService
 from app.services.form_automation_service import FormAutomationService
 from app.services.form_service import FormService
+from app.services.form_submission_media_service import FormSubmissionMediaService
 from app.services.project_access_service import ProjectAccessService
 from app.models.project import ProjectStatus
 from app.models.user import User
@@ -536,3 +539,34 @@ def delete_form_automation_rule(
         raise HTTPException(status_code=404, detail="Automation rule not found")
     FormAutomationService.delete_rule(db, rule)
     return None
+
+
+def _serialize_media_item(item) -> FormSubmissionMediaOut:
+    out = FormSubmissionMediaOut.model_validate(item)
+    out.previewable = FormSubmissionMediaService.is_previewable_url(item.url)
+    return out
+
+
+@router.get("/{form_id}/media", response_model=FormSubmissionMediaListOut)
+def list_form_media(
+    form_id: uuid.UUID,
+    limit: int = Query(100, ge=1, le=500),
+    media_kind: str | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    form = FormService.get_form(db, form_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
+    items = FormSubmissionMediaService.list_form_media(
+        db,
+        form,
+        limit=limit,
+        media_kind=media_kind,
+        ensure_index=True,
+    )
+    return FormSubmissionMediaListOut(
+        items=[_serialize_media_item(item) for item in items],
+        total=len(items),
+    )

@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Welcome from './pages/Welcome';
 import FormBuilder from './pages/FormBuilder';
 import FormSimulator from './pages/FormSimulator';
+import FormHome from './pages/FormHome';
 import PublicForm from './pages/PublicForm';
 import ProjectWorkspace from './pages/ProjectWorkspace';
 import ProjectHub from './pages/ProjectHub';
@@ -98,6 +99,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ReportDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/forms/:formId"
+                element={
+                  <ProtectedRoute>
+                    <FormHome />
                   </ProtectedRoute>
                 }
               />

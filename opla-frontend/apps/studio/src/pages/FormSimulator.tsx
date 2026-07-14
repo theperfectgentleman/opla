@@ -1011,7 +1011,7 @@ const FormSimulator: React.FC = () => {
 
     if (isLoading) return <div className="min-h-screen bg-[hsl(var(--background))] flex items-center justify-center text-[hsl(var(--text-primary))]">Loading Simulator...</div>;
 
-    const handleShellNavSelect = (key: 'projects' | 'tasks' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
+    const handleShellNavSelect = (key: 'projects' | 'ops' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
         navigate(`/dashboard?tab=${key}`);
     };
 

@@ -7,6 +7,7 @@ import { defaultSource } from './queryUtils';
 import type { AnalyticsDashboard, AnalyticsToolProps, SavedQuestion } from './types';
 import { AnalyticsPageHeader, AnalyticsPanelSkeleton, analyticsButtonClass, analyticsGhostButtonClass, analyticsInputClass, analyticsInsetClass, analyticsLabelClass, analyticsPanelClass } from './ui';
 import DashboardViewer from './DashboardViewer';
+import PinnedAnalyticsCard from '../hub/PinnedAnalyticsCard';
 
 const vizMeta: Record<SavedQuestion['viz_type'], { label: string; icon: ReactNode }> = {
 	table: { label: 'Table', icon: <Table2 className="h-4 w-4" /> },
@@ -41,6 +42,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 	const [submitLoading, setSubmitLoading] = useState(false);
 	const [submitMessage, setSubmitMessage] = useState<string | null>(null);
 	const [viewingDashboard, setViewingDashboard] = useState<AnalyticsDashboard | null>(null);
+	const [viewingQuestion, setViewingQuestion] = useState<SavedQuestion | null>(null);
 
 	async function handleAttachQuestion(questionId: string, dashboardId: string) {
 		const dashboard = dashboards.find(d => d.id === dashboardId);
@@ -109,11 +111,6 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 			cancelled = true;
 		};
 	}, [orgId, projectId, reloadToken]);
-
-	const orphanQuestions = useMemo(() => {
-		const questionIds = new Set(dashboards.flatMap(dashboard => dashboard.cards.map(card => card.question_id)));
-		return questions.filter(question => !questionIds.has(question.id)).slice(0, 8);
-	}, [dashboards, questions]);
 
 	const selectedSource = useMemo(
 		() => sources.find(source => source.dataset_id === questionSourceId) ?? defaultAnalyticsSource ?? null,
@@ -207,6 +204,41 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 
 	if (error) {
 		return <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700 shadow-sm">{error}</div>;
+	}
+
+	if (viewingQuestion) {
+		return (
+			<div className={analyticsPanelClass}>
+				<div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Saved question</p>
+						<h2 className="mt-1 text-xl font-bold text-slate-800">{viewingQuestion.title}</h2>
+						<p className="mt-1 text-sm text-slate-500">
+							{viewingQuestion.description || `${viewingQuestion.viz_type} · read-only preview`}
+						</p>
+					</div>
+					<button type="button" className={analyticsGhostButtonClass} onClick={() => setViewingQuestion(null)}>
+						Back
+					</button>
+				</div>
+				{['chart', 'kpi', 'goal', 'table'].includes(viewingQuestion.viz_type) ? (
+					<div className="min-h-[280px]">
+						<PinnedAnalyticsCard orgId={orgId} question={viewingQuestion} />
+					</div>
+				) : (
+					<div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
+						This question type ({viewingQuestion.viz_type}) doesn’t have an Overview-style preview yet.
+						{viewingQuestion.viz_type === 'walker'
+							? ' Open it from Analysis Lab → Explore after we wire reopen.'
+							: ''}
+					</div>
+				)}
+				<p className="mt-4 text-xs text-slate-500">
+					Tip: build controllable charts in <span className="font-semibold">Analysis Lab → Charts</span>, then Save.
+					The “New Question” form only creates a stub without chart controls.
+				</p>
+			</div>
+		);
 	}
 
 	if (viewingDashboard) {
@@ -464,21 +496,28 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 				) : null}
 
 				<div className="mt-4 space-y-3">
-					{orphanQuestions.length > 0 ? (
-						orphanQuestions.map(question => {
+					{questions.length > 0 ? (
+						questions.map(question => {
 							const meta = vizMeta[question.viz_type] ?? vizMeta.table;
 							return (
-								<article key={question.id} className="rounded-md border border-slate-200 bg-white p-3">
+								<article
+									key={question.id}
+									className="cursor-pointer rounded-md border border-slate-200 bg-white p-3 transition hover:border-emerald-700/40"
+									onClick={() => setViewingQuestion(question)}
+								>
 									<div className="flex items-center gap-2 text-emerald-700">
 										{meta.icon}
 										<span className="text-[10px] font-bold uppercase tracking-[0.18em]">{meta.label}</span>
 									</div>
 									<h4 className="mt-2 text-sm font-semibold text-slate-800">{question.title}</h4>
 									<p className="mt-1 text-sm text-slate-500">{question.description || 'No description provided.'}</p>
-									<p className="mt-3 text-xs text-slate-500">Updated {formatDate(question.updated_at)}</p>
+									<p className="mt-3 text-xs text-slate-500">Updated {formatDate(question.updated_at)} · Click to preview</p>
 									{dashboards.length > 0 && (
-										<div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-											<span className="text-xs font-medium text-slate-500 uppercase tracking-widest">Dashboards</span>
+										<div
+											className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4"
+											onClick={event => event.stopPropagation()}
+										>
+											<span className="text-xs font-medium uppercase tracking-widest text-slate-500">Dashboards</span>
 											<select
 												className="ml-auto block w-56 rounded-md border-0 py-1.5 pl-3 pr-10 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-emerald-600 sm:leading-6"
 												onChange={(e) => {
@@ -499,7 +538,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 						})
 					) : (
 						<div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
-							Every saved question in this workspace is already attached to a dashboard card.
+							No saved questions yet. Prefer Analysis Lab → Charts → Save for pinnable charts.
 						</div>
 					)}
 				</div>

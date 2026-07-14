@@ -58,7 +58,7 @@ flowchart LR
 | **3. Wire-in** | Replace mock data for that slice with real APIs where the phase says so. |
 | **4. Close** | Mark phase **Done** when acceptance criteria pass. Then start the next phase’s questions. |
 
-**Current phase pointer:** Phase 1 — Done (verify); next = Phase 1.5 clarifying
+**Current phase pointer:** Phase 2 — clarifying next
 
 ---
 
@@ -195,23 +195,24 @@ Replace project-specific vanity metrics with **admin-pinned charts** built in An
 
 | # | Answer |
 |---|--------|
-| 1 | |
-| 2 | |
-| 3 | |
-| 4 | |
+| 1 | **Single chart/KPI card** (SavedQuestion / dashboard tile — pin by `question_id`). |
+| 2 | **Project editors** (`project.edit`) can pin/unpin. |
+| 3 | **Max 4** pins on Overview. |
+| 4 | Empty state shows **“Pin a chart”** CTA (for editors). |
 
 ### Deliverables
-- Pin model/API + Overview render slot.
+- Pin model/API (`question_id`, max 4, editors only) + ProjectHub Overview render + Pin a chart picker.
 
 ### Wire-in checklist
-- [ ] Save/load pins for project  
-- [ ] Overview shows pinned charts with live data  
+- [x] Save/load pins for project  
+- [x] Overview shows pinned charts with live data  
+- [x] Empty state CTA “Pin a chart” for editors  
 
 ### Acceptance criteria
-- Admin can pin at least one analytics view; it appears on ProjectHub Overview for that project.
+- Project editors can pin up to 4 chart/KPI questions; they render live on ProjectHub Overview.
 
 ### Status
-**Not started**
+**Done**
 
 ---
 
@@ -246,25 +247,26 @@ Project-scoped triage rail from **live operational state** (not “tasks pretend
 
 | # | Answer |
 |---|--------|
-| 1 | |
-| 2 | |
-| 3 | |
-| 4 | |
-| 5 | |
+| 1 | **v1 signals (priority):** (1) pending review aging, (2) blocked tasks, (3) overdue tasks, (4) attendance gaps during the project collection time window. |
+| 2 | **Severity:** `critical` = blocked task, or pending review older than 24h. `warning` = overdue task, pending review older than 4h, or attendance gap during an active collection window. `info` reserved for soft notices (unused in v1 detectors unless needed). |
+| 3 | **Ack/dismiss in v1:** editors can dismiss items (persisted). Feed is not read-only forever. |
+| 4 | **Deep-links:** review → `/projects/:id?tab=ops&view=review`; tasks → `/projects/:id?tab=ops&view=tasks`; attendance → create/open a project **thread** with a predefined title/summary (no dedicated attendance alert surface). Do not build new Studio pages for every signal. Ops tab owns Tasks + Review Queue as sibling sub-views. |
+| 5 | **Event hooks:** each project gets **default system hooks** on create; additional custom hooks can be created later. Hooks fire on submission/review, task create/update, and attendance check-in/out. List API also refreshes time-based severity (review aging) on read. |
 
 ### Deliverables
 - Backend feed + ProjectHub rail wired to it.
+- `project_attention_hooks` (defaults + custom) and `project_attention_items` (open/dismissed).
 
 ### Wire-in checklist
-- [ ] Replace mock `ALERTS`  
-- [ ] Severity styling matches live data  
-- [ ] Deep-links land on correct Studio surfaces  
+- [x] Replace mock `ALERTS`  
+- [x] Severity styling matches live data  
+- [x] Deep-links land on correct Studio surfaces  
 
 ### Acceptance criteria
 - Creating backlog/block conditions in a test project surfaces matching attention items without manual mock data.
 
 ### Status
-**Not started**
+**Done**
 
 ---
 
@@ -299,25 +301,25 @@ All media collected via a form (image / audio / video) lives in a **media storag
 
 | # | Answer |
 |---|--------|
-| 1 | |
-| 2 | |
-| 3 | |
-| 4 | |
-| 5 | |
+| 1 | **v1 storage:** index/reuse **existing upload URLs** already stored in submission payloads. No object-storage migration in this phase. |
+| 2 | **Media field types:** `image` / photo, `signature`, `audio`, `video`, and file fields whose MIME/type is clearly media. |
+| 3 | **Video in v1:** **yes** — include video alongside images and audio when present. |
+| 4 | **Retention:** media index rows **cascade with submission delete**. Underlying files follow existing upload lifecycle (no separate DAM purge in v1). |
+| 5 | **Browse in v1:** **Studio only** (form media section + ProjectHub recent strip). Mobile browse later. |
 
 ### Deliverables
 - Form media section + ProjectHub recent media wired.
 
 ### Wire-in checklist
-- [ ] List media for a form  
-- [ ] Overview carousel uses real media  
-- [ ] Launch → form media section  
+- [x] List media for a form  
+- [x] Overview carousel uses real media  
+- [x] Launch → form media section  
 
 ### Acceptance criteria
 - Submitting a form with media makes items appear in that form’s media section and on ProjectHub recent media.
 
 ### Status
-**Not started**
+**Done**
 
 ---
 
@@ -351,24 +353,24 @@ Replace title/summary/`reply_count`-only threads (and Studio mocks) with a real 
 
 | # | Answer |
 |---|--------|
-| 1 | |
-| 2 | |
-| 3 | |
-| 4 | |
-| 5 | |
+| 1+5 | **Channels, not free-form topics:** each project has a default **General** channel, plus one channel per **team** granted access to the project. No arbitrary topic creation in v1. (Reconciles “one conversation space” with team subs.) |
+| 2 | **Open to all project members** for read/post in v1. |
+| 3 | **Edit/delete:** author may edit or delete within **24 hours**. **Project editors** may **delete** any message at any time. |
+| 4 | **Notifications in v1:** **@mentions** only (in-app). No broadcast-on-every-message yet. |
+| 5 | Covered under #1 — seed **General** + team channels from project team access. Existing stub `project_threads` rows: **migrate** into channels where possible, else discard stubs and recreate defaults. |
 
 ### Deliverables
 - Threads backend + ProjectHub stream + Studio API client (no mock lists).
 
 ### Wire-in checklist
-- [ ] Remove hardcoded threads in ProjectHub / Dashboard / Workspace  
-- [ ] Live list + post + reply  
+- [x] Remove hardcoded threads in ProjectHub / Dashboard / Workspace  
+- [x] Live list + post + reply  
 
 ### Acceptance criteria
 - Two users can exchange messages on a project and see them on ProjectHub.
 
 ### Status
-**Not started**
+**Done**
 
 ---
 
@@ -504,10 +506,10 @@ When Phases 1–5 are Done (Phase 6 may still be in progress if Analysis-only), 
 |-------|------|--------|
 | 0 | Scope lock | Done |
 | 1 | ProjectHub shell + existing data | Done (verify in Studio) |
-| 1.5 | Pinned analytics charts | Not started |
-| 2 | Needs Attention feed | Not started |
-| 3 | Form media library | Not started |
-| 4 | Proper threads | Not started |
+| 1.5 | Pinned analytics charts | Done |
+| 2 | Needs Attention feed | Done |
+| 3 | Form media library | Done |
+| 4 | Proper threads | Done |
 | 5 | Automation `create_alert` | Not started |
 | 6 | Maps in Analysis | Not started |
 | Final | Cutover to live project home | Not started |

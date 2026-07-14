@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, FlaskConical, Loader2, PanelsTopLeft, Table2, UploadCloud } from 'lucide-react';
+import { ArrowRight, FlaskConical, Loader2, Map, PanelsTopLeft, Table2, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { analyticsAPI } from '../../lib/api';
@@ -17,8 +17,9 @@ import {
 const WalkerAnalysisLab = lazy(() => import('./WalkerAnalysisLab'));
 const PrepTable = lazy(() => import('./PrepTable'));
 const DashboardCanvas = lazy(() => import('./DashboardCanvas'));
+const SpatialAnalysisLab = lazy(() => import('./SpatialAnalysisLab'));
 
-export type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard';
+export type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard' | 'spatial';
 
 type AnalyticsHubForm = {
   id: string;
@@ -60,6 +61,12 @@ const toolCards: AnalyticsToolCard[] = [
     label: 'Dashboards',
     icon: <PanelsTopLeft className="h-5 w-5" />,
     description: 'Organize saved questions into dashboards.',
+  },
+  {
+    key: 'spatial',
+    label: 'Map Analysis',
+    icon: <Map className="h-5 w-5" />,
+    description: 'Ask geographic questions and see answers on a map.',
   },
 ];
 
@@ -148,6 +155,15 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
   }, [orgId]);
 
   const workspace = useMemo(() => {
+    // Map Analysis is a demo surface with its own sample data — available without datasets.
+    if (activeTool === 'spatial') {
+      return (
+        <Suspense fallback={<ToolWorkspaceFallback label="map analysis" />}>
+          <SpatialAnalysisLab />
+        </Suspense>
+      );
+    }
+
     if (loading) return <AnalyticsHubSkeleton />;
 
     if (error) {
@@ -202,7 +218,7 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
                     <button
                       key={form.id}
                       type="button"
-                      onClick={() => navigate(`/builder/${form.id}`)}
+                      onClick={() => navigate(`/forms/${form.id}`)}
                       className="rounded-md border border-slate-200 bg-white p-3 text-left transition hover:border-emerald-700 hover:bg-emerald-50/40"
                     >
                       <span className="block text-sm font-semibold text-slate-800">{form.title}</span>
@@ -253,8 +269,12 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
   }, [activeTool, error, forms, loading, navigate, orgId, projectId, sources, uploading]);
 
   return (
-    <div className="space-y-3" data-org={orgId} data-project={projectId}>
-      {activeTool === 'lab' || activeTool === 'prep' ? (
+    <div
+      className={activeTool === 'spatial' ? '' : 'space-y-3'}
+      data-org={orgId}
+      data-project={projectId}
+    >
+      {activeTool === 'spatial' ? null : activeTool === 'lab' || activeTool === 'prep' ? (
         <div className="flex items-center justify-end gap-2">
           <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleCsvUpload} />
           <button

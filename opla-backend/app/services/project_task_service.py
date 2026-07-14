@@ -138,6 +138,9 @@ class ProjectTaskService:
         db.add(task)
         db.commit()
         db.refresh(task)
+        from app.services.project_attention_service import ProjectAttentionService
+
+        ProjectAttentionService.on_task_changed(db, task)
         return task
 
     @staticmethod
@@ -230,6 +233,9 @@ class ProjectTaskService:
 
         db.commit()
         db.refresh(task)
+        from app.services.project_attention_service import ProjectAttentionService
+
+        ProjectAttentionService.on_task_changed(db, task)
         return task
 
     @staticmethod

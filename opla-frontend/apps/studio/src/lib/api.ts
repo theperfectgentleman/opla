@@ -355,6 +355,102 @@ export const projectAPI = {
         });
         return response.data;
     },
+    listPinnedAnalytics: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/pinned-analytics`);
+        return response.data;
+    },
+    replacePinnedAnalytics: async (orgId: string, projectId: string, questionIds: string[]) => {
+        const response = await apiClient.put(`/organizations/${orgId}/projects/${projectId}/pinned-analytics`, {
+            question_ids: questionIds,
+        });
+        return response.data;
+    },
+    listAttention: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/attention`);
+        return response.data;
+    },
+    dismissAttention: async (orgId: string, projectId: string, itemId: string) => {
+        const response = await apiClient.post(
+            `/organizations/${orgId}/projects/${projectId}/attention/${itemId}/dismiss`,
+        );
+        return response.data;
+    },
+    listAttentionHooks: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/attention/hooks`);
+        return response.data;
+    },
+    createAttentionHook: async (
+        orgId: string,
+        projectId: string,
+        data: { kind: string; severity_default?: string; enabled?: boolean; config_json?: Record<string, unknown> },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/attention/hooks`, data);
+        return response.data;
+    },
+    listMedia: async (orgId: string, projectId: string, params?: { limit?: number; media_kind?: string }) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/media`, { params });
+        return response.data;
+    },
+    listThreads: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/threads`);
+        return response.data;
+    },
+    getThread: async (orgId: string, projectId: string, threadId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/threads/${threadId}`);
+        return response.data;
+    },
+    listThreadMessages: async (
+        orgId: string,
+        projectId: string,
+        threadId: string,
+        params?: { limit?: number; before?: string },
+    ) => {
+        const response = await apiClient.get(
+            `/organizations/${orgId}/projects/${projectId}/threads/${threadId}/messages`,
+            { params },
+        );
+        return response.data;
+    },
+    postThreadMessage: async (
+        orgId: string,
+        projectId: string,
+        threadId: string,
+        data: { body: string; mentioned_user_ids?: string[] },
+    ) => {
+        const response = await apiClient.post(
+            `/organizations/${orgId}/projects/${projectId}/threads/${threadId}/messages`,
+            data,
+        );
+        return response.data;
+    },
+    editThreadMessage: async (
+        orgId: string,
+        projectId: string,
+        messageId: string,
+        data: { body: string; mentioned_user_ids?: string[] },
+    ) => {
+        const response = await apiClient.patch(
+            `/organizations/${orgId}/projects/${projectId}/messages/${messageId}`,
+            data,
+        );
+        return response.data;
+    },
+    deleteThreadMessage: async (orgId: string, projectId: string, messageId: string) => {
+        const response = await apiClient.delete(
+            `/organizations/${orgId}/projects/${projectId}/messages/${messageId}`,
+        );
+        return response.data;
+    },
+    listThreadNotifications: async (orgId: string, params?: { unread_only?: boolean; limit?: number }) => {
+        const response = await apiClient.get(`/organizations/${orgId}/thread-notifications`, { params });
+        return response.data;
+    },
+    markThreadNotificationRead: async (orgId: string, notificationId: string) => {
+        const response = await apiClient.post(
+            `/organizations/${orgId}/thread-notifications/${notificationId}/read`,
+        );
+        return response.data;
+    },
     listCatalogItems: async (orgId: string, projectId: string) => {
         const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/catalog-items`);
         return response.data;
@@ -506,6 +602,10 @@ export const formAPI = {
         const response = await apiClient.get(`/forms/${formId}`);
         return response.data;
     },
+    getStats: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/stats`);
+        return response.data;
+    },
     publish: async (formId: string, payload?: { draft_version_id?: string; draft_slot?: number; changelog?: string }) => {
         const response = await apiClient.post(`/forms/${formId}/publish`, payload || {});
         return response.data;
@@ -516,6 +616,14 @@ export const formAPI = {
     },
     getRuntime: async (formId: string) => {
         const response = await apiClient.get(`/forms/${formId}/runtime`);
+        return response.data;
+    },
+    getDataset: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/dataset`);
+        return response.data;
+    },
+    listMedia: async (formId: string, params?: { limit?: number; media_kind?: string }) => {
+        const response = await apiClient.get(`/forms/${formId}/media`, { params });
         return response.data;
     },
     list: async (projectId: string, kind?: 'standard' | 'catalog') => {

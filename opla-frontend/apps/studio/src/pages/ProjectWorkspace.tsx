@@ -6,6 +6,7 @@ import {
     FileBarChart2,
     FileText,
     CheckCircle2,
+    Image as ImageIcon,
     MessageSquare,
     Paperclip,
     Play,
@@ -22,7 +23,9 @@ import {
 import StudioLayout from '../components/StudioLayout';
 import ConfirmPopover from '../components/ConfirmPopover';
 import CatalogGrid from '../components/catalog/CatalogGrid';
+import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
 import { useOrg } from '../contexts/OrgContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
     countUnpublishedCatalogFields,
@@ -270,8 +273,7 @@ const businessRoleLabelBySlug: Record<string, string> = {
 
 const TABS = [
     { id: 'forms', label: 'Forms', icon: FileText },
-    { id: 'review', label: 'Review Queue', icon: CheckCircle2 },
-    { id: 'tasks', label: 'Tasks', icon: SquareCheckBig },
+    { id: 'ops', label: 'Ops', icon: SquareCheckBig },
     { id: 'data', label: 'Datasets', icon: Database },
     { id: 'catalog', label: 'Catalog', icon: Tag },
     { id: 'threads', label: 'Threads', icon: MessageSquare },
@@ -279,19 +281,53 @@ const TABS = [
     { id: 'members', label: 'Members', icon: Users },
 ] as const;
 
+type OpsView = 'tasks' | 'review';
+
 const ProjectWorkspace: React.FC = () => {
     const navigate = useNavigate();
     const { projectId } = useParams<{ projectId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
-    const activeTab = searchParams.get('tab') || 'forms';
+    const rawTab = searchParams.get('tab') || 'forms';
+    const activeTab = rawTab === 'tasks' || rawTab === 'review' ? 'ops' : rawTab;
+    const opsView: OpsView = searchParams.get('view') === 'review' || rawTab === 'review' ? 'review' : 'tasks';
 
     const setActiveTab = (tab: string) => {
-        setSearchParams(prev => {
+        setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             next.set('tab', tab);
+            if (tab === 'ops') {
+                if (!next.get('view') || (next.get('view') !== 'tasks' && next.get('view') !== 'review')) {
+                    next.set('view', 'tasks');
+                }
+            } else {
+                next.delete('view');
+            }
             return next;
         });
     };
+
+    const setOpsView = (view: OpsView) => {
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', 'ops');
+            next.set('view', view);
+            return next;
+        });
+    };
+
+    // Legacy ?tab=tasks|review → ?tab=ops&view=...
+    useEffect(() => {
+        if (rawTab !== 'tasks' && rawTab !== 'review') return;
+        setSearchParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                next.set('tab', 'ops');
+                next.set('view', rawTab === 'review' ? 'review' : 'tasks');
+                return next;
+            },
+            { replace: true },
+        );
+    }, [rawTab, setSearchParams]);
 
     const {
         currentOrg,
@@ -300,6 +336,7 @@ const ProjectWorkspace: React.FC = () => {
         refreshCurrentProject,
         setCurrentProject,
     } = useOrg();
+    const { user } = useAuth();
     const { showToast } = useToast();
 
     const [forms, setForms] = useState<WorkspaceForm[]>([]);
@@ -352,22 +389,7 @@ const ProjectWorkspace: React.FC = () => {
     const attendanceDay = useMemo(() => formatDateKey(new Date()), []);
 
     const [datasets, setDatasets] = useState<WorkspaceDataset[]>([]);
-    const [threads] = useState<WorkspaceThread[]>([
-        {
-            id: 'thread-kickoff',
-            title: 'Project kickoff channel',
-            summary: 'Use this thread for launch notices, @mentions, and decisions that should stay attached to the project.',
-            reply_count: 12,
-            updated_at: new Date().toISOString(),
-        },
-        {
-            id: 'thread-escalations',
-            title: 'Escalations and blockers',
-            summary: 'Operational issue lane for field blockers, supervisor escalations, and rapid follow-up.',
-            reply_count: 4,
-            updated_at: new Date(Date.now() - 1000 * 60 * 65).toISOString(),
-        },
-    ]);
+    const [threads, setThreads] = useState<WorkspaceThread[]>([]);
     const [assets] = useState<WorkspaceAsset[]>([
         {
             id: 'asset-brief',
@@ -398,7 +420,7 @@ const ProjectWorkspace: React.FC = () => {
             setLoading(true);
             setError(null);
             try {
-                const [project, projectForms, projectTasks, projectAttendance, projectReports, projectAccess, orgTeams, templates, analyticsSources] = await Promise.all([
+                const [project, projectForms, projectTasks, projectAttendance, projectReports, projectAccess, orgTeams, templates, analyticsSources, projectThreads] = await Promise.all([
                     refreshCurrentProject(currentOrg.id, projectId),
                     formAPI.list(projectId),
                     projectAPI.listTasks(currentOrg.id, projectId),
@@ -408,6 +430,7 @@ const ProjectWorkspace: React.FC = () => {
                     teamAPI.list(currentOrg.id),
                     projectAPI.listRoleTemplates(currentOrg.id),
                     analyticsAPI.listSources(currentOrg.id).catch(() => []),
+                    projectAPI.listThreads(currentOrg.id, projectId).catch(() => []),
                 ]);
                 const pendingReviews = (
                     await Promise.all(
@@ -443,6 +466,15 @@ const ProjectWorkspace: React.FC = () => {
                 setAccessRules(projectAccess);
                 setTeams(orgTeams);
                 setRoleTemplates(templates);
+                setThreads(
+                    (Array.isArray(projectThreads) ? projectThreads : []).map((thread: any) => ({
+                        id: thread.id,
+                        title: thread.title,
+                        summary: thread.summary || '',
+                        reply_count: thread.reply_count || 0,
+                        updated_at: thread.updated_at,
+                    })),
+                );
             } catch (err: any) {
                 setError(err?.message || 'Failed to load project workspace');
             } finally {
@@ -491,6 +523,10 @@ const ProjectWorkspace: React.FC = () => {
             return forms[0]?.id || '';
         });
     }, [forms]);
+
+    const openFormMedia = (formId: string) => {
+        navigate(`/forms/${formId}`);
+    };
 
     useEffect(() => {
         if (!selectedAutomationFormId) {
@@ -611,7 +647,15 @@ const ProjectWorkspace: React.FC = () => {
     }), [filteredTasks]);
 
 
-    const handleShellNavSelect = (key: 'projects' | 'forms' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings' | 'tasks' | string) => {
+    const handleShellNavSelect = (key: string) => {
+        if (key === 'ops') {
+            if (projectId) {
+                navigate(`/projects/${projectId}?tab=ops&view=tasks`);
+                return;
+            }
+            navigate('/dashboard?tab=ops');
+            return;
+        }
         navigate(`/dashboard?tab=${key}`);
     };
 
@@ -761,7 +805,7 @@ const ProjectWorkspace: React.FC = () => {
             setIsCreateFormModalOpen(false);
             setNewFormTitle('');
             setNewFormKind('standard');
-            navigate(`/builder/${newForm.id}`);
+            navigate(`/forms/${newForm.id}`);
         } catch (err: any) {
             setError(err?.response?.data?.detail || err?.message || 'Failed to create form');
         }
@@ -1105,7 +1149,7 @@ const ProjectWorkspace: React.FC = () => {
 
     return (
         <StudioLayout
-            activeNav="projects"
+            activeNav={activeTab === 'ops' ? 'ops' : 'projects'}
             onSelectNav={handleShellNavSelect as any}
             counts={{ projects: 0, forms: forms.length, datasets: datasets.length, members: members?.length || 0 } as any}
             contentClassName="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[hsl(var(--background))] md:bg-[#f9fafb] dark:md:bg-[hsl(var(--background))]"
@@ -1146,7 +1190,7 @@ const ProjectWorkspace: React.FC = () => {
                                     Forms: 'forms',
                                     Datasets: 'data',
                                     Assets: 'data',
-                                    Tasks: 'tasks',
+                                    Tasks: 'ops',
                                     Threads: 'threads',
                                     Reports: 'reports',
                                     Members: 'members',
@@ -1255,10 +1299,18 @@ const ProjectWorkspace: React.FC = () => {
                                                             </select>
                                                         </div>
                                                         <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 flex-wrap justify-end">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openFormMedia(form.id)}
+                                                                className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block"
+                                                                title="Form media"
+                                                            >
+                                                                <ImageIcon className="h-3.5 w-3.5" />
+                                                            </button>
                                                             <button onClick={() => navigate(`/simulator/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
                                                                 <Play className="h-3.5 w-3.5 fill-current" />
                                                             </button>
-                                                            <button onClick={() => navigate(`/builder/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
+                                                            <button onClick={() => navigate(`/forms/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block" title="Open form">
                                                                 <ChevronRight className="h-4 w-4" />
                                                             </button>
                                                         </div>
@@ -1269,7 +1321,7 @@ const ProjectWorkspace: React.FC = () => {
                                     </section>
                                 </div>
 
-                                {/* Right Column: Automation Rules (7/12) */}
+                                {/* Right Column: Automation Rules */}
                                 <div className="lg:col-span-7 space-y-6">
                                     <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                         <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
@@ -1539,8 +1591,38 @@ const ProjectWorkspace: React.FC = () => {
                             </div>
                         )}
 
-                        {/* 2. REVIEW QUEUE WORKSPACE */}
-                        {activeTab === 'review' && (
+                        {/* 2. OPS — Tasks + Review */}
+                        {activeTab === 'ops' && (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3">
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {(
+                                            [
+                                                { id: 'tasks' as const, label: 'Tasks', count: tasks.length },
+                                                { id: 'review' as const, label: 'Review Queue', count: reviewQueue.length },
+                                            ] as const
+                                        ).map((item) => (
+                                            <button
+                                                key={item.id}
+                                                type="button"
+                                                onClick={() => setOpsView(item.id)}
+                                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                                    opsView === item.id
+                                                        ? 'bg-[hsl(var(--primary))] text-white'
+                                                        : 'bg-[hsl(var(--background))] text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'
+                                                }`}
+                                            >
+                                                {item.label}
+                                                <span className="tabular-nums opacity-80">{item.count}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                                        Field tasks, attendance, and submission review
+                                    </p>
+                                </div>
+
+                        {opsView === 'review' && (
                             <div className="max-w-4xl mx-auto space-y-6">
                                 <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                     <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
@@ -1598,8 +1680,7 @@ const ProjectWorkspace: React.FC = () => {
                             </div>
                         )}
 
-                        {/* 3. TASKS WORKSPACE */}
-                        {activeTab === 'tasks' && (
+                        {opsView === 'tasks' && (
                             <div className="grid gap-6 lg:grid-cols-12 items-start">
                                 {/* Left Column: Tasks list (7/12) */}
                                 <div className="lg:col-span-7 space-y-6">
@@ -1820,6 +1901,8 @@ const ProjectWorkspace: React.FC = () => {
                                         </div>
                                     </section>
                                 </div>
+                            </div>
+                        )}
                             </div>
                         )}
 
@@ -2047,44 +2130,21 @@ const ProjectWorkspace: React.FC = () => {
                             />
                         )}
 
-                        {/* 4. DISCUSSIONS WORKSPACE */}
-                        {activeTab === 'threads' && (
-                            <div className="max-w-4xl mx-auto space-y-6">
-                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                <MessageSquare className="h-4 w-4" />
-                                            </div>
-                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Threads</h2>
-                                        </div>
-                                        <button onClick={() => navigate('/dashboard?tab=threads')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                            <Plus className="h-4 w-4" />
-                                            <span className="text-xs font-semibold">New</span>
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                        {threads.length === 0 ? (
-                                            <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No threads yet.</p>
-                                        ) : threads.map(thread => (
-                                            <div key={thread.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                        <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{thread.title}</h3>
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">Updated {new Date(thread.updated_at).toLocaleString()}</p>
-                                                    </div>
-                                                    <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                        {thread.reply_count} replies
-                                                    </span>
-                                                </div>
-                                                <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{thread.summary}</p>
-                                                <div className="mt-3 rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                    Placeholder: message feed, composer, mentions, and activity history will land here.
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
+                        {activeTab === 'threads' && currentOrg?.id && (
+                            <div className="mx-auto max-w-5xl space-y-6">
+                                <ProjectThreadsPanel
+                                    orgId={currentOrg.id}
+                                    projectId={projectId}
+                                    canEditProject={Boolean(
+                                        accessRules.some(
+                                            (rule) =>
+                                                rule.accessor_type === 'user' &&
+                                                rule.accessor_id === user?.id &&
+                                                rule.role === 'editor',
+                                        ),
+                                    )}
+                                    initialThreadId={searchParams.get('thread')}
+                                />
                             </div>
                         )}
 

@@ -308,6 +308,11 @@ class ProjectAccessService:
             )
             db.add(access)
 
+        if accessor_type == AccessorType.TEAM:
+            from app.services.project_thread_service import ProjectThreadService
+
+            ProjectThreadService.ensure_project_channels(db, project.id, commit=False)
+
         db.commit()
         db.refresh(access)
         return access
@@ -331,5 +336,12 @@ class ProjectAccessService:
         if not access:
             raise HTTPException(status_code=404, detail="Project access rule not found")
 
+        was_team = access.accessor_type == AccessorType.TEAM
         db.delete(access)
+
+        if was_team:
+            from app.services.project_thread_service import ProjectThreadService
+
+            ProjectThreadService.ensure_project_channels(db, project_id, commit=False)
+
         db.commit()

@@ -98,6 +98,9 @@ class ProjectAttendanceService:
         db.add(record)
         db.commit()
         db.refresh(record)
+        from app.services.project_attention_service import ProjectAttentionService
+
+        ProjectAttentionService.on_attendance_changed(db, project, actor_id=user_id)
         return record
 
     @staticmethod
@@ -130,4 +133,7 @@ class ProjectAttendanceService:
         record.status = ProjectAttendanceStatus.CHECKED_OUT
         db.commit()
         db.refresh(record)
+        from app.services.project_attention_service import ProjectAttentionService
+
+        ProjectAttentionService.on_attendance_changed(db, project, actor_id=user_id)
         return record

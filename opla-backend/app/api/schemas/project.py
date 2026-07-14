@@ -6,6 +6,7 @@ from app.models.project import ProjectStatus
 from app.models.project_access import AccessorType, ProjectRole
 from app.models.project_attendance import ProjectAttendanceStatus
 from app.models.project_task import ProjectTaskKind, ProjectTaskStatus
+from app.api.schemas.analytics import SavedQuestionOut
 
 class ProjectBase(BaseModel):
     name: str
@@ -302,3 +303,73 @@ class ProjectCatalogItemOut(BaseModel):
     created_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
+
+
+class ProjectPinnedAnalyticsReplace(BaseModel):
+    question_ids: List[UUID] = Field(default_factory=list, max_length=4)
+
+
+class ProjectPinnedAnalyticsItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    question_id: UUID
+    sort_order: int
+    created_at: datetime
+    question: Optional[SavedQuestionOut] = None
+
+
+class ProjectPinnedAnalyticsListOut(BaseModel):
+    can_edit: bool
+    max_pins: int = 4
+    pins: List[ProjectPinnedAnalyticsItemOut]
+
+
+class ProjectAttentionHookOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    kind: str
+    severity_default: str
+    enabled: bool
+    is_system: bool
+    config_json: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectAttentionHookCreate(BaseModel):
+    kind: str = Field(..., min_length=1, max_length=120)
+    severity_default: str = "warning"
+    enabled: bool = True
+    config_json: Optional[dict] = None
+
+
+class ProjectAttentionItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    project_id: UUID
+    hook_id: Optional[UUID] = None
+    severity: str
+    kind: str
+    title: str
+    detail: Optional[str] = None
+    deep_link: Optional[str] = None
+    status: str
+    dedupe_key: str
+    source_submission_id: Optional[UUID] = None
+    source_task_id: Optional[UUID] = None
+    source_attendance_id: Optional[UUID] = None
+    source_thread_id: Optional[UUID] = None
+    dismissed_at: Optional[datetime] = None
+    dismissed_by: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectAttentionFeedOut(BaseModel):
+    can_dismiss: bool
+    items: List[ProjectAttentionItemOut]

@@ -100,12 +100,31 @@ function scatterPoints(
 	return points.slice(0, 2000);
 }
 
+export type QuickChartSaveConfig = {
+	titleHint: string;
+	query_config: {
+		group_by: string[];
+		aggregates: Array<{ field: string; fn: string; alias: string }>;
+		select_fields?: string[];
+		limit: number;
+	};
+	viz_config: {
+		chart_type: ChartKind;
+		category_field: string;
+		series_field?: string;
+		metric_field?: string;
+		agg: AggFn;
+	};
+};
+
 export default function QuickChart({
 	rows,
 	fields,
+	onConfigChange,
 }: {
 	rows: Array<Record<string, unknown>>;
 	fields: IMutField[];
+	onConfigChange?: (config: QuickChartSaveConfig | null) => void;
 }) {
 	const chartableFields = useMemo(
 		() => fields.filter(field => field.fid && field.fid !== 'gw_row_id'),
@@ -187,6 +206,35 @@ export default function QuickChart({
 	const metricTitle = chartKind === 'scatter'
 		? `${categoryField?.name || categoryKey} vs ${scatterYField?.name || scatterYKey}`
 		: `${categoryField?.name || categoryKey} · ${aggLabel(metricMode === 'count' ? 'count' : agg, metricField?.name)}`;
+
+	useEffect(() => {
+		if (!onConfigChange) return;
+		if (!categoryKey) {
+			onConfigChange(null);
+			return;
+		}
+		const groupBy = seriesKey && chartKind !== 'pie' ? [categoryKey, seriesKey] : [categoryKey];
+		const aggregates =
+			metricMode === 'count'
+				? [{ field: categoryKey, fn: 'count', alias: 'count' }]
+				: [{ field: metricMode, fn: agg, alias: `${agg}_${metricMode}` }];
+		onConfigChange({
+			titleHint: metricTitle,
+			query_config: {
+				group_by: groupBy,
+				aggregates,
+				select_fields: groupBy,
+				limit: 500,
+			},
+			viz_config: {
+				chart_type: chartKind,
+				category_field: categoryKey,
+				series_field: seriesKey || undefined,
+				metric_field: metricMode === 'count' ? undefined : metricMode,
+				agg: metricMode === 'count' ? 'count' : agg,
+			},
+		});
+	}, [agg, categoryKey, chartKind, metricMode, metricTitle, onConfigChange, seriesKey]);
 
 	const option = useMemo(() => {
 		if (chartKind === 'scatter') {

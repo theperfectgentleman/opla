@@ -137,7 +137,7 @@ const AiSurveyWizard: React.FC = () => {
                 markdown,
                 title: title.trim() || undefined,
             });
-            navigate(`/builder/${form.id}`);
+            navigate(`/forms/${form.id}`);
         } catch (err: any) {
             setError(extractError(err));
             setBusy(false);

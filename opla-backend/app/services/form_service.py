@@ -70,6 +70,14 @@ class ProjectService:
                 )
             )
 
+        from app.services.project_attention_service import ProjectAttentionService
+        from app.services.project_thread_service import ProjectThreadService
+
+        ProjectAttentionService.seed_default_hooks(db, project.id, commit=False)
+        ProjectThreadService.ensure_project_channels(
+            db, project.id, created_by=created_by, commit=False
+        )
+
         db.commit()
         db.refresh(project)
         return project

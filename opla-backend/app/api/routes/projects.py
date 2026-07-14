@@ -10,11 +10,18 @@ from app.api.schemas.project import (
     ProjectAttendanceCheckIn,
     ProjectAttendanceCheckOut,
     ProjectAttendanceOut,
+    ProjectAttentionFeedOut,
+    ProjectAttentionHookCreate,
+    ProjectAttentionHookOut,
+    ProjectAttentionItemOut,
     ProjectCatalogItemCreate,
     ProjectCatalogItemOut,
     ProjectCatalogItemUpdate,
     ProjectCreate,
     ProjectOut,
+    ProjectPinnedAnalyticsListOut,
+    ProjectPinnedAnalyticsReplace,
+    ProjectPinnedAnalyticsItemOut,
     ProjectTaskCreate,
     ProjectTaskOut,
     ProjectTaskUpdate,
@@ -23,13 +30,18 @@ from app.api.schemas.project import (
     ProjectRoleTemplateUpdate,
     ProjectUpdate,
 )
+from app.api.schemas.form import FormSubmissionMediaListOut, FormSubmissionMediaOut
 from app.services.form_service import ProjectService
 from app.services.organization_service import OrganizationService
 from app.services.project_access_service import ProjectAccessService
 from app.services.project_catalog_service import ProjectCatalogService
 from app.services.project_attendance_service import ProjectAttendanceService
+from app.services.project_attention_service import ProjectAttentionService
+from app.services.form_submission_media_service import FormSubmissionMediaService
 from app.services.project_role_service import ProjectRoleService
 from app.services.project_task_service import ProjectTaskService
+from app.services.project_pinned_analytics_service import MAX_PINS, ProjectPinnedAnalyticsService
+from app.api.schemas.analytics import SavedQuestionOut
 from app.models.project_access import AccessorType
 from app.models.user import User
 import uuid
@@ -552,3 +564,186 @@ def delete_project_catalog_item(
     item = ProjectCatalogService.get_item_or_404(db, project_id, item_id)
     ProjectCatalogService.delete_item(db, project, item)
     return None
+
+
+def _serialize_pinned_item(pin) -> ProjectPinnedAnalyticsItemOut:
+    question_out = SavedQuestionOut.model_validate(pin.question) if pin.question else None
+    return ProjectPinnedAnalyticsItemOut(
+        id=pin.id,
+        project_id=pin.project_id,
+        question_id=pin.question_id,
+        sort_order=pin.sort_order,
+        created_at=pin.created_at,
+        question=question_out,
+    )
+
+
+@router.get("/{project_id}/pinned-analytics", response_model=ProjectPinnedAnalyticsListOut)
+def list_project_pinned_analytics(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    can_edit = False
+    try:
+        ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+        can_edit = True
+    except HTTPException:
+        can_edit = False
+
+    pins = ProjectPinnedAnalyticsService.list_pins(db, project_id)
+    return ProjectPinnedAnalyticsListOut(
+        can_edit=can_edit,
+        max_pins=MAX_PINS,
+        pins=[_serialize_pinned_item(pin) for pin in pins],
+    )
+
+
+@router.put("/{project_id}/pinned-analytics", response_model=ProjectPinnedAnalyticsListOut)
+def replace_project_pinned_analytics(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    payload: ProjectPinnedAnalyticsReplace,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    pins = ProjectPinnedAnalyticsService.replace_pins(
+        db,
+        project_id=project_id,
+        org_id=org_id,
+        question_ids=payload.question_ids,
+        created_by=current_user.id,
+    )
+    return ProjectPinnedAnalyticsListOut(
+        can_edit=True,
+        max_pins=MAX_PINS,
+        pins=[_serialize_pinned_item(pin) for pin in pins],
+    )
+
+
+def _serialize_attention_item(item) -> ProjectAttentionItemOut:
+    return ProjectAttentionItemOut.model_validate(item)
+
+
+@router.get("/{project_id}/attention", response_model=ProjectAttentionFeedOut)
+def list_project_attention(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    can_dismiss = False
+    try:
+        ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+        can_dismiss = True
+    except HTTPException:
+        can_dismiss = False
+
+    items = ProjectAttentionService.list_open_items(
+        db,
+        project_id,
+        reconcile=True,
+        project=project,
+        actor_id=current_user.id,
+    )
+    return ProjectAttentionFeedOut(
+        can_dismiss=can_dismiss,
+        items=[_serialize_attention_item(item) for item in items],
+    )
+
+
+@router.post("/{project_id}/attention/{item_id}/dismiss", response_model=ProjectAttentionItemOut)
+def dismiss_project_attention_item(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    item = ProjectAttentionService.dismiss_item(
+        db,
+        project_id,
+        item_id,
+        dismissed_by=current_user.id,
+    )
+    return _serialize_attention_item(item)
+
+
+@router.get("/{project_id}/attention/hooks", response_model=List[ProjectAttentionHookOut])
+def list_project_attention_hooks(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    hooks = ProjectAttentionService.list_hooks(db, project_id)
+    return [ProjectAttentionHookOut.model_validate(hook) for hook in hooks]
+
+
+@router.post("/{project_id}/attention/hooks", response_model=ProjectAttentionHookOut, status_code=status.HTTP_201_CREATED)
+def create_project_attention_hook(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    payload: ProjectAttentionHookCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    hook = ProjectAttentionService.create_custom_hook(
+        db,
+        project_id,
+        kind=payload.kind,
+        severity_default=payload.severity_default,
+        config_json=payload.config_json,
+        enabled=payload.enabled,
+    )
+    return ProjectAttentionHookOut.model_validate(hook)
+
+
+@router.get("/{project_id}/media", response_model=FormSubmissionMediaListOut)
+def list_project_media(
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    limit: int = Query(24, ge=1, le=200),
+    media_kind: str | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
+    if project.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Project not found")
+    items = FormSubmissionMediaService.list_project_media(
+        db,
+        project_id,
+        limit=limit,
+        media_kind=media_kind,
+        ensure_index=True,
+    )
+    serialized = []
+    for item in items:
+        out = FormSubmissionMediaOut.model_validate(item)
+        out.previewable = FormSubmissionMediaService.is_previewable_url(item.url)
+        serialized.append(out)
+    return FormSubmissionMediaListOut(items=serialized, total=len(serialized))

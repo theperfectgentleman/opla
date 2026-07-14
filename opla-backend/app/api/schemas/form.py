@@ -176,3 +176,28 @@ class CatalogLookupOptionsOut(BaseModel):
     synced_at: datetime
     total_options: int
     options: List[CatalogLookupOptionOut]
+
+
+class FormSubmissionMediaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    submission_id: UUID
+    form_id: UUID
+    project_id: UUID
+    field_bind: str
+    field_label: Optional[str] = None
+    field_type: str
+    media_kind: str
+    url: Optional[str] = None
+    filename: Optional[str] = None
+    mime_type: Optional[str] = None
+    byte_size: Optional[int] = None
+    payload: Optional[Any] = None
+    created_at: datetime
+    previewable: bool = False
+
+
+class FormSubmissionMediaListOut(BaseModel):
+    items: List[FormSubmissionMediaOut]
+    total: int

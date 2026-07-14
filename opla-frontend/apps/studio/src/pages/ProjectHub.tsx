@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
     AlertCircle,
+    BarChart3,
     CheckCircle2,
     ChevronRight,
     Clock3,
@@ -12,16 +13,26 @@ import {
     FlaskConical,
     Gauge,
     Loader2,
+    Pin,
     SquareCheckBig,
     Tag,
     UserCheck,
     Users,
     Wrench,
+    X,
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
+import NeedsAttentionRail, { type AttentionItem } from '../components/hub/NeedsAttentionRail';
+import SubmissionMediaGrid, {
+    RecentMediaHeaderIcon,
+    type SubmissionMediaItem,
+} from '../components/hub/SubmissionMediaGrid';
+import PinnedAnalyticsCard from '../components/hub/PinnedAnalyticsCard';
+import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
 import { useOrg } from '../contexts/OrgContext';
 import { analyticsAPI, formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
+import type { SavedQuestion } from '../components/analytics/types';
 
 function cn(...parts: Array<string | false | null | undefined>) {
     return parts.filter(Boolean).join(' ');
@@ -93,6 +104,8 @@ function destinationLabel(kind: Exclude<WorkspaceFilter, 'all'>) {
 const ProjectHub: React.FC = () => {
     const navigate = useNavigate();
     const { projectId = '' } = useParams();
+    const [searchParams] = useSearchParams();
+    const threadParam = searchParams.get('thread');
     const { currentOrg, refreshCurrentProject, setCurrentProject } = useOrg();
 
     const [pageTab, setPageTab] = useState<PageTab>('overview');
@@ -110,6 +123,18 @@ const ProjectHub: React.FC = () => {
     const [submissions, setSubmissions] = useState<any[]>([]);
     const [attendanceToday, setAttendanceToday] = useState<any[]>([]);
     const [accessRules, setAccessRules] = useState<any[]>([]);
+    const [pinnedQuestions, setPinnedQuestions] = useState<SavedQuestion[]>([]);
+    const [canEditPins, setCanEditPins] = useState(false);
+    const [maxPins, setMaxPins] = useState(4);
+    const [showPinPicker, setShowPinPicker] = useState(false);
+    const [pinCandidates, setPinCandidates] = useState<SavedQuestion[]>([]);
+    const [draftPinIds, setDraftPinIds] = useState<string[]>([]);
+    const [savingPins, setSavingPins] = useState(false);
+    const [pinError, setPinError] = useState<string | null>(null);
+    const [attentionItems, setAttentionItems] = useState<AttentionItem[]>([]);
+    const [canDismissAttention, setCanDismissAttention] = useState(false);
+    const [dismissingId, setDismissingId] = useState<string | null>(null);
+    const [recentMedia, setRecentMedia] = useState<SubmissionMediaItem[]>([]);
 
     useEffect(() => {
         if (!currentOrg?.id || !projectId) return;
@@ -132,6 +157,9 @@ const ProjectHub: React.FC = () => {
                     orgTeams,
                     sources,
                     attendance,
+                    pinnedPayload,
+                    attentionPayload,
+                    mediaPayload,
                 ] = await Promise.all([
                     refreshCurrentProject(currentOrg.id, projectId),
                     formAPI.list(projectId, 'standard').catch(() => formAPI.list(projectId)),
@@ -142,6 +170,16 @@ const ProjectHub: React.FC = () => {
                     teamAPI.list(currentOrg.id),
                     analyticsAPI.listSources(currentOrg.id).catch(() => []),
                     projectAPI.listAttendance(currentOrg.id, projectId, todayIso).catch(() => []),
+                    projectAPI.listPinnedAnalytics(currentOrg.id, projectId).catch(() => ({
+                        can_edit: false,
+                        max_pins: 4,
+                        pins: [],
+                    })),
+                    projectAPI.listAttention(currentOrg.id, projectId).catch(() => ({
+                        can_dismiss: false,
+                        items: [],
+                    })),
+                    projectAPI.listMedia(currentOrg.id, projectId, { limit: 12 }).catch(() => ({ items: [] })),
                 ]);
 
                 const allForms: HubForm[] = Array.isArray(standardForms) ? standardForms : [];
@@ -191,6 +229,16 @@ const ProjectHub: React.FC = () => {
                 setDatasets(projectDatasets);
                 setSubmissions(flatSubmissions);
                 setAttendanceToday(attendance || []);
+                setCanEditPins(Boolean(pinnedPayload?.can_edit));
+                setMaxPins(pinnedPayload?.max_pins || 4);
+                setPinnedQuestions(
+                    (pinnedPayload?.pins || [])
+                        .map((pin: any) => pin.question)
+                        .filter(Boolean),
+                );
+                setCanDismissAttention(Boolean(attentionPayload?.can_dismiss));
+                setAttentionItems(attentionPayload?.items || []);
+                setRecentMedia(mediaPayload?.items || []);
             } catch (err: any) {
                 if (!cancelled) {
                     setError(err?.response?.data?.detail || err?.message || 'Failed to load ProjectHub');
@@ -326,7 +374,7 @@ const ProjectHub: React.FC = () => {
             kind: 'forms' as const,
             status: form.status,
             meta: form.updated_at ? `Updated ${new Date(form.updated_at).toLocaleDateString()}` : undefined,
-            onLaunch: () => navigate(`/builder/${form.id}`),
+            onLaunch: () => navigate(`/forms/${form.id}`),
         }));
         const catalogCards = catalogForms.map((form) => ({
             id: form.id,
@@ -371,10 +419,87 @@ const ProjectHub: React.FC = () => {
         return mins >= sh * 60 + (sm || 0) && mins < eh * 60 + (em || 0);
     }, [project]);
 
+    const openPinPicker = async () => {
+        if (!currentOrg?.id) return;
+        setPinError(null);
+        setDraftPinIds(pinnedQuestions.map((q) => q.id));
+        try {
+            const [projectQs, orgQs] = await Promise.all([
+                analyticsAPI.listQuestions(currentOrg.id, projectId).catch(() => []),
+                analyticsAPI.listQuestions(currentOrg.id).catch(() => []),
+            ]);
+            const merged = [...(projectQs || []), ...(orgQs || [])];
+            const byId = new Map<string, SavedQuestion>();
+            for (const q of merged) {
+                if (!q?.id || q.is_archived) continue;
+                if (!['chart', 'kpi', 'goal', 'table'].includes(q.viz_type)) continue;
+                if (q.project_id && q.project_id !== projectId) continue;
+                byId.set(q.id, q);
+            }
+            setPinCandidates(Array.from(byId.values()));
+            setShowPinPicker(true);
+        } catch (err: any) {
+            setPinError(err?.response?.data?.detail || err?.message || 'Failed to load charts');
+            setShowPinPicker(true);
+        }
+    };
+
+    const toggleDraftPin = (questionId: string) => {
+        setDraftPinIds((prev) => {
+            if (prev.includes(questionId)) return prev.filter((id) => id !== questionId);
+            if (prev.length >= maxPins) return prev;
+            return [...prev, questionId];
+        });
+    };
+
+    const savePins = async () => {
+        if (!currentOrg?.id) return;
+        setSavingPins(true);
+        setPinError(null);
+        try {
+            const payload = await projectAPI.replacePinnedAnalytics(currentOrg.id, projectId, draftPinIds);
+            setCanEditPins(Boolean(payload?.can_edit));
+            setMaxPins(payload?.max_pins || 4);
+            setPinnedQuestions((payload?.pins || []).map((pin: any) => pin.question).filter(Boolean));
+            setShowPinPicker(false);
+        } catch (err: any) {
+            setPinError(err?.response?.data?.detail || err?.message || 'Failed to save pins');
+        } finally {
+            setSavingPins(false);
+        }
+    };
+
+    const openAttentionLink = (item: AttentionItem) => {
+        if (item.deep_link) {
+            navigate(item.deep_link);
+            return;
+        }
+        navigate(`/projects/${projectId}`);
+    };
+
+    const dismissAttention = async (itemId: string) => {
+        if (!currentOrg?.id || !canDismissAttention) return;
+        setDismissingId(itemId);
+        try {
+            await projectAPI.dismissAttention(currentOrg.id, projectId, itemId);
+            setAttentionItems((prev) => prev.filter((item) => item.id !== itemId));
+        } catch {
+            // Keep item visible if dismiss fails
+        } finally {
+            setDismissingId(null);
+        }
+    };
+
     return (
         <StudioLayout
             activeNav="projects"
-            onSelectNav={(key) => navigate(`/dashboard?tab=${key}`)}
+            onSelectNav={(key) => {
+                if (key === 'ops' && projectId) {
+                    navigate(`/projects/${projectId}?tab=ops&view=tasks`);
+                    return;
+                }
+                navigate(`/dashboard?tab=${key}`);
+            }}
             contentClassName="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[hsl(var(--background))]"
         >
             <div className="mx-auto max-w-[1600px] space-y-6">
@@ -385,10 +510,10 @@ const ProjectHub: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">
-                                ProjectHub — Phase 1 (live)
+                                ProjectHub — Phase 4 (live)
                             </p>
                             <p className="text-xs text-[hsl(var(--text-secondary))]">
-                                Alerts, map, threads, and media stay hidden until later phases.
+                                Threads are live (General + team channels). Maps stay hidden until a later phase.
                             </p>
                         </div>
                     </div>
@@ -557,7 +682,108 @@ const ProjectHub: React.FC = () => {
                         </div>
 
                         {pageTab === 'overview' ? (
-                            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                            <div className="space-y-4">
+                                <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 shadow-sm">
+                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <BarChart3 className="h-4 w-4 text-[hsl(var(--primary))]" />
+                                            <h2 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--text-primary))]">
+                                                Pinned charts
+                                            </h2>
+                                            <span className="text-xs text-[hsl(var(--text-tertiary))]">
+                                                {pinnedQuestions.length}/{maxPins}
+                                            </span>
+                                        </div>
+                                        {canEditPins && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void openPinPicker()}
+                                                className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
+                                            >
+                                                <Pin className="h-3.5 w-3.5" />
+                                                {pinnedQuestions.length ? 'Manage pins' : 'Pin a chart'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    {pinnedQuestions.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-8 text-center">
+                                            <p className="text-sm text-[hsl(var(--text-secondary))]">
+                                                No charts pinned yet. Pin up to {maxPins} chart or KPI cards from
+                                                Analytics.
+                                            </p>
+                                            {canEditPins && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void openPinPicker()}
+                                                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--primary))] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[hsl(var(--primary-hover))]"
+                                                >
+                                                    <Pin className="h-3.5 w-3.5" />
+                                                    Pin a chart
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                            {pinnedQuestions.map((question) => (
+                                                <PinnedAnalyticsCard
+                                                    key={question.id}
+                                                    orgId={currentOrg!.id}
+                                                    question={question}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+
+                                <NeedsAttentionRail
+                                    items={attentionItems}
+                                    canDismiss={canDismissAttention}
+                                    dismissingId={dismissingId}
+                                    onOpen={openAttentionLink}
+                                    onDismiss={(itemId) => void dismissAttention(itemId)}
+                                />
+
+                                <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 shadow-sm">
+                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <RecentMediaHeaderIcon />
+                                            <h2 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--text-primary))]">
+                                                Recent media
+                                            </h2>
+                                            <span className="rounded-full bg-[hsl(var(--background))] px-2 py-0.5 text-[10px] font-bold text-[hsl(var(--text-tertiary))]">
+                                                {recentMedia.length}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const first = forms[0] || catalogForms[0];
+                                                if (first) navigate(`/forms/${first.id}`);
+                                                else navigate(`/projects/${projectId}?tab=forms`);
+                                            }}
+                                            className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
+                                        >
+                                            Open form media
+                                        </button>
+                                    </div>
+                                    <SubmissionMediaGrid
+                                        items={recentMedia}
+                                        compact
+                                        emptyLabel="No form media yet. Photos, audio, video, and signatures from submissions will show here."
+                                        onOpenItem={(item) => navigate(`/forms/${item.form_id}`)}
+                                    />
+                                </section>
+
+                                {currentOrg?.id && (
+                                    <ProjectThreadsPanel
+                                        orgId={currentOrg.id}
+                                        projectId={projectId}
+                                        canEditProject={canEditPins || canDismissAttention}
+                                        initialThreadId={threadParam}
+                                    />
+                                )}
+
+                                <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
                                 <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 shadow-sm">
                                     <div className="mb-4 flex items-center gap-2">
                                         <SquareCheckBig className="h-4 w-4 text-[hsl(var(--primary))]" />
@@ -655,6 +881,7 @@ const ProjectHub: React.FC = () => {
                                         </ul>
                                     )}
                                 </section>
+                                </div>
                             </div>
                         ) : (
                             <div className="space-y-4">
@@ -739,6 +966,87 @@ const ProjectHub: React.FC = () => {
                     </>
                 ) : null}
             </div>
+
+            {showPinPicker && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+                    <div className="max-h-[85vh] w-full max-w-lg overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-5 py-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-[hsl(var(--text-primary))]">Pin charts</h3>
+                                <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                                    Select up to {maxPins} chart or KPI cards ({draftPinIds.length}/{maxPins})
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowPinPicker(false)}
+                                className="rounded-lg p-2 text-[hsl(var(--text-tertiary))] hover:bg-[hsl(var(--background))]"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <div className="max-h-[50vh] space-y-2 overflow-y-auto px-5 py-4">
+                            {pinCandidates.length === 0 ? (
+                                <p className="text-sm text-[hsl(var(--text-secondary))]">
+                                    No pinnable charts found. Create a chart or KPI question in Analytics first.
+                                </p>
+                            ) : (
+                                pinCandidates.map((question) => {
+                                    const selected = draftPinIds.includes(question.id);
+                                    const disabled = !selected && draftPinIds.length >= maxPins;
+                                    return (
+                                        <button
+                                            key={question.id}
+                                            type="button"
+                                            disabled={disabled}
+                                            onClick={() => toggleDraftPin(question.id)}
+                                            className={cn(
+                                                'flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition',
+                                                selected
+                                                    ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/8'
+                                                    : 'border-[hsl(var(--border))] bg-[hsl(var(--background))]',
+                                                disabled && 'opacity-50',
+                                            )}
+                                        >
+                                            <div>
+                                                <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">
+                                                    {question.title}
+                                                </p>
+                                                <p className="text-xs uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
+                                                    {question.viz_type}
+                                                </p>
+                                            </div>
+                                            <span className="text-xs font-bold text-[hsl(var(--primary))]">
+                                                {selected ? 'Pinned' : 'Pin'}
+                                            </span>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                        {pinError && (
+                            <p className="px-5 pb-2 text-xs text-[hsl(var(--error))]">{pinError}</p>
+                        )}
+                        <div className="flex gap-2 border-t border-[hsl(var(--border))] px-5 py-4">
+                            <button
+                                type="button"
+                                onClick={() => setShowPinPicker(false)}
+                                className="flex-1 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold text-[hsl(var(--text-secondary))]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={savingPins}
+                                onClick={() => void savePins()}
+                                className="flex-1 rounded-md bg-[hsl(var(--primary))] px-4 py-2 text-sm font-semibold text-white hover:bg-[hsl(var(--primary-hover))] disabled:opacity-60"
+                            >
+                                {savingPins ? 'Saving…' : 'Save pins'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </StudioLayout>
     );
 };

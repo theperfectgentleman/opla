@@ -60,6 +60,14 @@ class SubmissionService:
             actor_id=user_id,
             context={"metadata": metadata or {}},
         )
+        from app.services.project_attention_service import ProjectAttentionService
+        from app.services.form_submission_media_service import FormSubmissionMediaService
+
+        ProjectAttentionService.on_submission_created(db, submission)
+        try:
+            FormSubmissionMediaService.index_submission(db, form, submission, commit=True)
+        except Exception:
+            db.rollback()
         return submission
 
     @staticmethod
@@ -116,6 +124,9 @@ class SubmissionService:
             )
         db.commit()
         db.refresh(submission)
+        from app.services.project_attention_service import ProjectAttentionService
+
+        ProjectAttentionService.on_submission_reviewed(db, submission)
         return submission
 
     @staticmethod

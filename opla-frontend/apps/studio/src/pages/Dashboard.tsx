@@ -61,10 +61,12 @@ type DashboardAsset = {
     updated_at: string;
 };
 
-type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard';
+type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard' | 'spatial';
 
-const validDashboardTabs = ['projects', 'tasks', 'forms', 'datasets', 'members', 'audience', 'analysis', 'threads', 'assets', 'reports', 'settings'] as const;
-const validAnalyticsTools: AnalyticsToolKey[] = ['lab', 'prep', 'dashboard'];
+const validDashboardTabs = ['projects', 'ops', 'tasks', 'forms', 'datasets', 'members', 'audience', 'analysis', 'threads', 'assets', 'reports', 'settings'] as const;
+type DashboardNavKey = Exclude<(typeof validDashboardTabs)[number], 'tasks'>;
+type OpsView = 'tasks' | 'review';
+const validAnalyticsTools: AnalyticsToolKey[] = ['lab', 'prep', 'dashboard', 'spatial'];
 
 const taskTone: Record<DashboardTask['status'], string> = {
     todo: 'bg-slate-500/10 text-slate-300 border border-slate-500/20',
@@ -92,6 +94,7 @@ const Dashboard: React.FC = () => {
     const { showToast } = useToast();
     const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState('forms');
+    const [opsView, setOpsView] = useState<OpsView>('tasks');
     const [activeAnalyticsTool, setActiveAnalyticsTool] = useState<AnalyticsToolKey>('lab');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
     const [formsSubTab, setFormsSubTab] = useState<'standard' | 'catalog'>('standard');
@@ -134,32 +137,50 @@ const Dashboard: React.FC = () => {
     const [datasetSources, setDatasetSources] = useState<AnalyticsSource[]>([]);
     const [datasetsLoading, setDatasetsLoading] = useState(false);
     const [datasetsError, setDatasetsError] = useState<string | null>(null);
+    const [threadItems, setThreadItems] = useState<DashboardThread[]>([]);
+    const [threadsLoading, setThreadsLoading] = useState(false);
 
-    const threadItems = useMemo<DashboardThread[]>(() => {
-        const primaryProject = projects[0];
-        const secondaryProject = projects[1] || primaryProject;
-
-        return [
-            {
-                id: 'thread-launch-briefing',
-                project_id: primaryProject?.id || 'mock-project-1',
-                project_name: primaryProject?.name || 'Market Entry Survey',
-                title: 'Field launch briefing',
-                summary: 'Kickoff thread for team-wide notices, @mentions, and launch-day clarifications.',
-                updated_at: new Date().toISOString(),
-                reply_count: 12,
-            },
-            {
-                id: 'thread-data-quality',
-                project_id: secondaryProject?.id || 'mock-project-2',
-                project_name: secondaryProject?.name || 'Retail Audit',
-                title: 'Data quality review lane',
-                summary: 'Operational discussion for supervisor notes, flagged submissions, and issue triage.',
-                updated_at: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-                reply_count: 7,
-            },
-        ];
-    }, [projects]);
+    useEffect(() => {
+        const fetchThreads = async () => {
+            if (!currentOrg || projects.length === 0 || activeTab !== 'threads') {
+                if (activeTab !== 'threads') return;
+                setThreadItems([]);
+                return;
+            }
+            setThreadsLoading(true);
+            try {
+                const batches = await Promise.all(
+                    projects.map(async (project) => {
+                        try {
+                            const rows = await projectAPI.listThreads(currentOrg.id, project.id);
+                            return (Array.isArray(rows) ? rows : []).map((thread: any) => ({
+                                id: thread.id,
+                                project_id: project.id,
+                                project_name: project.name,
+                                title: thread.title,
+                                summary: thread.summary || '',
+                                updated_at: thread.updated_at,
+                                reply_count: thread.reply_count || 0,
+                            }));
+                        } catch {
+                            return [];
+                        }
+                    }),
+                );
+                setThreadItems(
+                    batches
+                        .flat()
+                        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
+                );
+            } catch (err) {
+                console.error(err);
+                setThreadItems([]);
+            } finally {
+                setThreadsLoading(false);
+            }
+        };
+        void fetchThreads();
+    }, [activeTab, currentOrg, projects]);
 
     const assetItems = useMemo<DashboardAsset[]>(() => {
         const primaryProject = projects[0];
@@ -359,8 +380,17 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         const tab = searchParams.get('tab');
+        if (tab === 'tasks') {
+            setActiveTab('ops');
+            setOpsView('tasks');
+            return;
+        }
         if (tab && validDashboardTabs.includes(tab as typeof validDashboardTabs[number])) {
-            setActiveTab(tab);
+            setActiveTab(tab === 'tasks' ? 'ops' : tab);
+            if (tab === 'ops' || tab === 'tasks') {
+                const view = searchParams.get('view');
+                setOpsView(view === 'review' ? 'review' : 'tasks');
+            }
             if (tab === 'members') {
                 const section = searchParams.get('section');
                 if (section === 'members' || section === 'teams' || section === 'roles') {
@@ -381,8 +411,11 @@ const Dashboard: React.FC = () => {
         }
     }, [searchParams]);
 
-    const handleShellNavSelect = (key: 'projects' | 'tasks' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
+    const handleShellNavSelect = (key: DashboardNavKey) => {
         setActiveTab(key);
+        if (key === 'ops') {
+            setOpsView('tasks');
+        }
         if (key === 'members') {
             setMembersSubTab('teams');
         }
@@ -433,7 +466,7 @@ const Dashboard: React.FC = () => {
     const handleCreateForm = async (projectId: string) => {
         try {
             const newForm = await formAPI.create(projectId, { title: 'New Form' });
-            navigate(`/builder/${newForm.id}`);
+            navigate(`/forms/${newForm.id}`);
         } catch (err) {
             alert('Failed to create form');
         }
@@ -607,7 +640,7 @@ const Dashboard: React.FC = () => {
             showToast('Form Created', `Successfully created ${kindToUse === 'catalog' ? 'catalog' : 'form'}.`, 'success');
             setIsCreatingFormInline(false);
             setInlineFormTitle('');
-            navigate(`/builder/${newForm.id}`);
+            navigate(`/forms/${newForm.id}`);
         } catch (err) {
             console.error(err);
             showToast('Creation Failed', 'Failed to create form.', 'error');
@@ -667,7 +700,7 @@ const Dashboard: React.FC = () => {
         <div
             key={form.id}
             className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] p-6 rounded-md hover:border-[hsl(var(--border-hover))] transition-all group cursor-pointer shadow-sm relative overflow-hidden flex flex-col justify-between"
-            onClick={() => navigate(`/builder/${form.id}`)}
+            onClick={() => navigate(`/forms/${form.id}`)}
         >
             <div>
                 <div className="flex justify-between items-start mb-4">
@@ -706,7 +739,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="flex items-center text-[hsl(var(--primary))] text-sm font-semibold opacity-0 group-hover:opacity-100 transition-all mt-auto pt-2">
-                <span>Open Builder</span>
+                <span>Open form</span>
                 <ChevronRight className="w-4 h-4 ml-1" />
             </div>
         </div>
@@ -730,7 +763,7 @@ const Dashboard: React.FC = () => {
                         <tr 
                             key={form.id} 
                             className="hover:bg-[hsl(var(--surface-elevated))]/30 transition-colors cursor-pointer group"
-                            onClick={() => navigate(`/builder/${form.id}`)}
+                            onClick={() => navigate(`/forms/${form.id}`)}
                         >
                             <td className="px-6 py-4 font-semibold text-[hsl(var(--text-primary))]">
                                 <div className="flex items-center gap-3">
@@ -767,10 +800,10 @@ const Dashboard: React.FC = () => {
                             <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-2">
                                     <button 
-                                        onClick={() => navigate(`/builder/${form.id}`)}
+                                        onClick={() => navigate(`/forms/${form.id}`)}
                                         className="text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10 px-3 py-1.5 rounded-lg border border-[hsl(var(--primary))]/20 transition-all"
                                     >
-                                        Edit
+                                        Open
                                     </button>
                                 </div>
                             </td>
@@ -784,7 +817,7 @@ const Dashboard: React.FC = () => {
     return (
         <>
             <StudioLayout
-                activeNav={activeTab as 'projects' | 'tasks' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings'}
+                activeNav={activeTab as DashboardNavKey}
                 onSelectNav={handleShellNavSelect}
                 activeAnalyticsTool={activeAnalyticsTool}
                 onSelectAnalyticsTool={handleAnalyticsToolSelect}
@@ -792,9 +825,11 @@ const Dashboard: React.FC = () => {
                 contentClassName={
                     activeTab === 'forms'
                         ? 'flex-1 overflow-hidden flex'
-                        : activeTab === 'analysis'
-                            ? 'flex-1 overflow-y-auto p-4'
-                            : 'flex-1 overflow-y-auto p-10'
+                        : activeTab === 'analysis' && activeAnalyticsTool === 'spatial'
+                            ? 'flex-1 overflow-hidden p-0'
+                            : activeTab === 'analysis'
+                                ? 'flex-1 overflow-y-auto p-4'
+                                : 'flex-1 overflow-y-auto p-10'
                 }
             >
                 {organizations.length === 0 && !isLoading && (
@@ -1192,7 +1227,7 @@ const Dashboard: React.FC = () => {
                                                 {forms.filter(form => form.project_id === project.id).map(form => (
                                                     <div
                                                         key={form.id}
-                                                        onClick={() => navigate(`/builder/${form.id}`)}
+                                                        onClick={() => navigate(`/forms/${form.id}`)}
                                                         className="flex items-center justify-between p-3 bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-md hover:border-[hsl(var(--primary))] transition-all cursor-pointer group"
                                                     >
                                                         <div className="flex items-center space-x-3 overflow-hidden">
@@ -1260,11 +1295,80 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'tasks' && (
+                {activeTab === 'ops' && (
+                    <div className="space-y-6">
+                        <div className="flex flex-wrap items-end justify-between gap-4">
+                            <div>
+                                <h2 className="text-3xl font-bold mb-2">Ops</h2>
+                                <p className="text-[hsl(var(--text-secondary))]">
+                                    Cross-project tasks and a jump into each project’s review queue.
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {(
+                                    [
+                                        { id: 'tasks' as const, label: 'Tasks', count: tasks.length },
+                                        { id: 'review' as const, label: 'Review Queue', count: projects.length },
+                                    ] as const
+                                ).map((item) => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => setOpsView(item.id)}
+                                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                            opsView === item.id
+                                                ? 'bg-[hsl(var(--primary))] text-white'
+                                                : 'bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))] hover:text-[hsl(var(--text-primary))]'
+                                        }`}
+                                    >
+                                        {item.label}
+                                        <span className="tabular-nums opacity-80">{item.count}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {opsView === 'review' ? (
+                            <div className="space-y-4">
+                                <p className="text-sm text-[hsl(var(--text-secondary))]">
+                                    Submission review is project-scoped. Open a project’s Ops → Review Queue.
+                                </p>
+                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    {projects.length === 0 ? (
+                                        <div className="col-span-full rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
+                                            No projects yet.
+                                        </div>
+                                    ) : (
+                                        projects.map((project) => (
+                                            <button
+                                                key={project.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setCurrentProject(project);
+                                                    navigate(`/projects/${project.id}?tab=ops&view=review`);
+                                                }}
+                                                className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 text-left shadow-sm transition hover:border-[hsl(var(--primary))]/40"
+                                            >
+                                                <p className="text-base font-semibold text-[hsl(var(--text-primary))]">
+                                                    {project.name}
+                                                </p>
+                                                <p className="mt-1 text-xs text-[hsl(var(--text-tertiary))]">
+                                                    Open review queue
+                                                </p>
+                                                <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))]">
+                                                    Go to Ops
+                                                    <ChevronRight className="h-3.5 w-3.5" />
+                                                </span>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
                     <div className="space-y-8">
                         <div className="flex justify-between items-end gap-6">
                             <div>
-                                <h2 className="text-3xl font-bold mb-2">Tasks</h2>
+                                <h3 className="text-xl font-semibold mb-1">Tasks</h3>
                                 <p className="text-[hsl(var(--text-secondary))]">Cross-project task overview. Create new tasks here and then manage execution from the relevant project workspace.</p>
                             </div>
                             <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
@@ -1430,6 +1534,8 @@ const Dashboard: React.FC = () => {
                             ))}
                         </div>
                     </div>
+                        )}
+                    </div>
                 )}
 
                 {activeTab === 'members' && currentOrg && (
@@ -1504,39 +1610,65 @@ const Dashboard: React.FC = () => {
                         <div className="flex justify-between items-end gap-6">
                             <div>
                                 <h2 className="text-3xl font-bold mb-2">Threads</h2>
-                                <p className="text-[hsl(var(--text-secondary))]">Project communication lanes for announcements, clarifications, and decision follow-up across teams.</p>
+                                <p className="text-[hsl(var(--text-secondary))]">
+                                    General + team channels per project. Open a project hub to read and post.
+                                </p>
                             </div>
                             <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
-                                {threadItems.length} starter threads across {Math.max(projects.length, 1)} projects
+                                {threadsLoading
+                                    ? 'Loading…'
+                                    : `${threadItems.length} channels across ${Math.max(projects.length, 0)} projects`}
                             </div>
                         </div>
 
-                        <div className="grid gap-4 lg:grid-cols-2">
-                            {threadItems.map(thread => (
-                                <div key={thread.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                    <MessageSquare className="h-5 w-5" />
+                        {threadsLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading channels…
+                            </div>
+                        ) : threadItems.length === 0 ? (
+                            <p className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-8 text-center text-sm text-[hsl(var(--text-tertiary))]">
+                                No channels yet. Open a project hub to seed General (and team channels when teams are granted).
+                            </p>
+                        ) : (
+                            <div className="grid gap-4 lg:grid-cols-2">
+                                {threadItems.map((thread) => (
+                                    <button
+                                        key={`${thread.project_id}-${thread.id}`}
+                                        type="button"
+                                        onClick={() =>
+                                            navigate(`/projects/${thread.project_id}/hub?thread=${thread.id}`)
+                                        }
+                                        className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 text-left shadow-sm transition-shadow hover:shadow-md"
+                                    >
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                        <MessageSquare className="h-5 w-5" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-lg font-semibold">{thread.title}</h3>
+                                                        <p className="text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                                            {thread.project_name}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <h3 className="text-lg font-semibold">{thread.title}</h3>
-                                                    <p className="text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">{thread.project_name}</p>
-                                                </div>
+                                                <p className="mt-4 text-sm text-[hsl(var(--text-secondary))]">
+                                                    {thread.summary || 'Open to view the conversation.'}
+                                                </p>
                                             </div>
-                                            <p className="mt-4 text-sm text-[hsl(var(--text-secondary))]">{thread.summary}</p>
+                                            <span className="rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                                {thread.reply_count} replies
+                                            </span>
                                         </div>
-                                        <span className="rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
-                                            {thread.reply_count} replies
-                                        </span>
-                                    </div>
-                                    <div className="mt-4 rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
-                                        Thread UI placeholder: header, message feed, composer, and @mentions will live here.
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                        <p className="mt-4 text-xs font-semibold text-[hsl(var(--primary))]">
+                                            Open in ProjectHub →
+                                        </p>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 

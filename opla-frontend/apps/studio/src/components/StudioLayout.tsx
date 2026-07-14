@@ -25,7 +25,7 @@ import {
 
 type StudioNavKey =
     | 'projects'
-    | 'tasks'
+    | 'ops'
     | 'forms'
     | 'datasets'
     | 'members'
@@ -36,7 +36,7 @@ type StudioNavKey =
     | 'reports'
     | 'settings';
 
-type AnalyticsNavTool = 'lab' | 'prep' | 'dashboard';
+type AnalyticsNavTool = 'lab' | 'prep' | 'dashboard' | 'spatial';
 
 type NavCounts = {
     projects?: number;
@@ -62,7 +62,7 @@ const navItems: Array<{ key: StudioNavKey; label: string; icon: React.ReactNode;
     { key: 'forms', label: 'All Forms', icon: <Layout className="w-5 h-5" />, countKey: 'forms' },
     { key: 'datasets', label: 'Datasets', icon: <Database className="w-5 h-5" />, countKey: 'datasets' },
     { key: 'members', label: 'Teams', icon: <Users className="w-5 h-5" />, countKey: 'members' },
-    { key: 'tasks', label: 'Tasks', icon: <CheckSquare className="w-5 h-5" />, countKey: 'tasks' },
+    { key: 'ops', label: 'Ops', icon: <CheckSquare className="w-5 h-5" />, countKey: 'tasks' },
     { key: 'audience', label: 'Audience', icon: <Target className="w-5 h-5" /> },
     { key: 'analysis', label: 'Analytics', icon: <BarChart3 className="w-5 h-5" /> },
     { key: 'threads', label: 'Threads', icon: <MessageSquare className="w-5 h-5" /> },
@@ -75,6 +75,7 @@ const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
     { key: 'lab', label: 'Analysis Lab' },
     { key: 'prep', label: 'Data Prep' },
     { key: 'dashboard', label: 'Dashboards' },
+    { key: 'spatial', label: 'Map Analysis' },
 ];
 
 const StudioLayout: React.FC<StudioLayoutProps> = ({

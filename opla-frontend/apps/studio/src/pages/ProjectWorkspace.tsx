@@ -5,18 +5,13 @@ import {
     ChevronRight,
     FileBarChart2,
     FileText,
-    CheckCircle2,
     Image as ImageIcon,
-    MessageSquare,
     Paperclip,
     Play,
     Plus,
     SquareCheckBig,
     Users,
     Database,
-    XCircle,
-    MapPin,
-    Tag,
     Sparkles,
 } from 'lucide-react';
 
@@ -24,6 +19,8 @@ import StudioLayout from '../components/StudioLayout';
 import ConfirmPopover from '../components/ConfirmPopover';
 import DirectoryGrid from '../components/directory/DirectoryGrid';
 import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
+import OpsAttendanceMock from '../components/ops/OpsAttendanceMock';
+import OpsReviewMock from '../components/ops/OpsReviewMock';
 import { useOrg } from '../contexts/OrgContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -33,14 +30,16 @@ import {
     normalizeDirectoryEntry,
 } from '../utils/directoryUtils';
 import {
-    PROJECT_WORKSPACE_TABS,
-    PROJECT_TAB_LABELS,
-    DATA_SECTION_LABELS,
     resolveLegacyProjectTab,
+    resolveDesignSection,
+    resolveOpsSection,
+    projectNavHref,
+    projectShellNavHref,
     type ProjectWorkspaceTab,
     type ProjectDataSection,
     type ProjectOpsSection,
     type ProjectDesignSection,
+    type ProjectShellNavKey,
 } from '../lib/vocabulary';
 import { analyticsAPI, formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
 
@@ -292,17 +291,6 @@ const businessRoleLabelBySlug: Record<string, string> = {
     'stakeholder-viewer': 'Viewer',
 };
 
-const TABS = PROJECT_WORKSPACE_TABS.map((id) => ({
-    id,
-    label: PROJECT_TAB_LABELS[id],
-    icon: id === 'tasks' ? SquareCheckBig
-        : id === 'ops' ? CheckCircle2
-        : id === 'design' ? FileText
-        : id === 'messages' ? MessageSquare
-        : id === 'data' ? Database
-        : FileBarChart2,
-}));
-
 type OpsView = ProjectOpsSection;
 type DesignView = ProjectDesignSection;
 type DataView = ProjectDataSection;
@@ -318,10 +306,11 @@ const ProjectWorkspace: React.FC = () => {
     );
     const activeTab: ProjectWorkspaceTab = legacyResolved.tab;
     const dataSection: DataView = (legacyResolved.section as DataView) || 'datasets';
-    const designSection: DesignView = (legacyResolved.section as DesignView) || 'forms';
-    const opsView: OpsView = legacyResolved.section === 'review' || legacyResolved.view === 'review'
-        ? 'review'
-        : 'attendance';
+    const designSection: DesignView = resolveDesignSection(legacyResolved.section || null);
+    const opsView: OpsView = resolveOpsSection(
+        legacyResolved.section || null,
+        legacyResolved.view || searchParams.get('view'),
+    );
 
     const setWorkspaceTab = (tab: ProjectWorkspaceTab, options?: { section?: string; view?: string }) => {
         setSearchParams((prev) => {
@@ -341,17 +330,23 @@ const ProjectWorkspace: React.FC = () => {
         });
     };
 
-    const setOpsView = (view: OpsView) => {
-        setWorkspaceTab('ops', { section: view });
-    };
+    useEffect(() => {
+        if (!searchParams.get('tab')) {
+            setSearchParams(() => {
+                const next = new URLSearchParams();
+                next.set('tab', 'design');
+                next.set('section', 'forms');
+                return next;
+            }, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
 
-    const setDesignView = (view: DesignView) => {
-        setWorkspaceTab('design', { section: view });
-    };
-
-    const setDataView = (view: DataView) => {
-        setWorkspaceTab('data', { section: view });
-    };
+    // Org Ops Overview lives on the dashboard; project Ops Overview → Hub.
+    useEffect(() => {
+        if (activeTab === 'ops' && opsView === 'overview' && projectId) {
+            navigate(`/projects/${projectId}/hub`, { replace: true });
+        }
+    }, [activeTab, navigate, opsView, projectId]);
 
     // Legacy ?tab= redirects
     useEffect(() => {
@@ -365,6 +360,7 @@ const ProjectWorkspace: React.FC = () => {
         const canonicalTab = resolved.tab;
         const needsRedirect = rawTab !== canonicalTab
             || (rawTab === 'forms' || rawTab === 'catalog' || rawTab === 'threads' || rawTab === 'tasks' || rawTab === 'review')
+            || (rawTab === 'design' && searchParams.get('section') === 'directory')
             || (rawTab === 'data' && !searchParams.get('section') && resolved.section);
         if (!needsRedirect) return;
         setSearchParams((prev) => {
@@ -700,16 +696,15 @@ const ProjectWorkspace: React.FC = () => {
 
 
     const handleShellNavSelect = (key: string) => {
-        if (key === 'ops') {
-            if (projectId) {
-                navigate(`/projects/${projectId}?tab=ops&view=tasks`);
-                return;
-            }
-            navigate('/dashboard?tab=ops');
-            return;
-        }
-        navigate(`/dashboard?tab=${key}`);
+        if (!projectId) return;
+        navigate(projectShellNavHref(projectId, key));
     };
+
+    const shellActiveNav: ProjectShellNavKey = (
+        ['tasks', 'ops', 'design', 'data', 'messages'] as const
+    ).includes(activeTab as Exclude<ProjectShellNavKey, 'hub'>)
+        ? (activeTab as Exclude<ProjectShellNavKey, 'hub'>)
+        : 'design';
 
     const handleGrantAccess = async (event: React.FormEvent) => {
         event.preventDefault();
@@ -1219,9 +1214,23 @@ const ProjectWorkspace: React.FC = () => {
 
     return (
         <StudioLayout
-            activeNav={activeTab === 'ops' ? 'ops' : 'projects'}
-            onSelectNav={handleShellNavSelect as any}
-            counts={{ projects: 0, forms: forms.length, datasets: datasets.length, members: members?.length || 0 } as any}
+            navMode="project"
+            activeNav={shellActiveNav}
+            onSelectNav={handleShellNavSelect}
+            onBackToProjects={() => navigate('/dashboard?tab=projects')}
+            activeDesignSection={activeTab === 'design' ? designSection : null}
+            onSelectDesignSection={(section) => setWorkspaceTab('design', { section })}
+            activeOpsSection={activeTab === 'ops' ? (opsView === 'attendance' || opsView === 'review' ? opsView : 'attendance') : null}
+            onSelectOpsSection={(section) => {
+                setWorkspaceTab('ops', { section });
+            }}
+            activeDataSection={
+                activeTab === 'data' && dataSection !== 'analysis'
+                    ? (dataSection as 'directory' | 'datasets' | 'media')
+                    : null
+            }
+            onSelectDataSection={(section) => setWorkspaceTab('data', { section })}
+            counts={{ tasks: tasks.length, forms: forms.length, data: datasets.length }}
             contentClassName="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[hsl(var(--background))] md:bg-[#f9fafb] dark:md:bg-[hsl(var(--background))]"
         >
             {loading ? (
@@ -1291,52 +1300,34 @@ const ProjectWorkspace: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Tab Bar */}
-                    <div className="flex gap-2 border-b border-[hsl(var(--border))]/60 pb-px overflow-x-auto no-scrollbar px-2">
-                        {TABS.map(tab => {
-                            const Icon = tab.icon;
-                            const isActive = activeTab === tab.id;
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setWorkspaceTab(tab.id as ProjectWorkspaceTab)}
-                                    className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap outline-none ${
-                                        isActive
-                                            ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))] font-semibold'
-                                            : 'border-transparent text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-secondary))] hover:border-[hsl(var(--border))]/40'
-                                    }`}
-                                >
-                                    <Icon className="h-4 w-4" />
-                                    {tab.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* Tab Views */}
-                    <div className="mt-6">
-                        {/* 1. FORMS WORKSPACE */}
+                    {/* Tab Views — destinations owned by project sidebar */}
+                    <div className="mt-2">
+                        {/* 1. DESIGN — Forms */}
                         {activeTab === 'design' && designSection === 'forms' && (
-                            <div className="grid gap-6 lg:grid-cols-12 items-start">
-                                {/* Left Column: Forms list (5/12) */}
-                                <div className="lg:col-span-5 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                    <FileText className="h-4 w-4" />
-                                                </div>
-                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Forms</h2>
+                            <div className="space-y-6">
+                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                <FileText className="h-4 w-4" />
                                             </div>
-                                            <button onClick={() => setIsCreateFormModalOpen(true)} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                                <Plus className="h-4 w-4" />
-                                                <span className="text-xs font-semibold">New</span>
-                                            </button>
+                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">
+                                                Forms
+                                            </h2>
                                         </div>
-                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                            {forms.length === 0 ? (
-                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No forms yet.</p>
-                                            ) : forms.map(form => (
+                                        <button onClick={() => { setNewFormKind('standard'); setIsCreateFormModalOpen(true); }} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                            <Plus className="h-4 w-4" />
+                                            <span className="text-xs font-semibold">New</span>
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                            {(() => {
+                                                const designForms = forms.filter((form) => form.kind !== 'directory');
+                                                return designForms.length === 0 ? (
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
+                                                    No forms yet.
+                                                </p>
+                                            ) : designForms.map(form => (
                                                 <div key={form.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0 flex-1">
@@ -1386,14 +1377,17 @@ const ProjectWorkspace: React.FC = () => {
                                                         </div>
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </section>
-                                </div>
+                                            ));
+                                            })()}
+                                    </div>
+                                </section>
+                            </div>
+                        )}
 
-                                {/* Right Column: Automation Rules */}
-                                <div className="lg:col-span-7 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                        {/* 1b. DESIGN — Automations */}
+                        {activeTab === 'design' && designSection === 'automations' && (
+                            <div className="space-y-6">
+                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                         <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                             <div className="flex items-center gap-3">
                                                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
@@ -1731,134 +1725,20 @@ const ProjectWorkspace: React.FC = () => {
                                             ))}
                                         </div>
                                     </section>
-                                </div>
                             </div>
                         )}
 
-                        {/* 2. OPS — Tasks + Review */}
-                        {activeTab === 'ops' && (
-                            <div className="space-y-4">
-                                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3">
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {(
-                                            [
-                                                { id: 'attendance' as const, label: 'Attendance', count: attendanceRecords.length },
-                                                { id: 'review' as const, label: 'Review Queue', count: reviewQueue.length },
-                                            ] as const
-                                        ).map((item) => (
-                                            <button
-                                                key={item.id}
-                                                type="button"
-                                                onClick={() => setOpsView(item.id)}
-                                                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                                                    opsView === item.id
-                                                        ? 'bg-[hsl(var(--primary))] text-white'
-                                                        : 'bg-[hsl(var(--background))] text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]'
-                                                }`}
-                                            >
-                                                {item.label}
-                                                <span className="tabular-nums opacity-80">{item.count}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <p className="text-xs text-[hsl(var(--text-tertiary))]">
-                                        Field tasks, attendance, and submission review
-                                    </p>
-                                </div>
-
-                        {opsView === 'attendance' && (
-                            <div className="max-w-3xl mx-auto">
-                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                <MapPin className="h-4 w-4" />
-                                            </div>
-                                            <div>
-                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Attendance</h2>
-                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Operational check-in and check-out for {attendanceDay}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                        {attendanceRecords.length === 0 ? (
-                                            <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No attendance activity recorded for this day.</p>
-                                        ) : attendanceRecords.map(record => (
-                                            <div key={record.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-                                                <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{resolveAttendanceMemberLabel(record)}</h3>
-                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                    Checked in {new Date(record.check_in_at).toLocaleTimeString()}
-                                                    {record.check_out_at ? ` • Checked out ${new Date(record.check_out_at).toLocaleTimeString()}` : ''}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            </div>
+                        {/* 2. OPS — mock Attendance + Review */}
+                        {activeTab === 'ops' && opsView === 'attendance' && (
+                            <OpsAttendanceMock projectName={currentProject.name} />
                         )}
-
-                        {opsView === 'review' && (
-                            <div className="max-w-4xl mx-auto space-y-6">
-                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                <CheckCircle2 className="h-4 w-4" />
-                                            </div>
-                                            <div>
-                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Review Queue</h2>
-                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Pending submissions awaiting approval</p>
-                                            </div>
-                                        </div>
-                                        <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                            {reviewQueue.length}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                        {reviewQueue.length === 0 ? (
-                                            <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
-                                                No submissions are waiting for review.
-                                            </p>
-                                        ) : reviewQueue.map(item => (
-                                            <div key={item.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div>
-                                                        <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--primary))]">{item.form_title}</p>
-                                                        <h3 className="mt-1 text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">Submission pending review</h3>
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{new Date(item.created_at).toLocaleString()}</p>
-                                                    </div>
-                                                    <span className="inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                                                        Submitted
-                                                    </span>
-                                                </div>
-                                                <p className="mt-3 text-xs text-[hsl(var(--text-secondary))]">{summariseSubmissionData(item.data)}</p>
-                                                <div className="mt-3 flex items-center justify-end gap-2 pt-3 border-t border-[hsl(var(--border))]/50">
-                                                    <button
-                                                        onClick={() => handleReviewSubmission(item.id, 'rejected')}
-                                                        className="inline-flex items-center gap-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-3 py-1.5 text-xs font-semibold text-[hsl(var(--text-secondary))] transition-colors hover:border-[hsl(var(--error))]/30 hover:text-[hsl(var(--error))]"
-                                                    >
-                                                        <XCircle className="h-3.5 w-3.5" />
-                                                        Reject
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleReviewSubmission(item.id, 'approved')}
-                                                        className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20"
-                                                    >
-                                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                                        Approve
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            </div>
+                        {activeTab === 'ops' && opsView === 'review' && (
+                            <OpsReviewMock projectName={currentProject.name} />
                         )}
 
                         {activeTab === 'tasks' && (
-                            <div className="grid gap-6 lg:grid-cols-12 items-start">
-                                {/* Left Column: Tasks list (7/12) */}
-                                <div className="lg:col-span-7 space-y-6">
+
+                            <div className="space-y-6">
                                     <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                         <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                             <div className="flex items-center gap-3">
@@ -2020,87 +1900,11 @@ const ProjectWorkspace: React.FC = () => {
                                             ))}
                                         </div>
                                     </section>
-                                </div>
+                            </div>
 
-                                {/* Right Column: Attendance (5/12) */}
-                                <div className="lg:col-span-5 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                    <MapPin className="h-4 w-4" />
-                                                </div>
-                                                <div>
-                                                    <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Attendance</h2>
-                                                    <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Operational check-in and check-out for {attendanceDay}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.total} total</span>
-                                                <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedIn} active</span>
-                                                <span className="rounded-full bg-[hsl(var(--surface-elevated))] px-2.5 py-1">{attendanceSummary.checkedOut} completed</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                            {attendanceRecords.length === 0 ? (
-                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No attendance activity recorded for this day.</p>
-                                            ) : attendanceRecords.map(record => (
-                                                <div key={record.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
-                                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                                        <div>
-                                                            <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{resolveAttendanceMemberLabel(record)}</h3>
-                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                                Checked in {new Date(record.check_in_at).toLocaleTimeString()}
-                                                                {record.check_out_at ? ` • Checked out ${new Date(record.check_out_at).toLocaleTimeString()}` : ''}
-                                                            </p>
-                                                        </div>
-                                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${record.status === 'checked_out' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-sky-500/10 text-sky-300 border border-sky-500/20'}`}>
-                                                            {record.status === 'checked_out' ? 'Checked Out' : 'Checked In'}
-                                                        </span>
-                                                    </div>
-                                                    <p className="mt-2 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                        Check-in: {formatAttendanceLocation(record.check_in_location_json)}
-                                                    </p>
-                                                    {record.check_out_location_json && (
-                                                        <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                            Check-out: {formatAttendanceLocation(record.check_out_location_json)}
-                                                        </p>
-                                                    )}
-                                                    {(record.check_in_note || record.check_out_note) && (
-                                                        <p className="mt-2 text-[11px] text-[hsl(var(--text-tertiary))]">
-                                                            {record.check_out_note || record.check_in_note}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </section>
-                                </div>
-                            </div>
-                        )}
-                            </div>
                         )}
 
-                        {/* 4. DATASETS WORKSPACE */}
-                        {activeTab === 'data' && (
-                            <div className="mb-4 flex flex-wrap gap-2">
-                                {(['directory', 'datasets', 'analysis', 'media'] as const).map((section) => (
-                                    <button
-                                        key={section}
-                                        type="button"
-                                        onClick={() => setDataView(section)}
-                                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                                            dataSection === section
-                                                ? 'bg-[hsl(var(--primary))] text-white'
-                                                : 'bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))]'
-                                        }`}
-                                    >
-                                        {DATA_SECTION_LABELS[section]}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
+                        {/* 4. DATA — section chosen from sidebar */}
                         {activeTab === 'data' && dataSection === 'analysis' && (
                             <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
                                 Open Analysis from the org Data tab in the sidebar, or use the project hub for spatial insights.
@@ -2352,113 +2156,23 @@ const ProjectWorkspace: React.FC = () => {
 
                         {/* 5. REPORTS WORKSPACE */}
                         {activeTab === 'reports' && (
-                            <div className="grid gap-6 lg:grid-cols-12 items-start">
-                                {/* Left Column: Custom Reports list (6/12) */}
-                                <div className="lg:col-span-6 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                        <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                    <FileBarChart2 className="h-4 w-4" />
-                                                </div>
-                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Reports</h2>
-                                            </div>
-                                            <button onClick={handleCreateReport} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                                <Plus className="h-4 w-4" />
-                                                <span className="text-xs font-semibold">New</span>
-                                            </button>
-                                        </div>
-                                        <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                            {reports.length === 0 ? (
-                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No reports yet.</p>
-                                            ) : reports.map(report => (
-                                                <div key={report.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0 pr-2">
-                                                            <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))] truncate">{report.title}</h3>
-                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))] truncate">{report.description || 'No description'}</p>
-                                                        </div>
-                                                        <select
-                                                            value={report.status}
-                                                            onChange={(e) => handleReportUpdate(report.id, { status: e.target.value as ReportArtifact['status'] })}
-                                                            className={`shrink-0 appearance-none inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer outline-none border-0 ${reportStatusTone[report.status] || reportStatusTone.draft}`}
-                                                        >
-                                                            <option value="draft">Draft</option>
-                                                            <option value="published">Published</option>
-                                                            <option value="archived">Archived</option>
-                                                        </select>
-                                                    </div>
-                                                    <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
-                                                        <div className="flex items-center gap-2 max-w-[50%]">
-                                                            <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-500 shrink-0" title={resolveAccessorLabel(report.lead_accessor_id, report.lead_accessor_type)}>
-                                                                {resolveAccessorLabel(report.lead_accessor_id, report.lead_accessor_type).charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <span className="text-[10px] text-[hsl(var(--text-secondary))] uppercase tracking-widest leading-none font-bold truncate">Owner</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                                            <button onClick={() => handleDeleteReport(report.id)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--error))] text-[10px] font-semibold rounded bg-[hsl(var(--error))]/5">
-                                                                Del
-                                                            </button>
-                                                            <button onClick={() => navigate(`/projects/${projectId}/reports/${report.id}`)} className="p-1 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded-md hover:bg-[hsl(var(--primary))]/10">
-                                                                <ChevronRight className="h-3.5 w-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </section>
-                                </div>
-
-                                {/* Right Column: Workflow Coverage metrics (6/12) */}
-                                <div className="lg:col-span-6 space-y-6">
-                                    <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden p-4 lg:p-5">
-                                        <div className="mb-4">
-                                            <h3 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Workflow Coverage</h3>
-                                            <p className="mt-1 text-xs text-[hsl(var(--text-tertiary))]">
-                                                Operational metrics that reporting can now consume from source review, tasks, automation, and attendance.
-                                            </p>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 mb-4">
-                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Pending review</p>
-                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.pendingReview}</p>
-                                            </div>
-                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Source-linked tasks</p>
-                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.sourceLinkedTasks}</p>
-                                            </div>
-                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Automation-created</p>
-                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.automatedTasks}</p>
-                                            </div>
-                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Task completion</p>
-                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.completionRate}%</p>
-                                            </div>
-                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Attendance complete</p>
-                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.attendanceCompletionRate}%</p>
-                                            </div>
-                                            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Published reports</p>
-                                                <p className="mt-2 text-lg font-semibold text-[hsl(var(--text-primary))]">{workflowMetrics.publishedReports}</p>
-                                            </div>
-                                        </div>
-                                        <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] p-3">
-                                            <p className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">Reporting joins</p>
-                                            <div className="mt-2 space-y-1.5 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                {workflowJoinNotes.map((note) => (
-                                                    <p key={note}>{note}</p>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </section>
-                                </div>
+                            <div className="mx-auto max-w-xl rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center shadow-sm">
+                                <FileBarChart2 className="mx-auto h-10 w-10 text-[hsl(var(--primary))]" />
+                                <h2 className="mt-4 text-xl font-semibold text-[hsl(var(--text-primary))]">Reports moved to org</h2>
+                                <p className="mt-2 text-sm text-[hsl(var(--text-secondary))]">
+                                    Stakeholder boards live outside projects so seniors can combine sources and get Team grants without field Ops access.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/dashboard?tab=reports')}
+                                    className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-semibold text-white"
+                                >
+                                    Open Reports
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
                             </div>
                         )}
 
-                        {/* 6. TEAM WORKSPACE */}
                         {activeTab === 'members' && (
                             <div className="max-w-3xl mx-auto space-y-6">
                                 <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">

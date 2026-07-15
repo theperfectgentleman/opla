@@ -3,6 +3,7 @@ import { CheckCircle2, Copy, KeyRound, Link2, Shield } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import StudioLayout from '../components/StudioLayout';
+import { dashboardNavHref, resolveDashboardShellNav } from '../lib/vocabulary';
 import { useOrg } from '../contexts/OrgContext';
 import { useToast } from '../contexts/ToastContext';
 import { orgAPI } from '../lib/api';
@@ -104,8 +105,12 @@ const InvitationAccept: React.FC = () => {
 
     return (
         <StudioLayout
+            navMode="org"
             activeNav="members"
-            onSelectNav={(key) => navigate(`/dashboard?tab=${key}`)}
+            onSelectNav={(key) => {
+                const resolved = resolveDashboardShellNav(key);
+                navigate(dashboardNavHref(resolved.key, resolved.options));
+            }}
             contentClassName="flex-1 overflow-y-auto p-10"
         >
             <div className="mx-auto max-w-3xl space-y-8">

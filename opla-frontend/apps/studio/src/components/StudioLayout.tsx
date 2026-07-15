@@ -7,35 +7,31 @@ import {
     Layout,
     Folder,
     CheckSquare,
+    CheckCircle2,
     Users,
     Settings,
     Search,
     Bell,
     Target,
-    BarChart3,
     FileBarChart2,
     MessageSquare,
     ChevronDown,
+    ChevronLeft,
     LogOut,
     PanelLeftClose,
     PanelLeftOpen,
     Database,
+    LayoutDashboard,
+    Inbox,
 } from 'lucide-react';
+import type { StudioShellNavKey } from '../lib/vocabulary';
 
-type StudioNavKey =
-    | 'projects'
-    | 'ops'
-    | 'tasks'
-    | 'design'
-    | 'data'
-    | 'members'
-    | 'audience'
-    | 'messages'
-    | 'reports'
-    | 'settings';
+export type StudioNavKey = StudioShellNavKey;
 
 type AnalyticsNavTool = 'lab' | 'prep' | 'dashboard' | 'spatial';
 type DataNavSection = 'directory' | 'datasets' | 'media';
+type DesignNavSection = 'forms' | 'automations';
+type OpsNavSection = 'attendance' | 'review';
 
 type NavCounts = {
     projects?: number;
@@ -43,38 +39,69 @@ type NavCounts = {
     forms?: number;
     data?: number;
     members?: number;
+    inbox?: number;
+};
+
+type NavItem = {
+    key: StudioNavKey;
+    label: string;
+    icon: React.ReactNode;
+    countKey?: keyof NavCounts;
 };
 
 type StudioLayoutProps = {
+    navMode?: 'org' | 'project';
     activeNav: StudioNavKey;
     onSelectNav: (key: StudioNavKey) => void;
+    onBackToProjects?: () => void;
+    /** Header bell → Inbox (notifications). Defaults to org Inbox nav or /dashboard?tab=inbox. */
+    onOpenInbox?: () => void;
     activeAnalyticsTool?: AnalyticsNavTool;
     onSelectAnalyticsTool?: (key: AnalyticsNavTool) => void;
     activeDataSection?: DataNavSection | null;
     onSelectDataSection?: (key: DataNavSection) => void;
+    activeDesignSection?: DesignNavSection | null;
+    onSelectDesignSection?: (key: DesignNavSection) => void;
+    activeOpsSection?: OpsNavSection | null;
+    onSelectOpsSection?: (key: OpsNavSection) => void;
     children: React.ReactNode;
     counts?: NavCounts;
     contentClassName?: string;
     alignRightRail?: boolean;
 };
 
-const navItems: Array<{ key: StudioNavKey; label: string; icon: React.ReactNode; countKey?: keyof NavCounts }> = [
+const orgNavItems: NavItem[] = [
+    { key: 'inbox', label: 'Inbox', icon: <Inbox className="w-5 h-5" />, countKey: 'inbox' },
     { key: 'projects', label: 'Projects', icon: <Folder className="w-5 h-5" />, countKey: 'projects' },
+    { key: 'reports', label: 'Reports', icon: <FileBarChart2 className="w-5 h-5" /> },
+    { key: 'members', label: 'Teams', icon: <Users className="w-5 h-5" />, countKey: 'members' },
+    { key: 'audience', label: 'Audience', icon: <Target className="w-5 h-5" /> },
+    { key: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
+];
+
+const projectNavItems: NavItem[] = [
+    { key: 'hub', label: 'Hub', icon: <LayoutDashboard className="w-5 h-5" /> },
     { key: 'tasks', label: 'Tasks', icon: <CheckSquare className="w-5 h-5" />, countKey: 'tasks' },
-    { key: 'ops', label: 'Ops', icon: <CheckSquare className="w-5 h-5" /> },
+    { key: 'ops', label: 'Ops', icon: <CheckCircle2 className="w-5 h-5" /> },
     { key: 'design', label: 'Design', icon: <Layout className="w-5 h-5" />, countKey: 'forms' },
     { key: 'data', label: 'Data', icon: <Database className="w-5 h-5" />, countKey: 'data' },
     { key: 'messages', label: 'Messages', icon: <MessageSquare className="w-5 h-5" /> },
-    { key: 'members', label: 'Teams', icon: <Users className="w-5 h-5" />, countKey: 'members' },
-    { key: 'audience', label: 'Audience', icon: <Target className="w-5 h-5" /> },
-    { key: 'reports', label: 'Reports', icon: <FileBarChart2 className="w-5 h-5" /> },
-    { key: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
 const dataSectionSubItems: Array<{ key: DataNavSection; label: string }> = [
     { key: 'directory', label: 'Directory' },
     { key: 'datasets', label: 'Datasets' },
     { key: 'media', label: 'Media' },
+];
+
+const designSectionSubItems: Array<{ key: DesignNavSection; label: string }> = [
+    { key: 'forms', label: 'Forms' },
+    { key: 'automations', label: 'Automations' },
+];
+
+const projectOpsSectionSubItems: Array<{ key: OpsNavSection; label: string }> = [
+    { key: 'attendance', label: 'Attendance' },
+    { key: 'review', label: 'Review' },
 ];
 
 const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
@@ -85,12 +112,19 @@ const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
 ];
 
 const StudioLayout: React.FC<StudioLayoutProps> = ({
+    navMode = 'org',
     activeNav,
     onSelectNav,
+    onBackToProjects,
+    onOpenInbox,
     activeAnalyticsTool,
     onSelectAnalyticsTool,
     activeDataSection,
     onSelectDataSection,
+    activeDesignSection,
+    onSelectDesignSection,
+    activeOpsSection,
+    onSelectOpsSection,
     children,
     counts,
     contentClassName = 'flex-1 overflow-y-auto p-10',
@@ -103,6 +137,9 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const profileMenuRef = useRef<HTMLDivElement | null>(null);
+
+    const navItems = navMode === 'project' ? projectNavItems : orgNavItems;
+    const opsSectionSubItems = navMode === 'project' ? projectOpsSectionSubItems : [];
 
     useEffect(() => {
         const onClickOutside = (event: MouseEvent) => {
@@ -119,15 +156,35 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
         const org = organizations.find(o => o.id === orgId);
         if (!org || currentOrg?.id === org.id) return;
 
-        // Persist selection immediately so the next boot loads the chosen org.
         localStorage.setItem('current_org_id', org.id);
         setCurrentOrg(org);
         setCurrentProject(null);
         setIsProfileMenuOpen(false);
-
-        // Force a full app re-initialization into the selected organization scope.
         window.location.assign('/dashboard');
     };
+
+    const handleBackToProjects = () => {
+        if (onBackToProjects) {
+            onBackToProjects();
+            return;
+        }
+        navigate('/dashboard?tab=projects');
+    };
+
+    const handleOpenInbox = () => {
+        if (onOpenInbox) {
+            onOpenInbox();
+            return;
+        }
+        if (navMode === 'org') {
+            onSelectNav('inbox');
+            return;
+        }
+        navigate('/dashboard?tab=inbox');
+    };
+
+    const inboxCount = counts?.inbox ?? 0;
+    const showInboxBadge = inboxCount > 0;
 
     return (
         <div className="flex text-sm h-screen bg-[hsl(var(--background))] text-[hsl(var(--text-primary))] overflow-hidden">
@@ -169,8 +226,22 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[hsl(var(--text-tertiary))]">Workspace</p>
                                 <p className="mt-2 truncate text-sm font-semibold text-[hsl(var(--text-primary))]">{currentOrg.name}</p>
                                 <p className="truncate text-xs text-[hsl(var(--text-secondary))]">
-                                    {currentProject ? currentProject.name : 'Organization overview'}
+                                    {navMode === 'project' && currentProject
+                                        ? currentProject.name
+                                        : currentProject
+                                            ? currentProject.name
+                                            : 'Organization overview'}
                                 </p>
+                                {navMode === 'project' ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleBackToProjects}
+                                        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                        Back to Projects
+                                    </button>
+                                ) : null}
                             </div>
                         )}
                         {navItems.map(item => {
@@ -178,6 +249,11 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                             const count = item.countKey ? (counts?.[item.countKey] ?? 0) : 0;
                             const showDataSubmenu = !isSidebarCollapsed && item.key === 'data' && isActive
                                 && (onSelectDataSection || onSelectAnalyticsTool);
+                            const showDesignSubmenu = !isSidebarCollapsed && item.key === 'design' && isActive
+                                && Boolean(onSelectDesignSection);
+                            const showOpsSubmenu = !isSidebarCollapsed && item.key === 'ops' && isActive
+                                && Boolean(onSelectOpsSection)
+                                && opsSectionSubItems.length > 0;
 
                             return (
                                 <div key={item.key} className="space-y-1">
@@ -190,7 +266,11 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                             {item.icon}
                                             {!isSidebarCollapsed && <span className="font-medium">{item.label}</span>}
                                         </div>
-                                        {!isSidebarCollapsed && item.key === 'data' && onSelectAnalyticsTool ? (
+                                        {!isSidebarCollapsed && (
+                                            (item.key === 'data' && onSelectAnalyticsTool)
+                                            || (item.key === 'design' && onSelectDesignSection)
+                                            || (item.key === 'ops' && onSelectOpsSection && opsSectionSubItems.length > 1)
+                                        ) ? (
                                             <ChevronDown className={`h-4 w-4 transition-transform ${isActive ? 'rotate-180 text-white' : 'text-[hsl(var(--text-tertiary))]'}`} />
                                         ) : null}
                                         {!isSidebarCollapsed && item.countKey && count > 0 && (
@@ -199,6 +279,42 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                             </span>
                                         )}
                                     </button>
+
+                                    {showOpsSubmenu ? (
+                                        <div className="ml-4 border-l border-[hsl(var(--border))] pl-3 space-y-0.5">
+                                            {opsSectionSubItems.map(subItem => {
+                                                const isSubItemActive = activeOpsSection === subItem.key;
+                                                return (
+                                                    <button
+                                                        key={subItem.key}
+                                                        type="button"
+                                                        onClick={() => onSelectOpsSection?.(subItem.key)}
+                                                        className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
+                                                    >
+                                                        <span className="truncate font-medium">{subItem.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : null}
+
+                                    {showDesignSubmenu ? (
+                                        <div className="ml-4 border-l border-[hsl(var(--border))] pl-3 space-y-0.5">
+                                            {designSectionSubItems.map(subItem => {
+                                                const isSubItemActive = activeDesignSection === subItem.key;
+                                                return (
+                                                    <button
+                                                        key={subItem.key}
+                                                        type="button"
+                                                        onClick={() => onSelectDesignSection?.(subItem.key)}
+                                                        className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
+                                                    >
+                                                        <span className="truncate font-medium">{subItem.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : null}
 
                                     {showDataSubmenu ? (
                                         <div className="ml-4 border-l border-[hsl(var(--border))] pl-3 space-y-0.5">
@@ -250,9 +366,17 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                         <input className="bg-transparent border-none w-full text-sm text-[hsl(var(--text-primary))] placeholder:text-[hsl(var(--text-tertiary))] focus:outline-none" placeholder="Search forms, projects..." />
                     </div>
                     <div className="ml-auto flex items-center space-x-3 md:space-x-4">
-                        <button className="w-9 h-9 rounded-md inline-flex items-center justify-center text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all relative">
+                        <button
+                            type="button"
+                            onClick={handleOpenInbox}
+                            title={showInboxBadge ? `Inbox · ${inboxCount} need attention` : 'Inbox'}
+                            aria-label={showInboxBadge ? `Inbox, ${inboxCount} items need attention` : 'Open Inbox'}
+                            className="w-9 h-9 rounded-md inline-flex items-center justify-center text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] transition-all relative"
+                        >
                             <Bell className="w-5 h-5" />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-[hsl(var(--primary))] rounded-full border-2 border-[hsl(var(--surface))]"></span>
+                            {showInboxBadge ? (
+                                <span className="absolute top-2 right-2 w-2 h-2 bg-[hsl(var(--primary))] rounded-full border-2 border-[hsl(var(--surface))]" />
+                            ) : null}
                         </button>
 
                         <ThemeToggle iconOnly className="w-9 h-9 rounded-md inline-flex items-center justify-center" />

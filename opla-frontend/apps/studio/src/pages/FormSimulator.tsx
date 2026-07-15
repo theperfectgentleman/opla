@@ -9,6 +9,7 @@ import {
     Plus, Trash2, Layers, Database
 } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
+import { projectNavHref, projectShellNavHref } from '../lib/vocabulary';
 import SyntheticDataPanel from '../components/simulator/SyntheticDataPanel';
 import {
     evaluateAllRules,
@@ -1011,8 +1012,12 @@ const FormSimulator: React.FC = () => {
 
     if (isLoading) return <div className="min-h-screen bg-[hsl(var(--background))] flex items-center justify-center text-[hsl(var(--text-primary))]">Loading Simulator...</div>;
 
-    const handleShellNavSelect = (key: 'projects' | 'ops' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
-        navigate(`/dashboard?tab=${key}`);
+    const handleShellNavSelect = (key: string) => {
+        if (projectId) {
+            navigate(projectShellNavHref(projectId, key));
+            return;
+        }
+        navigate('/dashboard?tab=projects');
     };
 
     const currentSection = blueprint?.ui[currentSectionIndex];
@@ -1029,8 +1034,18 @@ const FormSimulator: React.FC = () => {
 
     return (
         <StudioLayout
-            activeNav="forms"
+            navMode={projectId ? 'project' : 'org'}
+            activeNav={projectId ? 'design' : 'projects'}
             onSelectNav={handleShellNavSelect}
+            onBackToProjects={() => navigate('/dashboard?tab=projects')}
+            activeDesignSection={projectId ? 'forms' : null}
+            onSelectDesignSection={projectId ? ((section) => navigate(projectNavHref(projectId, 'design', { section }))) : undefined}
+            onSelectOpsSection={projectId ? ((section) => {
+                if (section === 'attendance' || section === 'review') {
+                    navigate(projectNavHref(projectId, 'ops', { section }));
+                }
+            }) : undefined}
+            onSelectDataSection={projectId ? ((section) => navigate(projectNavHref(projectId, 'data', { section }))) : undefined}
             contentClassName="flex-1 overflow-auto"
         >
             <div className="h-full bg-[hsl(var(--background))] flex items-start justify-center gap-8 p-8 overflow-auto">

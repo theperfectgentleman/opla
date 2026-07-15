@@ -17,6 +17,7 @@ import ProjectHub from './pages/ProjectHub';
 import AiSurveyWizard from './pages/AiSurveyWizard';
 import InvitationAccept from './pages/InvitationAccept';
 import ReportDetail from './pages/ReportDetail';
+import ReportBoard from './pages/ReportBoard';
 
 function App() {
   useEffect(() => {
@@ -68,7 +69,7 @@ function App() {
               />
               <Route
                 path="/pdemo"
-                element={<Navigate to="/dashboard?tab=projects" replace />}
+                element={<Navigate to="/dashboard?tab=inbox" replace />}
               />
               <Route
                 path="/projects/:projectId"
@@ -91,6 +92,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <InvitationAccept />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports/:reportId"
+                element={
+                  <ProtectedRoute>
+                    <ReportBoard />
                   </ProtectedRoute>
                 }
               />

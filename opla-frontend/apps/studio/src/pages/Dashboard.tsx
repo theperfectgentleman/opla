@@ -8,12 +8,16 @@ import MembersManagement from '../components/MembersManagement';
 import TeamsManagement from '../components/TeamsManagement';
 import RolesManagement from '../components/RolesManagement';
 import DatasetsTab from '../components/DatasetsTab';
+import ProjectsPortfolio from '../components/projects/ProjectsPortfolio';
+import InboxHub from '../components/inbox/InboxHub';
+import ReportsPortfolio from '../components/reports/ReportsPortfolio';
+import { useInboxAttention } from '../components/inbox/useInboxAttention';
 import type { AnalyticsSource } from '../components/analytics/types';
 import {
-    Plus, Settings, ChevronRight, ChevronLeft, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid, Sparkles
+    Plus, ChevronRight, ChevronLeft, FileText, Activity, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid, Sparkles
 } from 'lucide-react';
 import FontProfileSelector from '../components/FontProfileSelector';
-import { resolveLegacyDashboardTab, resolveDataSection, type DashboardNavKey as VocabularyDashboardNavKey, type ProjectDataSection } from '../lib/vocabulary';
+import { resolveLegacyDashboardTab, resolveDataSection, resolveDesignSection, buildDashboardSearchParams, type DashboardNavKey as VocabularyDashboardNavKey, type ProjectDataSection, type ProjectDesignSection } from '../lib/vocabulary';
 
 const AnalyticsHub = lazy(() => import('../components/analytics/AnalyticsHub'));
 
@@ -65,7 +69,6 @@ type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard' | 'spatial';
 
 const validDashboardTabs = ['projects', 'ops', 'tasks', 'design', 'data', 'members', 'audience', 'messages', 'assets', 'reports', 'settings', 'forms', 'datasets', 'analysis', 'threads'] as const;
 type DashboardNavKey = VocabularyDashboardNavKey;
-type OpsView = 'tasks' | 'review';
 const validAnalyticsTools: AnalyticsToolKey[] = ['lab', 'prep', 'dashboard', 'spatial'];
 
 const taskTone: Record<DashboardTask['status'], string> = {
@@ -93,12 +96,11 @@ const Dashboard: React.FC = () => {
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [activeTab, setActiveTab] = useState<DashboardNavKey>('design');
-    const [opsView, setOpsView] = useState<OpsView>('tasks');
+    const [activeTab, setActiveTab] = useState<DashboardNavKey>('inbox');
     const [activeAnalyticsTool, setActiveAnalyticsTool] = useState<AnalyticsToolKey>('lab');
     const [dataSection, setDataSection] = useState<ProjectDataSection>('datasets');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
-    const [formsSubTab, setFormsSubTab] = useState<'standard' | 'directory'>('standard');
+    const [designSection, setDesignSection] = useState<ProjectDesignSection>('forms');
 
     const [forms, setForms] = useState<any[]>([]);
     const [formSearchQuery, setFormSearchQuery] = useState('');
@@ -381,26 +383,84 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         const tab = searchParams.get('tab');
+        const section = searchParams.get('section');
+        const view = searchParams.get('view');
+        const tool = searchParams.get('tool');
+
+        if (!tab) {
+            setSearchParams(() => buildDashboardSearchParams('inbox'), { replace: true });
+            return;
+        }
+
+        const legacyTabs = new Set(['forms', 'threads', 'assets', 'datasets', 'analysis']);
+        if (legacyTabs.has(tab)) {
+            const resolved = resolveLegacyDashboardTab(tab);
+            const params = buildDashboardSearchParams(
+                resolved,
+                tab === 'assets'
+                    ? { section: 'media' }
+                    : tab === 'datasets'
+                        ? { section: 'datasets' }
+                        : tab === 'analysis'
+                            ? { section: 'analysis', tool: tool || 'lab' }
+                            : undefined,
+            );
+            setSearchParams(() => params, { replace: true });
+            return;
+        }
+
+        // Legacy org Ops → Inbox (Ops lives under projects only)
+        if (tab === 'ops') {
+            if (view === 'tasks') {
+                setSearchParams(() => buildDashboardSearchParams('tasks'), { replace: true });
+                return;
+            }
+            setSearchParams(() => buildDashboardSearchParams('inbox'), { replace: true });
+            return;
+        }
+
+        if (tab === 'members' && !section) {
+            setSearchParams(() => buildDashboardSearchParams('members', { section: 'teams' }), { replace: true });
+            return;
+        }
+
+        if (tab === 'data' && !section) {
+            setSearchParams(() => buildDashboardSearchParams('data', { section: 'datasets' }), { replace: true });
+            return;
+        }
+
+        if (tab === 'data' && section === 'analysis' && !tool) {
+            setSearchParams(() => buildDashboardSearchParams('data', { section: 'analysis', tool: 'lab' }), { replace: true });
+            return;
+        }
+
+        if (tab === 'design' && !section) {
+            setSearchParams(() => buildDashboardSearchParams('design', { section: 'forms' }), { replace: true });
+            return;
+        }
+
+        // Directory lives under Data — redirect legacy Design > Directory links
+        if (tab === 'design' && section === 'directory') {
+            setSearchParams(() => buildDashboardSearchParams('data', { section: 'directory' }), { replace: true });
+            return;
+        }
+
         const resolved = resolveLegacyDashboardTab(tab);
         setActiveTab(resolved);
-        if (tab === 'tasks' || (tab === 'ops' && searchParams.get('view') !== 'review')) {
-            setOpsView('tasks');
-        } else if (tab === 'ops' || tab === 'review' || searchParams.get('view') === 'review') {
-            setOpsView('review');
-        }
         if (resolved === 'members') {
-            const section = searchParams.get('section');
             if (section === 'members' || section === 'teams' || section === 'roles') {
                 setMembersSubTab(section);
             } else {
                 setMembersSubTab('teams');
             }
         }
+        if (resolved === 'design') {
+            setDesignSection(resolveDesignSection(section));
+        }
         if (resolved === 'data') {
-            const section = resolveDataSection(tab, searchParams.get('section'));
-            setDataSection(section);
-            if (section === 'analysis' || tab === 'analysis' || searchParams.get('tool')) {
-                const tool = searchParams.get('tool');
+            const dataSectionResolved = resolveDataSection(tab, section);
+            setDataSection(dataSectionResolved);
+            if (dataSectionResolved === 'analysis' || tab === 'analysis' || tool) {
                 if (tool && validAnalyticsTools.includes(tool as AnalyticsToolKey)) {
                     setActiveAnalyticsTool(tool as AnalyticsToolKey);
                 } else {
@@ -408,60 +468,65 @@ const Dashboard: React.FC = () => {
                 }
             }
         }
-        if (tab === 'assets') {
-            setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set('tab', 'data');
-                next.set('section', 'media');
-                next.delete('tool');
-                return next;
-            }, { replace: true });
-        }
     }, [searchParams, setSearchParams]);
 
-    const handleShellNavSelect = (key: DashboardNavKey) => {
-        setActiveTab(key);
-        if (key === 'ops') {
-            setOpsView('tasks');
-        }
+    const navigateDashboardTab = (
+        key: DashboardNavKey,
+        options?: {
+            section?: 'members' | 'teams' | 'roles' | ProjectDataSection | ProjectDesignSection;
+            tool?: AnalyticsToolKey;
+        },
+    ) => {
+        setActiveTab(key === 'ops' ? 'inbox' : key);
         if (key === 'members') {
-            setMembersSubTab('teams');
+            const membersSection = (options?.section as 'members' | 'teams' | 'roles') || 'teams';
+            setMembersSubTab(membersSection);
+        }
+        if (key === 'design') {
+            setDesignSection((options?.section as ProjectDesignSection) || 'forms');
         }
         if (key === 'data') {
-            setDataSection('datasets');
-            setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set('tab', 'data');
-                next.set('section', 'datasets');
-                next.delete('tool');
-                return next;
-            }, { replace: true });
+            const nextDataSection = (options?.section as ProjectDataSection) || 'datasets';
+            setDataSection(nextDataSection);
+            if (nextDataSection === 'analysis') {
+                setActiveAnalyticsTool(options?.tool || activeAnalyticsTool);
+            }
         }
+        setSearchParams(
+            () => buildDashboardSearchParams(key === 'ops' ? 'inbox' : key, {
+                section: options?.section,
+                tool: options?.tool || (options?.section === 'analysis' ? activeAnalyticsTool : undefined),
+            }),
+            { replace: true },
+        );
     };
 
-    const handleDataSectionSelect = (section: 'directory' | 'datasets' | 'media') => {
-        setActiveTab('data');
-        setDataSection(section);
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.set('tab', 'data');
-            next.set('section', section);
-            next.delete('tool');
-            return next;
-        }, { replace: true });
-    };
-
-    const handleAnalyticsToolSelect = (tool: AnalyticsToolKey) => {
-        setActiveTab('data');
-        setDataSection('analysis');
-        setActiveAnalyticsTool(tool);
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.set('tab', 'data');
-            next.set('section', 'analysis');
-            next.set('tool', tool);
-            return next;
-        }, { replace: true });
+    const handleShellNavSelect = (key: DashboardNavKey) => {
+        if (key === 'inbox' || key === 'ops') {
+            navigateDashboardTab('inbox');
+            return;
+        }
+        if (key === 'reports') {
+            navigateDashboardTab('reports');
+            return;
+        }
+        if (key === 'tasks') {
+            navigateDashboardTab('tasks');
+            return;
+        }
+        if (key === 'members') {
+            navigateDashboardTab('members', { section: 'teams' });
+            return;
+        }
+        if (key === 'design') {
+            navigateDashboardTab('design', { section: 'forms' });
+            return;
+        }
+        if (key === 'data') {
+            navigateDashboardTab('data', { section: 'datasets' });
+            return;
+        }
+        navigateDashboardTab(key);
     };
 
     const handleCreateProject = async (event: React.FormEvent) => {
@@ -644,7 +709,7 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         setFormsPage(1);
-    }, [selectedProjectId, formsSubTab, formSearchQuery]);
+    }, [selectedProjectId, designSection, formSearchQuery]);
 
     const handleNewFormClick = (projectId?: string) => {
         if (projectId) {
@@ -670,7 +735,7 @@ const Dashboard: React.FC = () => {
 
         try {
             setSavingForm(true);
-            const kindToUse = formsSubTab === 'directory' ? 'directory' : 'standard';
+            const kindToUse = 'standard';
             const newForm = await formAPI.create(projectToUse, {
                 title: inlineFormTitle.trim(),
                 kind: kindToUse,
@@ -695,7 +760,7 @@ const Dashboard: React.FC = () => {
         } else if (projects.length > 0) {
             setInlineFormProjectId(projects[0].id);
         }
-    }, [selectedProjectId, formsSubTab, projects]);
+    }, [selectedProjectId, designSection, projects]);
 
     const sidebarProjects = useMemo(() => {
         if (!projectSearchQuery.trim()) return projects;
@@ -706,7 +771,7 @@ const Dashboard: React.FC = () => {
     const filteredForms = useMemo(() => {
         return forms.filter(form => {
             // Tab filtering
-            const matchesSubTab = formsSubTab === 'directory' ? form.kind === 'directory' : form.kind !== 'directory';
+            const matchesSubTab = form.kind !== 'directory';
             if (!matchesSubTab) return false;
 
             // Project filtering
@@ -723,7 +788,7 @@ const Dashboard: React.FC = () => {
 
             return true;
         });
-    }, [forms, formsSubTab, selectedProjectId, formSearchQuery]);
+    }, [forms, designSection, selectedProjectId, formSearchQuery]);
 
     const paginatedForms = useMemo(() => {
         const start = (formsPage - 1) * formsPageSize;
@@ -742,23 +807,10 @@ const Dashboard: React.FC = () => {
         >
             <div>
                 <div className="flex justify-between items-start mb-4">
-                    <div className={`p-3 rounded-md transition-all ${
-                        formsSubTab === 'directory'
-                            ? 'bg-amber-500/10 text-amber-600 group-hover:bg-amber-500/20'
-                            : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/20'
-                    }`}>
-                        {formsSubTab === 'directory' ? (
-                            <Database className="w-6 h-6" />
-                        ) : (
-                            <FileText className="w-6 h-6" />
-                        )}
+                    <div className="p-3 rounded-md transition-all bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/20">
+                        <FileText className="w-6 h-6" />
                     </div>
                     <div className="flex items-center gap-1.5">
-                        {form.kind === 'directory' && (
-                            <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 select-none">
-                                Directory
-                            </span>
-                        )}
                         <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${form.status === 'live' ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
                             {form.status}
                         </span>
@@ -852,24 +904,67 @@ const Dashboard: React.FC = () => {
         </div>
     );
 
+    const inboxProjects = useMemo(
+        () => projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            status: project.status,
+        })),
+        [projects],
+    );
+    const inboxTasks = useMemo(
+        () => tasks.map((task) => ({
+            id: task.id,
+            project_id: task.project_id,
+            status: task.status,
+        })),
+        [tasks],
+    );
+    const { loading: inboxLoading, totals: inboxTotals, attentionItems, attentionCount } = useInboxAttention(
+        currentOrg?.id,
+        inboxProjects,
+        inboxTasks,
+    );
+
     return (
         <>
             <StudioLayout
-                activeNav={activeTab as DashboardNavKey}
-                onSelectNav={handleShellNavSelect}
-                activeAnalyticsTool={activeAnalyticsTool}
-                onSelectAnalyticsTool={handleAnalyticsToolSelect}
-                activeDataSection={dataSection === 'analysis' ? null : (dataSection as 'directory' | 'datasets' | 'media')}
-                onSelectDataSection={handleDataSectionSelect}
-                counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, data: datasetSources.length, members: members?.length || 0 }}
+                navMode="org"
+                activeNav={(
+                    activeTab === 'inbox'
+                    || activeTab === 'projects'
+                    || activeTab === 'reports'
+                    || activeTab === 'members'
+                    || activeTab === 'audience'
+                    || activeTab === 'settings'
+                ) ? activeTab : 'inbox'}
+                onSelectNav={(key) => {
+                    if (key === 'inbox' || key === 'ops') {
+                        navigateDashboardTab('inbox');
+                        return;
+                    }
+                    if (key === 'reports') {
+                        navigateDashboardTab('reports');
+                        return;
+                    }
+                    if (key === 'hub' || key === 'tasks' || key === 'design' || key === 'data' || key === 'messages') {
+                        navigateDashboardTab('inbox');
+                        return;
+                    }
+                    handleShellNavSelect(key as DashboardNavKey);
+                }}
+                onOpenInbox={() => navigateDashboardTab('inbox')}
+                counts={{ projects: projects.length, members: members?.length || 0, inbox: attentionCount }}
                 contentClassName={
-                    activeTab === 'design'
+                    activeTab === 'design' && designSection !== 'automations'
                         ? 'flex-1 overflow-hidden flex'
                         : activeTab === 'data' && activeAnalyticsTool === 'spatial'
                             ? 'flex-1 overflow-hidden p-0'
                             : activeTab === 'data'
                                 ? 'flex-1 overflow-y-auto p-4'
-                                : 'flex-1 overflow-y-auto p-10'
+                                : activeTab === 'projects' || activeTab === 'inbox' || activeTab === 'reports'
+                                    ? 'flex-1 overflow-y-auto p-6'
+                                    : 'flex-1 overflow-y-auto p-10'
                 }
             >
                 {organizations.length === 0 && !isLoading && (
@@ -886,7 +981,46 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'design' && (
+                {activeTab === 'design' && designSection === 'automations' && (
+                    <div className="space-y-6">
+                        <div>
+                            <h2 className="text-3xl font-bold mb-2">Automations</h2>
+                            <p className="text-[hsl(var(--text-secondary))]">
+                                Configure submission rules that create tasks or Needs Attention alerts. Open a project to design automations for its forms.
+                            </p>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            {projects.length === 0 ? (
+                                <div className="col-span-full rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
+                                    Create a project first to configure automations.
+                                </div>
+                            ) : (
+                                projects.map((project) => (
+                                    <button
+                                        key={project.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setCurrentProject(project);
+                                            navigate(`/projects/${project.id}?tab=design&section=automations`);
+                                        }}
+                                        className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 text-left shadow-sm transition hover:border-[hsl(var(--primary))]/40"
+                                    >
+                                        <p className="text-base font-semibold text-[hsl(var(--text-primary))]">{project.name}</p>
+                                        <p className="mt-1 text-xs text-[hsl(var(--text-tertiary))]">
+                                            {forms.filter((form) => form.project_id === project.id && form.kind !== 'directory').length} forms
+                                        </p>
+                                        <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))]">
+                                            Open automations
+                                            <ChevronRight className="h-3.5 w-3.5" />
+                                        </span>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'design' && designSection !== 'automations' && (
                     <div className="flex w-full h-[calc(100vh-64px)] overflow-hidden bg-[hsl(var(--background))] select-none">
                         {/* Projects Sidebar */}
                         <div className="w-80 border-r border-[hsl(var(--border))]/70 bg-[hsl(var(--surface))] flex flex-col shrink-0">
@@ -927,14 +1061,14 @@ const Dashboard: React.FC = () => {
                                 >
                                     <span className="truncate">All Projects</span>
                                     <span className="text-[10px] opacity-60">
-                                        {forms.filter(f => formsSubTab === 'directory' ? f.kind === 'directory' : f.kind !== 'directory').length}
+                                        {forms.filter(f => f.kind !== 'directory').length}
                                     </span>
                                 </button>
 
                                 <div className="h-px bg-[hsl(var(--border))]/40 my-2" />
 
                                 {sidebarProjects.map(project => {
-                                    const count = forms.filter(f => f.project_id === project.id && (formsSubTab === 'directory' ? f.kind === 'directory' : f.kind !== 'directory')).length;
+                                    const count = forms.filter(f => f.project_id === project.id && (f.kind !== 'directory')).length;
                                     const isSelected = selectedProjectId === project.id;
                                     return (
                                         <button
@@ -976,41 +1110,15 @@ const Dashboard: React.FC = () => {
                                             projects.find(p => p.id === selectedProjectId)?.name || 'Project forms'
                                         )}
                                         <span className="text-xs font-normal text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 rounded border border-[hsl(var(--border))]/45">
-                                            {filteredForms.length} {formsSubTab === 'directory' ? 'Directory' : 'Standard Forms'}
+                                            {filteredForms.length} Forms
                                         </span>
                                     </h2>
                                 </div>
                             </div>
 
                             {/* Filters Panel */}
-                            <div className="px-8 py-3 border-b border-[hsl(var(--border))]/30 bg-[hsl(var(--surface-elevated))]/10 shrink-0 flex items-center justify-between gap-4">
-                                {/* Left Subtabs */}
-                                <div className="flex border-b border-[hsl(var(--border))]/30 gap-6 text-xs font-semibold select-none pb-px">
-                                    <button
-                                        onClick={() => setFormsSubTab('standard')}
-                                        className={`pb-2.5 transition-all relative ${
-                                            formsSubTab === 'standard'
-                                                ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
-                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
-                                        }`}
-                                    >
-                                        Standard
-                                    </button>
-                                    <button
-                                        onClick={() => setFormsSubTab('directory')}
-                                        className={`pb-2.5 transition-all relative ${
-                                            formsSubTab === 'directory'
-                                                ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
-                                                : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
-                                        }`}
-                                    >
-                                        Directory
-                                    </button>
-                                </div>
-
-                                {/* Right: Form Search, Add, and Layout Select */}
+                            <div className="px-8 py-3 border-b border-[hsl(var(--border))]/30 bg-[hsl(var(--surface-elevated))]/10 shrink-0 flex items-center justify-end gap-4">
                                 <div className="flex items-center gap-4">
-                                    {/* Search forms */}
                                     <div className="relative w-56">
                                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--text-tertiary))]" />
                                         <input
@@ -1022,7 +1130,6 @@ const Dashboard: React.FC = () => {
                                         />
                                     </div>
 
-                                    {/* Add Button */}
                                     <button
                                         onClick={() => handleNewFormClick()}
                                         className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
@@ -1032,10 +1139,9 @@ const Dashboard: React.FC = () => {
                                         }`}
                                     >
                                         <Plus className="w-3.5 h-3.5" />
-                                        <span>Add {formsSubTab === 'directory' ? 'Directory' : 'Standard Form'}</span>
+                                        <span>Add Form</span>
                                     </button>
 
-                                    {/* Grid / List view toggle */}
                                     <div className="flex border border-[hsl(var(--border))] rounded-lg p-0.5 bg-[hsl(var(--surface))] text-xs shrink-0">
                                         <button
                                             onClick={() => setFormsViewMode('grid')}
@@ -1067,7 +1173,7 @@ const Dashboard: React.FC = () => {
                             {isCreatingFormInline && (
                                 <div className="px-8 py-5 border-b border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/20 flex flex-col gap-3 shrink-0 animate-in slide-in-from-top duration-150">
                                     <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">
-                                        Create New {formsSubTab === 'directory' ? 'Directory' : 'Standard Form'}
+                                        Create New Form
                                     </h3>
                                     <form onSubmit={handleInlineCreateSubmit} className="flex flex-col md:flex-row items-end gap-4">
                                         {selectedProjectId === 'all' && (
@@ -1089,13 +1195,13 @@ const Dashboard: React.FC = () => {
 
                                         <div className="flex-1 flex flex-col gap-1 w-full">
                                             <label className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
-                                                {formsSubTab === 'directory' ? 'Directory Title' : 'Standard Form Title'}
+                                                Form Title
                                             </label>
                                             <input
                                                 type="text"
                                                 value={inlineFormTitle}
                                                 onChange={(e) => setInlineFormTitle(e.target.value)}
-                                                placeholder={formsSubTab === 'directory' ? "e.g. Parts Directory" : "e.g. Customer Feedback"}
+                                                placeholder="e.g. Customer Feedback"
                                                 className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg px-3 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:outline-none focus:border-[hsl(var(--primary))]"
                                                 required
                                                 autoFocus
@@ -1103,8 +1209,7 @@ const Dashboard: React.FC = () => {
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
-                                            {formsSubTab !== 'directory' ? (
-                                                <button
+                                            <button
                                                     type="button"
                                                     onClick={() => {
                                                         const projectToUse = selectedProjectId === 'all' ? inlineFormProjectId : selectedProjectId;
@@ -1119,7 +1224,6 @@ const Dashboard: React.FC = () => {
                                                     <Sparkles className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />
                                                     Create with AI
                                                 </button>
-                                            ) : null}
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -1172,7 +1276,7 @@ const Dashboard: React.FC = () => {
                                 {totalFormsPages > 1 && (
                                     <div className="mt-8 pt-4 border-t border-[hsl(var(--border))]/30 flex items-center justify-between text-xs shrink-0 select-none">
                                         <span className="text-[hsl(var(--text-secondary))] font-medium">
-                                            Showing <span className="font-semibold text-[hsl(var(--text-primary))]">{(formsPage - 1) * formsPageSize + 1}</span> to <span className="font-semibold text-[hsl(var(--text-primary))]">{Math.min(formsPage * formsPageSize, filteredForms.length)}</span> of <span className="font-semibold text-[hsl(var(--text-primary))]">{filteredForms.length}</span> {formsSubTab === 'directory' ? 'directory' : 'standard forms'}
+                                            Showing <span className="font-semibold text-[hsl(var(--text-primary))]">{(formsPage - 1) * formsPageSize + 1}</span> to <span className="font-semibold text-[hsl(var(--text-primary))]">{Math.min(formsPage * formsPageSize, filteredForms.length)}</span> of <span className="font-semibold text-[hsl(var(--text-primary))]">{filteredForms.length}</span> forms
                                         </span>
                                         <div className="flex items-center gap-2">
                                             <button
@@ -1201,211 +1305,27 @@ const Dashboard: React.FC = () => {
                 )}
 
                 {activeTab === 'projects' && (
-                    <div className="space-y-8">
-                        <div className="flex justify-between items-end">
-                            <div>
-                                <h2 className="text-3xl font-bold mb-2">Projects</h2>
-                                <p className="text-[hsl(var(--text-secondary))]">Open a project workspace to manage its forms, teams, tasks, and reporting in one place.</p>
-                            </div>
-                            <button
-                                onClick={() => setShowCreateProject(true)}
-                                className="flex items-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-6 py-3 rounded-md shadow-lg shadow-black/10 transition-all"
-                            >
-                                <Plus className="w-5 h-5" />
-                                <span>Create Project</span>
-                            </button>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (projects[0]) openProjectHub(projects[0]);
-                                else alert('Create a project first to open ProjectHub.');
-                            }}
-                            className="w-full text-left rounded-2xl border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/8 px-5 py-4 hover:bg-[hsl(var(--primary))]/12 transition-colors"
-                        >
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <p className="text-sm font-bold text-[hsl(var(--text-primary))]">
-                                        ProjectHub — Command Centre
-                                    </p>
-                                    <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">
-                                        Opens `/projects/:id/hub` for your first project (Phase 1 live wiring).
-                                    </p>
-                                </div>
-                                <span className="inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))]">
-                                    Open ProjectHub
-                                    <ChevronRight className="w-4 h-4" />
-                                </span>
-                            </div>
-                        </button>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {projects.map(project => (
-                                <div
-                                    key={project.id}
-                                    onClick={() => openProjectWorkspace(project)}
-                                    className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-md overflow-hidden hover:border-[hsl(var(--border-hover))] transition-all shadow-sm flex flex-col cursor-pointer"
-                                >
-                                    <div className="p-8 flex-1 flex flex-col">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <h3 className="text-xl font-bold">{project.name}</h3>
-                                            <div
-                                                className="p-2 bg-[hsl(var(--surface-elevated))] rounded-md"
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    openProjectWorkspace(project);
-                                                }}
-                                            >
-                                                <Settings className="w-4 h-4 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))] cursor-pointer" />
-                                            </div>
-                                        </div>
-                                        <p className="text-[hsl(var(--text-secondary))] text-sm mb-6 line-clamp-2">{project.description || 'No description provided.'}</p>
-
-                                        {forms.filter(form => form.project_id === project.id).length > 0 && (
-                                            <div className="space-y-3 mb-6">
-                                                {forms.filter(form => form.project_id === project.id).map(form => (
-                                                    <div
-                                                        key={form.id}
-                                                        onClick={() => navigate(`/forms/${form.id}`)}
-                                                        className="flex items-center justify-between p-3 bg-[hsl(var(--background))] border border-[hsl(var(--border))] rounded-md hover:border-[hsl(var(--primary))] transition-all cursor-pointer group"
-                                                    >
-                                                        <div className="flex items-center space-x-3 overflow-hidden">
-                                                            <div className="p-2 bg-[hsl(var(--primary))]/10 rounded-md">
-                                                                <FileText className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                                            </div>
-                                                            <span className="text-sm font-semibold truncate">{form.title}</span>
-                                                        </div>
-                                                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                            <button
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    navigate(`/simulator/${form.id}`);
-                                                                }}
-                                                                className="p-1.5 hover:bg-[hsl(var(--surface-elevated))] rounded-lg text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors"
-                                                                title="Simulator"
-                                                            >
-                                                                <Play className="w-4 h-4 fill-current" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        <div className="mt-auto space-y-2">
-                                            <button
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    openProjectHub(project);
-                                                }}
-                                                className="w-full flex items-center justify-center space-x-2 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary-hover))] text-white font-semibold px-4 py-2.5 rounded-md transition-all text-sm"
-                                            >
-                                                <span>Open ProjectHub</span>
-                                            </button>
-                                            <button
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    handleCreateForm(project.id);
-                                                }}
-                                                className="w-full bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))] font-semibold py-3 rounded-md border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 transition-all flex items-center justify-center space-x-2"
-                                            >
-                                                <PlusCircle className="w-4 h-4" />
-                                                <span>New Form</span>
-                                            </button>
-                                            <button
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    navigate(`/projects/${project.id}/ai-survey`);
-                                                }}
-                                                className="w-full bg-[hsl(var(--surface-elevated))] hover:bg-[hsl(var(--primary))]/10 text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))] font-semibold py-2.5 rounded-md border border-[hsl(var(--border))] hover:border-[hsl(var(--primary))]/30 transition-all flex items-center justify-center space-x-2 text-sm"
-                                            >
-                                                <Sparkles className="w-4 h-4 text-[hsl(var(--primary))]" />
-                                                <span>Create with AI</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="bg-[hsl(var(--surface-elevated))] px-8 py-4 border-t border-[hsl(var(--border))] flex justify-between text-xs text-[hsl(var(--text-tertiary))]">
-                                        <span>{forms.filter(form => form.project_id === project.id).length} Forms</span>
-                                        <span>Created {new Date(project.created_at).toLocaleDateString()}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <ProjectsPortfolio
+                        projects={projects}
+                        forms={forms}
+                        datasetSources={datasetSources}
+                        tasks={tasks}
+                        teamCount={teams.length}
+                        onCreateProject={() => setShowCreateProject(true)}
+                        onOpenHub={openProjectHub}
+                        onOpenWorkspace={openProjectWorkspace}
+                    />
                 )}
 
-                {activeTab === 'ops' && (
+                {activeTab === 'tasks' && (
                     <div className="space-y-6">
-                        <div className="flex flex-wrap items-end justify-between gap-4">
-                            <div>
-                                <h2 className="text-3xl font-bold mb-2">Ops</h2>
-                                <p className="text-[hsl(var(--text-secondary))]">
-                                    Cross-project tasks and a jump into each project’s review queue.
-                                </p>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {(
-                                    [
-                                        { id: 'tasks' as const, label: 'Tasks', count: tasks.length },
-                                        { id: 'review' as const, label: 'Review Queue', count: projects.length },
-                                    ] as const
-                                ).map((item) => (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        onClick={() => setOpsView(item.id)}
-                                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                                            opsView === item.id
-                                                ? 'bg-[hsl(var(--primary))] text-white'
-                                                : 'bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))] hover:text-[hsl(var(--text-primary))]'
-                                        }`}
-                                    >
-                                        {item.label}
-                                        <span className="tabular-nums opacity-80">{item.count}</span>
-                                    </button>
-                                ))}
-                            </div>
+                        <div>
+                            <h2 className="text-3xl font-bold mb-2">Tasks</h2>
+                            <p className="text-[hsl(var(--text-secondary))]">
+                                Cross-project task overview. Create tasks here, then manage execution from each project workspace.
+                            </p>
                         </div>
-
-                        {opsView === 'review' ? (
-                            <div className="space-y-4">
-                                <p className="text-sm text-[hsl(var(--text-secondary))]">
-                                    Submission review is project-scoped. Open a project’s Ops → Review Queue.
-                                </p>
-                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                    {projects.length === 0 ? (
-                                        <div className="col-span-full rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
-                                            No projects yet.
-                                        </div>
-                                    ) : (
-                                        projects.map((project) => (
-                                            <button
-                                                key={project.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    setCurrentProject(project);
-                                                    navigate(`/projects/${project.id}?tab=ops&view=review`);
-                                                }}
-                                                className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 text-left shadow-sm transition hover:border-[hsl(var(--primary))]/40"
-                                            >
-                                                <p className="text-base font-semibold text-[hsl(var(--text-primary))]">
-                                                    {project.name}
-                                                </p>
-                                                <p className="mt-1 text-xs text-[hsl(var(--text-tertiary))]">
-                                                    Open review queue
-                                                </p>
-                                                <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))]">
-                                                    Go to Ops
-                                                    <ChevronRight className="h-3.5 w-3.5" />
-                                                </span>
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        ) : (
-                    <div className="space-y-8">
+                        <div className="space-y-8">
                         <div className="flex justify-between items-end gap-6">
                             <div>
                                 <h3 className="text-xl font-semibold mb-1">Tasks</h3>
@@ -1574,15 +1494,39 @@ const Dashboard: React.FC = () => {
                             ))}
                         </div>
                     </div>
-                        )}
                     </div>
+                )}
+
+                {activeTab === 'inbox' && currentOrg && (
+                    <InboxHub
+                        projects={inboxProjects}
+                        loading={inboxLoading}
+                        totals={inboxTotals}
+                        attentionItems={attentionItems}
+                        onOpenAttendance={(projectId) => {
+                            const project = projects.find((row) => row.id === projectId);
+                            if (project) setCurrentProject(project);
+                            navigate(`/projects/${projectId}?tab=ops&section=attendance`);
+                        }}
+                        onOpenReview={(projectId) => {
+                            const project = projects.find((row) => row.id === projectId);
+                            if (project) setCurrentProject(project);
+                            navigate(`/projects/${projectId}?tab=ops&section=review`);
+                        }}
+                        onOpenProject={(projectId) => {
+                            const project = projects.find((row) => row.id === projectId);
+                            if (project) setCurrentProject(project);
+                            navigate(`/projects/${projectId}/hub`);
+                        }}
+                        onOpenProjects={() => navigateDashboardTab('projects')}
+                    />
                 )}
 
                 {activeTab === 'members' && currentOrg && (
                     <div className="space-y-8">
                         <div className="flex items-center gap-4 border-b border-[hsl(var(--border))] pb-4">
                             <button
-                                onClick={() => setMembersSubTab('members')}
+                                onClick={() => navigateDashboardTab('members', { section: 'members' })}
                                 className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${membersSubTab === 'members'
                                     ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
                                     : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
@@ -1591,7 +1535,7 @@ const Dashboard: React.FC = () => {
                                 Members
                             </button>
                             <button
-                                onClick={() => setMembersSubTab('teams')}
+                                onClick={() => navigateDashboardTab('members', { section: 'teams' })}
                                 className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${membersSubTab === 'teams'
                                     ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
                                     : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
@@ -1600,7 +1544,7 @@ const Dashboard: React.FC = () => {
                                 Teams
                             </button>
                             <button
-                                onClick={() => setMembersSubTab('roles')}
+                                onClick={() => navigateDashboardTab('members', { section: 'roles' })}
                                 className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${membersSubTab === 'roles'
                                     ? 'bg-[hsl(var(--primary))] text-white shadow-lg'
                                     : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'
@@ -1751,126 +1695,22 @@ const Dashboard: React.FC = () => {
                 )}
 
 
-                {activeTab === 'reports' && (
-                    <div className="space-y-8">
-                        <div className="flex justify-between items-end gap-6">
-                            <div>
-                                <h2 className="text-3xl font-bold mb-2">Reports</h2>
-                                <p className="text-[hsl(var(--text-secondary))]">Curated narrative outputs that package analytics, media, and operational context for review, sharing, and decisions.</p>
-                            </div>
-                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
-                                {reports.length} saved across {projects.length} projects
-                            </div>
-                        </div>
-
-                        <form onSubmit={handleCreateReport} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
-                            <div className="flex items-center justify-between gap-4">
-                                <div>
-                                    <h3 className="text-xl font-semibold">Create Report</h3>
-                                    <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Choose the project, create the report, then continue into the narrative canvas for linked artifacts, mentions, and publishing.</p>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div>
-                                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Project</label>
-                                    <select
-                                        value={reportProjectId}
-                                        onChange={(event) => setReportProjectId(event.target.value)}
-                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
-                                    >
-                                        {projects.map(project => (
-                                            <option key={project.id} value={project.id}>{project.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Title</label>
-                                    <input
-                                        value={reportTitle}
-                                        onChange={(event) => setReportTitle(event.target.value)}
-                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
-                                        placeholder="Weekly field readout"
-                                    />
-                                </div>
-
-                                <div className="md:col-span-2">
-                                    <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Description</label>
-                                    <textarea
-                                        value={reportDescription}
-                                        onChange={(event) => setReportDescription(event.target.value)}
-                                        className="min-h-[96px] w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm"
-                                        placeholder="What this report is meant to summarize and who it serves."
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mt-5 flex justify-end">
-                                <button
-                                    type="submit"
-                                    disabled={savingReport || !reportProjectId || !reportTitle.trim()}
-                                    className="inline-flex items-center gap-2 rounded-md bg-[hsl(var(--primary))] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/10 transition-all hover:bg-[hsl(var(--primary-hover))] disabled:opacity-60"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                    {savingReport ? 'Creating...' : 'Create Report'}
-                                </button>
-                            </div>
-                        </form>
-
-                        <div className="space-y-4">
-                            {reports.length === 0 ? (
-                                <div className="rounded-md border-2 border-dashed border-[hsl(var(--border))] p-12 text-center text-[hsl(var(--text-tertiary))]">
-                                    <FileBarChart2 className="mx-auto mb-4 h-12 w-12 opacity-20" />
-                                    <p>No reports found yet. Create the first one from this Reports section.</p>
-                                </div>
-                            ) : reports.map(report => (
-                                <div key={report.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
-                                    <div className="flex flex-wrap items-start justify-between gap-4">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-3">
-                                                <h3 className="text-lg font-semibold">{report.title}</h3>
-                                                <span className="inline-flex rounded-full bg-[hsl(var(--surface-elevated))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]">
-                                                    {report.status}
-                                                </span>
-                                                <span className="inline-flex rounded-full bg-[hsl(var(--surface-elevated))] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]">
-                                                    {report.project_name}
-                                                </span>
-                                            </div>
-                                            {report.description ? (
-                                                <p className="mt-2 text-sm text-[hsl(var(--text-secondary))]">{report.description}</p>
-                                            ) : null}
-                                            <div className="mt-3 flex flex-wrap gap-4 text-xs text-[hsl(var(--text-tertiary))]">
-                                                <span>Updated: {new Date(report.updated_at).toLocaleString()}</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-3">
-                                            <button
-                                                onClick={() => {
-                                                    const project = projects.find(item => item.id === report.project_id);
-                                                    if (project) {
-                                                        setCurrentProject(project);
-                                                    }
-                                                    navigate(`/projects/${report.project_id}`);
-                                                }}
-                                                className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
-                                            >
-                                                Open Project
-                                            </button>
-                                            <button
-                                                onClick={() => navigate(`/projects/${report.project_id}/reports/${report.id}`)}
-                                                className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
-                                            >
-                                                Open Report
-                                                <ChevronRight className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                {activeTab === 'reports' && currentOrg && (
+                    <ReportsPortfolio
+                        orgId={currentOrg.id}
+                        projects={projects.map((project) => ({ id: project.id, name: project.name }))}
+                        teams={teams}
+                        legacyReports={reports.map((report) => ({
+                            id: report.id,
+                            project_id: report.project_id,
+                            project_name: report.project_name,
+                            title: report.title,
+                            description: report.description,
+                            status: report.status,
+                            updated_at: report.updated_at,
+                        }))}
+                        onOpenBucket={(bucketId) => navigate(`/reports/${bucketId}`)}
+                    />
                 )}
 
                 {activeTab === 'settings' && (

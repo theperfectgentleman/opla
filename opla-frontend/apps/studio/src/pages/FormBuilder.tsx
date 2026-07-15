@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formAPI, projectAPI, sectionTemplateAPI } from '../lib/api';
+import { projectNavHref, projectShellNavHref } from '../lib/vocabulary';
 import { useOrg } from '../contexts/OrgContext';
 import StudioLayout from '../components/StudioLayout';
 import {
@@ -2696,8 +2697,13 @@ const FormBuilder: React.FC = () => {
         }
     };
 
-    const handleShellNavSelect = (key: 'projects' | 'ops' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
-        navigate(`/dashboard?tab=${key}`);
+    const handleShellNavSelect = (key: string) => {
+        const projectId = formMeta?.project_id;
+        if (projectId) {
+            navigate(projectShellNavHref(projectId, key));
+            return;
+        }
+        navigate('/dashboard?tab=projects');
     };
 
     // @ts-ignore — Will be wired to console actions
@@ -3185,8 +3191,18 @@ const FormBuilder: React.FC = () => {
 
     return (
         <StudioLayout
-            activeNav="forms"
+            navMode={formMeta?.project_id ? 'project' : 'org'}
+            activeNav={formMeta?.project_id ? 'design' : 'projects'}
             onSelectNav={handleShellNavSelect}
+            onBackToProjects={() => navigate('/dashboard?tab=projects')}
+            activeDesignSection={formMeta?.project_id ? 'forms' : null}
+            onSelectDesignSection={formMeta?.project_id ? ((section) => navigate(projectNavHref(formMeta.project_id, 'design', { section }))) : undefined}
+            onSelectOpsSection={formMeta?.project_id ? ((section) => {
+                if (section === 'attendance' || section === 'review') {
+                    navigate(projectNavHref(formMeta.project_id, 'ops', { section }));
+                }
+            }) : undefined}
+            onSelectDataSection={formMeta?.project_id ? ((section) => navigate(projectNavHref(formMeta.project_id, 'data', { section }))) : undefined}
             contentClassName="flex-1 overflow-hidden"
             alignRightRail
         >

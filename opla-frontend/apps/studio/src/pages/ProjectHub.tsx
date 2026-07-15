@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
+import { projectNavHref, projectShellNavHref } from '../lib/vocabulary';
 import NeedsAttentionRail, { type AttentionItem } from '../components/hub/NeedsAttentionRail';
 import SubmissionMediaGrid, {
     RecentMediaHeaderIcon,
@@ -397,7 +398,7 @@ const ProjectHub: React.FC = () => {
                     : dataset.updated_at
                       ? `Updated ${new Date(dataset.updated_at).toLocaleDateString()}`
                       : undefined,
-            onLaunch: () => navigate('/dashboard?tab=data&section=datasets'),
+            onLaunch: () => navigate(`/projects/${projectId}?tab=data&section=datasets`),
         }));
         const all = [...formCards, ...directoryCards, ...datasetCards];
         if (workspaceFilter === 'all') return all;
@@ -492,13 +493,27 @@ const ProjectHub: React.FC = () => {
 
     return (
         <StudioLayout
-            activeNav="projects"
+            navMode="project"
+            activeNav="hub"
             onSelectNav={(key) => {
-                if (key === 'ops' && projectId) {
-                    navigate(`/projects/${projectId}?tab=tasks`);
-                    return;
+                if (!projectId) return;
+                navigate(projectShellNavHref(projectId, key));
+            }}
+            onBackToProjects={() => navigate('/dashboard?tab=projects')}
+            activeOpsSection={null}
+            onSelectOpsSection={(section) => {
+                if (!projectId) return;
+                if (section === 'attendance' || section === 'review') {
+                    navigate(projectNavHref(projectId, 'ops', { section }));
                 }
-                navigate(`/dashboard?tab=${key}`);
+            }}
+            onSelectDesignSection={(section) => {
+                if (!projectId) return;
+                navigate(projectNavHref(projectId, 'design', { section }));
+            }}
+            onSelectDataSection={(section) => {
+                if (!projectId) return;
+                navigate(projectNavHref(projectId, 'data', { section }));
             }}
             contentClassName="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[hsl(var(--background))]"
         >

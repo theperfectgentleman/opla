@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import StudioLayout from '../components/StudioLayout';
+import { projectNavHref, projectShellNavHref } from '../lib/vocabulary';
 import SubmissionMediaGrid, { type SubmissionMediaItem } from '../components/hub/SubmissionMediaGrid';
 import { useOrg } from '../contexts/OrgContext';
 import { formAPI } from '../lib/api';
@@ -104,10 +105,28 @@ const FormHome: React.FC = () => {
 
     const submissionCount = stats?.submission_count ?? null;
 
+    const projectId = form?.project_id as string | undefined;
+
     return (
         <StudioLayout
-            activeNav="forms"
-            onSelectNav={(key) => navigate(`/dashboard?tab=${key}`)}
+            navMode={projectId ? 'project' : 'org'}
+            activeNav={projectId ? 'design' : 'projects'}
+            onSelectNav={(key) => {
+                if (projectId) {
+                    navigate(projectShellNavHref(projectId, key));
+                    return;
+                }
+                navigate('/dashboard?tab=projects');
+            }}
+            onBackToProjects={() => navigate('/dashboard?tab=projects')}
+            activeDesignSection={projectId ? 'forms' : null}
+            onSelectDesignSection={projectId ? ((section) => navigate(projectNavHref(projectId, 'design', { section }))) : undefined}
+            onSelectOpsSection={projectId ? ((section) => {
+                if (section === 'attendance' || section === 'review') {
+                    navigate(projectNavHref(projectId, 'ops', { section }));
+                }
+            }) : undefined}
+            onSelectDataSection={projectId ? ((section) => navigate(projectNavHref(projectId, 'data', { section }))) : undefined}
             contentClassName="flex-1 overflow-y-auto bg-[hsl(var(--background))]"
         >
             <div className="relative min-h-full">
@@ -132,7 +151,7 @@ const FormHome: React.FC = () => {
                                 <nav className="flex flex-wrap items-center gap-2 text-xs font-medium text-[hsl(var(--text-tertiary))]">
                                     <button
                                         type="button"
-                                        onClick={() => navigate('/dashboard?tab=design')}
+                                        onClick={() => navigate(projectId ? projectNavHref(projectId, 'design', { section: 'forms' }) : '/dashboard?tab=projects')}
                                         className="hover:text-[hsl(var(--text-secondary))]"
                                     >
                                         All Forms
@@ -227,7 +246,7 @@ const FormHome: React.FC = () => {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => navigate('/dashboard?tab=datasets')}
+                                            onClick={() => navigate(projectId ? projectNavHref(projectId, 'data', { section: 'datasets' }) : '/dashboard?tab=projects')}
                                             className="inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3.5 py-2.5 text-sm font-semibold text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))]"
                                         >
                                             <Database className="h-4 w-4" />

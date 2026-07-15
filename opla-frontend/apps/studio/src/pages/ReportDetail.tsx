@@ -7,6 +7,7 @@ import StudioLayout from '../components/StudioLayout';
 import { useOrg } from '../contexts/OrgContext';
 import { useToast } from '../contexts/ToastContext';
 import { reportAPI, teamAPI } from '../lib/api';
+import { projectShellNavHref } from '../lib/vocabulary';
 
 type ReportArtifact = {
     id: string;
@@ -148,10 +149,6 @@ const ReportDetail: React.FC = () => {
     }, [members, projectReports, report?.id, teams]);
 
     const isDirty = Boolean(report) && editorSnapshot !== persistedEditorSnapshot;
-
-    const handleShellNavSelect = (key: 'projects' | 'ops' | 'forms' | 'datasets' | 'members' | 'audience' | 'analysis' | 'threads' | 'assets' | 'reports' | 'settings') => {
-        navigate(`/dashboard?tab=${key}`);
-    };
 
     const getAccessorValue = (accessorId?: string | null, accessorType?: 'user' | 'team' | null) => {
         if (!accessorId || !accessorType) return '';
@@ -297,8 +294,17 @@ const ReportDetail: React.FC = () => {
 
     return (
         <StudioLayout
+            navMode="org"
             activeNav="reports"
-            onSelectNav={handleShellNavSelect}
+            onSelectNav={(key) => {
+                if (key === 'reports') {
+                    navigate('/dashboard?tab=reports');
+                    return;
+                }
+                navigate(projectShellNavHref(projectId || '', key));
+            }}
+            onOpenInbox={() => navigate('/dashboard?tab=inbox')}
+            onBackToProjects={() => navigate('/dashboard?tab=projects')}
             counts={{ projects: projects.length, members: members?.length || 0 }}
             contentClassName="flex-1 overflow-y-auto p-10"
         >

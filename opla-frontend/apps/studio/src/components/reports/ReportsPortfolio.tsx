@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, FileBarChart2, Plus, Users } from 'lucide-react';
 import {
     createReportBucket,
+    ensureDemoReportBucket,
     listReportBuckets,
     REPORT_GRANT_ROLE_LABELS,
     type ReportBucket,
@@ -45,6 +46,14 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
     const [grantTeamId, setGrantTeamId] = useState('');
     const [grantRole, setGrantRole] = useState<ReportGrantRole>('viewer');
     const [pendingGrants, setPendingGrants] = useState<ReportTeamGrant[]>([]);
+
+    useEffect(() => {
+        ensureDemoReportBucket(
+            orgId,
+            projects.map((p) => p.id),
+        );
+        setTick((n) => n + 1);
+    }, [orgId]);
 
     const buckets = useMemo(() => {
         void tick;
@@ -230,20 +239,14 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
             ) : null}
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {buckets.length === 0 ? (
-                    <div className="col-span-full rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-10 text-center text-sm text-[hsl(var(--text-secondary))]">
-                        No report boards yet. Create one to pull seniors into a read-only window on the work.
-                    </div>
-                ) : (
-                    buckets.map((bucket) => (
-                        <BucketCard
-                            key={bucket.id}
-                            bucket={bucket}
-                            projectName={projectName}
-                            onOpen={() => onOpenBucket(bucket.id)}
-                        />
-                    ))
-                )}
+                {buckets.map((bucket) => (
+                    <BucketCard
+                        key={bucket.id}
+                        bucket={bucket}
+                        projectName={projectName}
+                        onOpen={() => onOpenBucket(bucket.id)}
+                    />
+                ))}
             </div>
 
             {legacyReports.length > 0 ? (
@@ -296,7 +299,7 @@ function BucketCard({
                     : 'No grants yet'}
             </p>
             <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--primary))]">
-                Open board
+                Open canvas
                 <ChevronRight className="h-3.5 w-3.5" />
             </span>
         </button>

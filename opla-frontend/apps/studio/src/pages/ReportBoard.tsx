@@ -3,12 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft,
     BarChart3,
-    Eye,
+    LayoutDashboard,
     MessageSquare,
     Plus,
     Users,
 } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
+import ReportCanvasMock from '../components/reports/ReportCanvasMock';
 import { useOrg } from '../contexts/OrgContext';
 import { teamAPI } from '../lib/api';
 import {
@@ -25,6 +26,7 @@ const MOCK_ANALYTICS = [
     { id: 'cov', title: 'Coverage this week', value: '78%', hint: 'Curated view — explore only' },
     { id: 'rev', title: 'Pending review (sources)', value: '14', hint: 'Read-only snapshot' },
     { id: 'att', title: 'Checked in today', value: '42', hint: 'Across linked programmes' },
+    { id: 'vel', title: 'Submission velocity', value: '186', hint: 'Period total (mock)' },
 ];
 
 const ReportBoard: React.FC = () => {
@@ -36,7 +38,7 @@ const ReportBoard: React.FC = () => {
     const [comment, setComment] = useState('');
     const [grantTeamId, setGrantTeamId] = useState('');
     const [grantRole, setGrantRole] = useState<ReportGrantRole>('commenter');
-    const [activePanel, setActivePanel] = useState<'overview' | 'comments' | 'explore' | 'access'>('overview');
+    const [activePanel, setActivePanel] = useState<'canvas' | 'comments' | 'explore' | 'access'>('canvas');
 
     const reload = () => {
         if (!currentOrg || !reportId) return;
@@ -130,7 +132,7 @@ const ReportBoard: React.FC = () => {
                     </button>
                 </div>
             ) : (
-                <div className="mx-auto max-w-6xl space-y-6">
+                <div className="mx-auto max-w-7xl space-y-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <button
@@ -162,7 +164,7 @@ const ReportBoard: React.FC = () => {
 
                     <div className="flex flex-wrap gap-2 border-b border-[hsl(var(--border))] pb-2">
                         {([
-                            { key: 'overview', label: 'Overview', icon: Eye },
+                            { key: 'canvas', label: 'Canvas', icon: LayoutDashboard },
                             { key: 'comments', label: 'Comments', icon: MessageSquare },
                             { key: 'explore', label: 'Explore', icon: BarChart3 },
                             { key: 'access', label: 'Team access', icon: Users },
@@ -187,34 +189,15 @@ const ReportBoard: React.FC = () => {
                         })}
                     </div>
 
-                    {activePanel === 'overview' ? (
-                        <div className="grid gap-4 lg:grid-cols-3">
-                            <section className="lg:col-span-2 space-y-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5">
-                                <h2 className="text-sm font-semibold">Narrative (mock)</h2>
-                                <p className="text-sm leading-relaxed text-[hsl(var(--text-secondary))]">
-                                    This board aggregates the linked programmes for senior review. Operators continue
-                                    capture, attendance, and review inside each Project. You can leave questions in
-                                    Comments and explore curated analytics without changing field configuration.
-                                </p>
-                                <div className="rounded-lg border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--background))] p-6 text-center text-xs text-[hsl(var(--text-tertiary))]">
-                                    Canvas / published blocks will appear here. Legacy project reports can be linked later.
-                                </div>
-                            </section>
-                            <aside className="space-y-3">
-                                {MOCK_ANALYTICS.map((card) => (
-                                    <div
-                                        key={card.id}
-                                        className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3"
-                                    >
-                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                            {card.title}
-                                        </p>
-                                        <p className="mt-1 text-2xl font-bold tabular-nums">{card.value}</p>
-                                        <p className="text-xs text-[hsl(var(--text-tertiary))]">{card.hint}</p>
-                                    </div>
-                                ))}
-                            </aside>
-                        </div>
+                    {activePanel === 'canvas' ? (
+                        <ReportCanvasMock
+                            boardTitle={bucket.title}
+                            sourceLabels={sourceNames}
+                            comments={bucket.comments}
+                            commentDraft={comment}
+                            onCommentDraftChange={setComment}
+                            onPostComment={postComment}
+                        />
                     ) : null}
 
                     {activePanel === 'comments' ? (

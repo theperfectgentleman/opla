@@ -130,6 +130,43 @@ export function deleteReportBucket(orgId: string, bucketId: string): boolean {
     return true;
 }
 
+/** Seed one mock board so the canvas is reachable without a create flow. */
+export function ensureDemoReportBucket(
+    orgId: string,
+    sourceProjectIds: string[] = [],
+): ReportBucket {
+    const existing = readAll(orgId);
+    if (existing.length > 0) return existing[0];
+    const now = new Date().toISOString();
+    const bucket: ReportBucket = {
+        id: `rb_demo_${orgId.slice(0, 8)}`,
+        orgId,
+        title: 'Demo programme board',
+        description: 'Mock stakeholder canvas — open to explore widgets we will wire later.',
+        status: 'published',
+        sourceProjectIds: sourceProjectIds.slice(0, 2),
+        teamGrants: [],
+        comments: [
+            {
+                id: `c_demo_${orgId.slice(0, 8)}`,
+                author: 'Programme lead',
+                body: 'Zone B check-ins dipped this week — can we get a note from Ops before Friday?',
+                createdAt: now,
+            },
+            {
+                id: `c_demo2_${orgId.slice(0, 8)}`,
+                author: 'You',
+                body: 'Welcome — this is the report canvas seniors will use to watch and steer.',
+                createdAt: now,
+            },
+        ],
+        updatedAt: now,
+        createdAt: now,
+    };
+    writeAll(orgId, [bucket]);
+    return bucket;
+}
+
 export function ensureLegacyReportBucket(
     orgId: string,
     legacy: {

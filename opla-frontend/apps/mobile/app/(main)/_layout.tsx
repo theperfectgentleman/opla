@@ -12,7 +12,7 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
 
   const currentRouteName = state.routes[state.index].name;
-  const isFeed = currentRouteName === '(yard)' || currentRouteName === '(desk)';
+  const isFeed = currentRouteName === '(pulse)' || currentRouteName === '(agent)';
   const isProfile = currentRouteName === 'profile';
 
   return (
@@ -35,8 +35,8 @@ function CustomTabBar({ state, navigation }: any) {
 
       <TouchableOpacity
         onPress={() => {
-          if (mode === 'pulse') navigation.navigate('(yard)');
-          else navigation.navigate('(desk)');
+          if (mode === 'pulse') navigation.navigate('(pulse)');
+          else navigation.navigate('(agent)');
         }}
         activeOpacity={0.7}
         style={{ alignItems: 'center', gap: 4 }}
@@ -61,11 +61,11 @@ function CustomTabBar({ state, navigation }: any) {
               router.push('/(auth)/login');
             } else {
               setMode('pro');
-              navigation.navigate('(desk)');
+              navigation.navigate('(agent)');
             }
           } else {
             setMode('pulse');
-            navigation.navigate('(yard)');
+            navigation.navigate('(pulse)');
           }
         }}
         style={[{
@@ -109,8 +109,8 @@ export default function MainLayout() {
       screenOptions={{ headerShown: false }}
       tabBar={props => <CustomTabBar {...props} />}
     >
-      <Tabs.Screen name="(yard)" />
-      <Tabs.Screen name="(desk)" />
+      <Tabs.Screen name="(pulse)" />
+      <Tabs.Screen name="(agent)" />
       <Tabs.Screen name="profile" />
       <Tabs.Screen name="join-team" options={{ href: null }} />
     </Tabs>

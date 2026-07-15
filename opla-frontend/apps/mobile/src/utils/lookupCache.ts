@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FormBlueprint, FormField } from '@opla/types';
 
-import { deskFormAPI, publicFormAPI } from '../../services/api';
+import { agentFormAPI, publicFormAPI } from '../../services/api';
 
 export type LookupContext = {
-  mode: 'public' | 'desk';
+  mode: 'public' | 'agent';
   formId?: string;
   slug?: string;
 };
@@ -204,8 +204,8 @@ export async function loadLookupOptions(
     value_field: field.lookup_dataset_value_field,
     limit: 250,
   };
-  const response = context.mode === 'desk' && context.formId
-    ? await deskFormAPI.lookupOptions(context.formId, field.lookup_dataset_id, params)
+  const response = context.mode === 'agent' && context.formId
+    ? await agentFormAPI.lookupOptions(context.formId, field.lookup_dataset_id, params)
     : await publicFormAPI.lookupOptions(context.slug || '', field.lookup_dataset_id, params);
 
   const options = Array.isArray(response?.options)

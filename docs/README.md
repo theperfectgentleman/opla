@@ -55,6 +55,14 @@ Read in this order to understand the project:
    - **Process:** Clarify → Build in ProjectHub → Wire APIs → Close; cut over to live project page when complete
    - **Use:** Before starting each phase, answer that phase’s clarifying questions in the doc
 
+10. **`PRODUCT_VOCABULARY.md`** 📐 PRODUCT NOUNS
+   - **Purpose:** Locked hierarchy and naming (Organisation, Project, Tasks, Design, Ops, Data, etc.)
+   - **Use:** UI copy, nav design, and positioning — before renaming routes or tabs
+
+11. **`VOCABULARY_MIGRATION_PLAN.md`** 🗺️ NAV & RENAME ROADMAP
+   - **Purpose:** Phased plan to rearrange Studio/mobile nav, copy, API aliases, and optional DB migrations
+   - **Use:** Before starting vocabulary implementation work
+
 ---
 
 ## **📂 Document Quick Reference**
@@ -72,6 +80,8 @@ Read in this order to understand the project:
 | `Backend-Studio Development Roadmap.md` | Dev Plan | **You're actively developing the backend or studio** |
 | `DEVELOPMENT_CHECKLIST.md` | Tracker | You want to track progress or plan next session |
 | `Project-Command-Centre-Phases.md` | Hub Roadmap | **You're building the project command centre / ProjectHub** |
+| `PRODUCT_VOCABULARY.md` | Product nouns | **You need canonical names for nav, copy, or positioning** |
+| `VOCABULARY_MIGRATION_PLAN.md` | Migration plan | **You're implementing nav/copy/DB vocabulary changes** |
 
 ---
 

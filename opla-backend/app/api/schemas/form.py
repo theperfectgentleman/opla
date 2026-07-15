@@ -59,9 +59,9 @@ class FormOut(FormBase):
     assigned_accessor_type: Optional[AccessorType] = None
     guest_accessor_id: Optional[UUID] = None
     guest_accessor_type: Optional[AccessorType] = None
-    # Catalog-specific designations
-    catalog_key_field_id: Optional[str] = None
-    catalog_label_field_id: Optional[str] = None
+    # Directory-specific designations
+    directory_key_field_id: Optional[str] = None
+    directory_label_field_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -122,45 +122,45 @@ class FormVersionsListOut(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Catalog-specific schemas
+# Directory-specific schemas
 # ---------------------------------------------------------------------------
 
-class CatalogDesignationIn(BaseModel):
-    """PATCH body for setting key/label field designations on a catalog form."""
-    catalog_key_field_id: Optional[str] = None
-    catalog_label_field_id: Optional[str] = None
+class DirectoryDesignationIn(BaseModel):
+    """PATCH body for setting key/label field designations on a directory form."""
+    directory_key_field_id: Optional[str] = None
+    directory_label_field_id: Optional[str] = None
 
 
-class CatalogEntryUpsertIn(BaseModel):
-    """Body for creating or updating a catalog entry."""
+class DirectoryEntryUpsertIn(BaseModel):
+    """Body for creating or updating a directory entry."""
     data: Dict[str, Any]
 
 
-class CatalogEntryOut(BaseModel):
-    """Resolved catalog entry (latest submission per key value)."""
+class DirectoryEntryOut(BaseModel):
+    """Resolved directory entry (latest submission per key value)."""
     submission_id: str
     key_value: Optional[str] = None
     label_value: Optional[str] = None
     data: Dict[str, Any]
-    catalog_is_active: bool
+    directory_is_active: bool
     created_at: Optional[str] = None
 
 
-class CatalogEntryDeleteOut(BaseModel):
+class DirectoryEntryDeleteOut(BaseModel):
     deleted_count: int
     key_value: Optional[str] = None
 
 
-class CatalogLookupSourceOut(BaseModel):
-    """Published catalog form available as a lookup source within the same project."""
+class DirectoryLookupSourceOut(BaseModel):
+    """Published directory form available as a lookup source within the same project."""
     id: str
     title: str
-    catalog_key_field_id: str
-    catalog_label_field_id: str
+    directory_key_field_id: str
+    directory_label_field_id: str
     fields: List[Dict[str, str]] = []
 
 
-class CatalogLookupOptionOut(BaseModel):
+class DirectoryLookupOptionOut(BaseModel):
     label: str
     value: str
     submission_id: str
@@ -168,14 +168,14 @@ class CatalogLookupOptionOut(BaseModel):
     data: Dict[str, Any] = {}
 
 
-class CatalogLookupOptionsOut(BaseModel):
-    catalog_form_id: str
-    catalog_form_title: str
+class DirectoryLookupOptionsOut(BaseModel):
+    directory_form_id: str
+    directory_form_title: str
     label_field: str
     value_field: str
     synced_at: datetime
     total_options: int
-    options: List[CatalogLookupOptionOut]
+    options: List[DirectoryLookupOptionOut]
 
 
 class FormSubmissionMediaOut(BaseModel):

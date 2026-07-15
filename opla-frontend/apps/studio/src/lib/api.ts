@@ -391,39 +391,39 @@ export const projectAPI = {
         const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/media`, { params });
         return response.data;
     },
-    listThreads: async (orgId: string, projectId: string) => {
-        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/threads`);
+    listMessages: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/messages`);
         return response.data;
     },
-    getThread: async (orgId: string, projectId: string, threadId: string) => {
-        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/threads/${threadId}`);
+    getMessageChannel: async (orgId: string, projectId: string, channelId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/message-channels/${channelId}`);
         return response.data;
     },
-    listThreadMessages: async (
+    listChannelMessages: async (
         orgId: string,
         projectId: string,
-        threadId: string,
+        channelId: string,
         params?: { limit?: number; before?: string },
     ) => {
         const response = await apiClient.get(
-            `/organizations/${orgId}/projects/${projectId}/threads/${threadId}/messages`,
+            `/organizations/${orgId}/projects/${projectId}/message-channels/${channelId}/messages`,
             { params },
         );
         return response.data;
     },
-    postThreadMessage: async (
+    postChannelMessage: async (
         orgId: string,
         projectId: string,
-        threadId: string,
+        channelId: string,
         data: { body: string; mentioned_user_ids?: string[] },
     ) => {
         const response = await apiClient.post(
-            `/organizations/${orgId}/projects/${projectId}/threads/${threadId}/messages`,
+            `/organizations/${orgId}/projects/${projectId}/message-channels/${channelId}/messages`,
             data,
         );
         return response.data;
     },
-    editThreadMessage: async (
+    editMessage: async (
         orgId: string,
         projectId: string,
         messageId: string,
@@ -435,27 +435,27 @@ export const projectAPI = {
         );
         return response.data;
     },
-    deleteThreadMessage: async (orgId: string, projectId: string, messageId: string) => {
+    deleteMessage: async (orgId: string, projectId: string, messageId: string) => {
         const response = await apiClient.delete(
             `/organizations/${orgId}/projects/${projectId}/messages/${messageId}`,
         );
         return response.data;
     },
-    listThreadNotifications: async (orgId: string, params?: { unread_only?: boolean; limit?: number }) => {
-        const response = await apiClient.get(`/organizations/${orgId}/thread-notifications`, { params });
+    listMessageNotifications: async (orgId: string, params?: { unread_only?: boolean; limit?: number }) => {
+        const response = await apiClient.get(`/organizations/${orgId}/message-notifications`, { params });
         return response.data;
     },
-    markThreadNotificationRead: async (orgId: string, notificationId: string) => {
+    markMessageNotificationRead: async (orgId: string, notificationId: string) => {
         const response = await apiClient.post(
-            `/organizations/${orgId}/thread-notifications/${notificationId}/read`,
+            `/organizations/${orgId}/message-notifications/${notificationId}/read`,
         );
         return response.data;
     },
-    listCatalogItems: async (orgId: string, projectId: string) => {
-        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/catalog-items`);
+    listDirectoryItems: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/directory-items`);
         return response.data;
     },
-    createCatalogItem: async (
+    createDirectoryItem: async (
         orgId: string,
         projectId: string,
         data: {
@@ -469,10 +469,10 @@ export const projectAPI = {
             metadata_json?: Record<string, any>;
         },
     ) => {
-        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/catalog-items`, data);
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/directory-items`, data);
         return response.data;
     },
-    updateCatalogItem: async (
+    updateDirectoryItem: async (
         orgId: string,
         projectId: string,
         itemId: string,
@@ -487,11 +487,11 @@ export const projectAPI = {
             metadata_json?: Record<string, any>;
         },
     ) => {
-        const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}/catalog-items/${itemId}`, data);
+        const response = await apiClient.patch(`/organizations/${orgId}/projects/${projectId}/directory-items/${itemId}`, data);
         return response.data;
     },
-    deleteCatalogItem: async (orgId: string, projectId: string, itemId: string) => {
-        const response = await apiClient.delete(`/organizations/${orgId}/projects/${projectId}/catalog-items/${itemId}`);
+    deleteDirectoryItem: async (orgId: string, projectId: string, itemId: string) => {
+        const response = await apiClient.delete(`/organizations/${orgId}/projects/${projectId}/directory-items/${itemId}`);
         return response.data;
     },
     createTask: async (
@@ -537,7 +537,7 @@ export const projectAPI = {
 // ============= Form API Methods =============
 
 export const formAPI = {
-    create: async (projectId: string, data: { title: string; blueprint?: any; is_public?: boolean; kind?: 'standard' | 'catalog' }) => {
+    create: async (projectId: string, data: { title: string; blueprint?: any; is_public?: boolean; kind?: 'standard' | 'directory' }) => {
         const response = await apiClient.post(`/projects/${projectId}/forms`, data);
         return response.data;
     },
@@ -551,7 +551,7 @@ export const formAPI = {
             name: string;
             description?: string;
             event_type: 'submission_created' | 'submission_reviewed' | 'submission_approved';
-            action_type: 'create_task';
+            action_type: 'create_task' | 'create_alert';
             is_active?: boolean;
             conditions_json?: Record<string, any> | null;
             action_config_json: Record<string, any>;
@@ -567,7 +567,7 @@ export const formAPI = {
             name?: string;
             description?: string;
             event_type?: 'submission_created' | 'submission_reviewed' | 'submission_approved';
-            action_type?: 'create_task';
+            action_type?: 'create_task' | 'create_alert';
             is_active?: boolean;
             conditions_json?: Record<string, any> | null;
             action_config_json?: Record<string, any>;
@@ -626,41 +626,41 @@ export const formAPI = {
         const response = await apiClient.get(`/forms/${formId}/media`, { params });
         return response.data;
     },
-    list: async (projectId: string, kind?: 'standard' | 'catalog') => {
+    list: async (projectId: string, kind?: 'standard' | 'directory') => {
         const params = kind ? `?kind=${kind}` : '';
         const response = await apiClient.get(`/projects/${projectId}/forms${params}`);
         return response.data;
     },
-    // --------------- Catalog-specific methods ---------------
-    updateCatalogDesignations: async (
+    // --------------- Directory-specific methods ---------------
+    updateDirectoryDesignations: async (
         formId: string,
-        data: { catalog_key_field_id?: string | null; catalog_label_field_id?: string | null },
+        data: { directory_key_field_id?: string | null; directory_label_field_id?: string | null },
     ) => {
-        const response = await apiClient.patch(`/forms/${formId}/catalog-designations`, data);
+        const response = await apiClient.patch(`/forms/${formId}/directory-designations`, data);
         return response.data;
     },
-    getCatalogEntries: async (formId: string) => {
-        const response = await apiClient.get(`/forms/${formId}/catalog-entries`);
+    getDirectoryEntries: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/directory-entries`);
         return response.data;
     },
-    upsertCatalogEntry: async (formId: string, data: Record<string, any>) => {
-        const response = await apiClient.post(`/forms/${formId}/catalog-entries`, { data });
+    upsertDirectoryEntry: async (formId: string, data: Record<string, any>) => {
+        const response = await apiClient.post(`/forms/${formId}/directory-entries`, { data });
         return response.data;
     },
-    setCatalogEntryActive: async (formId: string, submissionId: string, active: boolean) => {
-        const response = await apiClient.patch(`/forms/${formId}/catalog-entries/${submissionId}/active`, { active });
+    setDirectoryEntryActive: async (formId: string, submissionId: string, active: boolean) => {
+        const response = await apiClient.patch(`/forms/${formId}/directory-entries/${submissionId}/active`, { active });
         return response.data;
     },
-    deleteCatalogEntry: async (formId: string, submissionId: string) => {
-        const response = await apiClient.delete(`/forms/${formId}/catalog-entries/${submissionId}`);
+    deleteDirectoryEntry: async (formId: string, submissionId: string) => {
+        const response = await apiClient.delete(`/forms/${formId}/directory-entries/${submissionId}`);
         return response.data;
     },
-    listCatalogLookupSources: async (formId: string) => {
-        const response = await apiClient.get(`/forms/${formId}/catalog-lookup-sources`);
+    listDirectoryLookupSources: async (formId: string) => {
+        const response = await apiClient.get(`/forms/${formId}/directory-lookup-sources`);
         return response.data;
     },
-    getCatalogLookupOptions: async (formId: string, catalogFormId: string, params?: { search?: string; limit?: number }) => {
-        const response = await apiClient.get(`/forms/${formId}/catalog-lookup-sources/${catalogFormId}/options`, {
+    getDirectoryLookupOptions: async (formId: string, directoryFormId: string, params?: { search?: string; limit?: number }) => {
+        const response = await apiClient.get(`/forms/${formId}/directory-lookup-sources/${directoryFormId}/options`, {
             params: { limit: 500, ...params },
         });
         return response.data;

@@ -1,6 +1,6 @@
 /**
  * Path-aware synthetic survey response generator.
- * Walks sections like a respondent, respecting rules, cascades, and catalogs.
+ * Walks sections like a respondent, respecting rules, cascades, and directories.
  */
 import {
   evaluateAllRules,
@@ -10,7 +10,7 @@ import {
   getSetValueEffects,
   getJumpToSectionTarget,
 } from '../../../../mobile/src/utils/rulesEngine';
-import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
+import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -161,11 +161,11 @@ const CHOICE_TYPES = new Set([
 const NUMERIC_TYPES = new Set(['input_number', 'rating_scale', 'generic_range']);
 const MULTI_TYPES = new Set(['checkbox_group', 'multi_select_dropdown']);
 
-/** Resolve options that don't depend on live responses (static / unfiltered catalog). */
+/** Resolve options that don't depend on live responses (static / unfiltered directory). */
 function resolveStaticOptions(field: AnyField): any[] {
-  if (fieldUsesCatalogOptionResolver(field as any) && field.catalog_runtime_entries?.length) {
+  if (fieldUsesDirectoryOptionResolver(field as any) && field.directory_runtime_entries?.length) {
     // Without parent filter — unique values if requested
-    return resolveCatalogFormFieldOptions(field as any, {});
+    return resolveDirectoryFormFieldOptions(field as any, {});
   }
   if (field.cascade_options_map && typeof field.cascade_options_map === 'object') {
     const seen = new Set<string>();
@@ -307,8 +307,8 @@ export function resolveFieldOptions(
 
   let options: any[] = [];
 
-  if (fieldUsesCatalogOptionResolver(field as any)) {
-    options = resolveCatalogFormFieldOptions(field as any, responses as any);
+  if (fieldUsesDirectoryOptionResolver(field as any)) {
+    options = resolveDirectoryFormFieldOptions(field as any, responses as any);
   } else if (field.cascade_parent_field_id && field.cascade_options_map) {
     const parentVal = responses[field.cascade_parent_field_id];
     if (parentVal !== undefined && parentVal !== null && String(parentVal) !== '') {
@@ -595,7 +595,7 @@ function generateMatrix(rng: () => number, field: AnyField): Record<string, unkn
   return result;
 }
 
-function generateObjectItem(rng: () => number, field: AnyField, catalogItems: any[]): Record<string, unknown> {
+function generateObjectItem(rng: () => number, field: AnyField, directoryItems: any[]): Record<string, unknown> {
   const def = field.object_definition;
   const item: Record<string, unknown> = { _id: `syn_${Math.floor(rng() * 1e9)}` };
   if (!def?.properties?.length) {
@@ -609,8 +609,8 @@ function generateObjectItem(rng: () => number, field: AnyField, catalogItems: an
     if (prop.reference?.source_items?.length) {
       const src = prop.reference.source_items[Math.floor(rng() * prop.reference.source_items.length)];
       item[key] = src.sku_code || src.id || src.label;
-    } else if (prop.reference?.source_type === 'catalog' && catalogItems.length) {
-      const src = catalogItems[Math.floor(rng() * catalogItems.length)];
+    } else if (prop.reference?.source_type === 'directory' && directoryItems.length) {
+      const src = directoryItems[Math.floor(rng() * directoryItems.length)];
       item[key] = src.sku_code || src.id || src.label;
     } else if (prop.type === 'number' || prop.type === 'integer' || prop.type === 'decimal') {
       item[key] = randomInt(rng, 1, 100);
@@ -630,7 +630,7 @@ function generateFieldValue(
   blueprint: AnyBlueprint,
   index: number,
   preferred?: { value?: string; range?: { min: number; max: number } },
-  catalogItems: any[] = [],
+  directoryItems: any[] = [],
   maxCollectionItems = 3,
 ): unknown {
   const type = String(field.type || 'input_text');
@@ -667,10 +667,10 @@ function generateFieldValue(
     return `SYN${randomInt(rng, 100000, 999999)}`;
   }
   if (type === 'matrix_table') return generateMatrix(rng, field);
-  if (type === 'object_instance') return generateObjectItem(rng, field, catalogItems);
+  if (type === 'object_instance') return generateObjectItem(rng, field, directoryItems);
   if (type === 'object_collection') {
     const n = randomInt(rng, 1, maxCollectionItems);
-    return Array.from({ length: n }, () => generateObjectItem(rng, field, catalogItems));
+    return Array.from({ length: n }, () => generateObjectItem(rng, field, directoryItems));
   }
   if (type === 'textarea') return `Synthetic note for record ${index + 1}. Generated for testing.`;
   if (type === 'email_input' || type === 'phone_input' || type === 'input_text') {
@@ -829,7 +829,7 @@ export function generateOneResponse(
   index: number,
   rng: () => number,
   forced: SlotPlan['forced'] = {},
-  catalogItems: any[] = [],
+  directoryItems: any[] = [],
   maxCollectionItems = 3,
 ): GeneratedResponse {
   const sections = blueprint.ui || [];
@@ -923,7 +923,7 @@ export function generateOneResponse(
           blueprint,
           index,
           preferred,
-          catalogItems,
+          directoryItems,
           maxCollectionItems,
         );
       }
@@ -959,7 +959,7 @@ export function generateOneResponse(
 export function generateSyntheticBatch(
   blueprint: AnyBlueprint,
   options: GenerateOptions,
-  catalogItems: any[] = [],
+  directoryItems: any[] = [],
 ): GenerateBatchResult {
   const count = Math.max(1, Math.min(500, Math.floor(options.count || 1)));
   const rng = createRng(options.seed);
@@ -986,7 +986,7 @@ export function generateSyntheticBatch(
         i,
         rng,
         slots[i].forced,
-        catalogItems,
+        directoryItems,
         options.maxCollectionItems ?? 3,
       ),
     );

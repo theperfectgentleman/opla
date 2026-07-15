@@ -13,7 +13,7 @@ import {
     Plus, Settings, ChevronRight, ChevronLeft, PlusCircle, FileText, Activity, Play, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid, Sparkles
 } from 'lucide-react';
 import FontProfileSelector from '../components/FontProfileSelector';
-import { AnalyticsHubSkeleton } from '../components/analytics/ui';
+import { resolveLegacyDashboardTab, resolveDataSection, type DashboardNavKey as VocabularyDashboardNavKey, type ProjectDataSection } from '../lib/vocabulary';
 
 const AnalyticsHub = lazy(() => import('../components/analytics/AnalyticsHub'));
 
@@ -51,7 +51,7 @@ type DashboardThread = {
     reply_count: number;
 };
 
-type DashboardAsset = {
+type DashboardMediaItem = {
     id: string;
     project_id: string;
     project_name: string;
@@ -63,8 +63,8 @@ type DashboardAsset = {
 
 type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard' | 'spatial';
 
-const validDashboardTabs = ['projects', 'ops', 'tasks', 'forms', 'datasets', 'members', 'audience', 'analysis', 'threads', 'assets', 'reports', 'settings'] as const;
-type DashboardNavKey = Exclude<(typeof validDashboardTabs)[number], 'tasks'>;
+const validDashboardTabs = ['projects', 'ops', 'tasks', 'design', 'data', 'members', 'audience', 'messages', 'assets', 'reports', 'settings', 'forms', 'datasets', 'analysis', 'threads'] as const;
+type DashboardNavKey = VocabularyDashboardNavKey;
 type OpsView = 'tasks' | 'review';
 const validAnalyticsTools: AnalyticsToolKey[] = ['lab', 'prep', 'dashboard', 'spatial'];
 
@@ -92,12 +92,13 @@ const Dashboard: React.FC = () => {
     const { currentOrg, organizations, projects, members, createProject, isLoading, setCurrentProject } = useOrg();
     const navigate = useNavigate();
     const { showToast } = useToast();
-    const [searchParams] = useSearchParams();
-    const [activeTab, setActiveTab] = useState('forms');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState<DashboardNavKey>('design');
     const [opsView, setOpsView] = useState<OpsView>('tasks');
     const [activeAnalyticsTool, setActiveAnalyticsTool] = useState<AnalyticsToolKey>('lab');
+    const [dataSection, setDataSection] = useState<ProjectDataSection>('datasets');
     const [membersSubTab, setMembersSubTab] = useState<'members' | 'teams' | 'roles'>('members');
-    const [formsSubTab, setFormsSubTab] = useState<'standard' | 'catalog'>('standard');
+    const [formsSubTab, setFormsSubTab] = useState<'standard' | 'directory'>('standard');
 
     const [forms, setForms] = useState<any[]>([]);
     const [formSearchQuery, setFormSearchQuery] = useState('');
@@ -137,22 +138,22 @@ const Dashboard: React.FC = () => {
     const [datasetSources, setDatasetSources] = useState<AnalyticsSource[]>([]);
     const [datasetsLoading, setDatasetsLoading] = useState(false);
     const [datasetsError, setDatasetsError] = useState<string | null>(null);
-    const [threadItems, setThreadItems] = useState<DashboardThread[]>([]);
-    const [threadsLoading, setThreadsLoading] = useState(false);
+    const [messageItems, setMessageItems] = useState<DashboardThread[]>([]);
+    const [messagesLoading, setMessagesLoading] = useState(false);
 
     useEffect(() => {
         const fetchThreads = async () => {
-            if (!currentOrg || projects.length === 0 || activeTab !== 'threads') {
-                if (activeTab !== 'threads') return;
-                setThreadItems([]);
+            if (!currentOrg || projects.length === 0 || activeTab !== 'messages') {
+                if (activeTab !== 'messages') return;
+                setMessageItems([]);
                 return;
             }
-            setThreadsLoading(true);
+            setMessagesLoading(true);
             try {
                 const batches = await Promise.all(
                     projects.map(async (project) => {
                         try {
-                            const rows = await projectAPI.listThreads(currentOrg.id, project.id);
+                            const rows = await projectAPI.listMessages(currentOrg.id, project.id);
                             return (Array.isArray(rows) ? rows : []).map((thread: any) => ({
                                 id: thread.id,
                                 project_id: project.id,
@@ -167,28 +168,28 @@ const Dashboard: React.FC = () => {
                         }
                     }),
                 );
-                setThreadItems(
+                setMessageItems(
                     batches
                         .flat()
                         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
                 );
             } catch (err) {
                 console.error(err);
-                setThreadItems([]);
+                setMessageItems([]);
             } finally {
-                setThreadsLoading(false);
+                setMessagesLoading(false);
             }
         };
         void fetchThreads();
     }, [activeTab, currentOrg, projects]);
 
-    const assetItems = useMemo<DashboardAsset[]>(() => {
+    const mediaItems = useMemo<DashboardMediaItem[]>(() => {
         const primaryProject = projects[0];
         const secondaryProject = projects[1] || primaryProject;
 
         return [
             {
-                id: 'asset-consent-script',
+                id: 'media-consent-script',
                 project_id: primaryProject?.id || 'mock-project-1',
                 project_name: primaryProject?.name || 'Market Entry Survey',
                 title: 'Enumerator consent script',
@@ -197,7 +198,7 @@ const Dashboard: React.FC = () => {
                 updated_at: new Date().toISOString(),
             },
             {
-                id: 'asset-brand-audio',
+                id: 'media-brand-audio',
                 project_id: secondaryProject?.id || 'mock-project-2',
                 project_name: secondaryProject?.name || 'Retail Audit',
                 title: 'Brand audio prompt',
@@ -208,9 +209,9 @@ const Dashboard: React.FC = () => {
         ];
     }, [projects]);
 
-    const catalogFormSummaries = useMemo(
+    const directoryFormSummaries = useMemo(
         () => forms
-            .filter((form) => form.kind === 'catalog')
+            .filter((form) => form.kind === 'directory')
             .map((form) => ({
                 id: form.id,
                 title: form.title,
@@ -380,27 +381,25 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         const tab = searchParams.get('tab');
-        if (tab === 'tasks') {
-            setActiveTab('ops');
+        const resolved = resolveLegacyDashboardTab(tab);
+        setActiveTab(resolved);
+        if (tab === 'tasks' || (tab === 'ops' && searchParams.get('view') !== 'review')) {
             setOpsView('tasks');
-            return;
+        } else if (tab === 'ops' || tab === 'review' || searchParams.get('view') === 'review') {
+            setOpsView('review');
         }
-        if (tab && validDashboardTabs.includes(tab as typeof validDashboardTabs[number])) {
-            setActiveTab(tab === 'tasks' ? 'ops' : tab);
-            if (tab === 'ops' || tab === 'tasks') {
-                const view = searchParams.get('view');
-                setOpsView(view === 'review' ? 'review' : 'tasks');
+        if (resolved === 'members') {
+            const section = searchParams.get('section');
+            if (section === 'members' || section === 'teams' || section === 'roles') {
+                setMembersSubTab(section);
+            } else {
+                setMembersSubTab('teams');
             }
-            if (tab === 'members') {
-                const section = searchParams.get('section');
-                if (section === 'members' || section === 'teams' || section === 'roles') {
-                    setMembersSubTab(section);
-                } else {
-                    setMembersSubTab('teams');
-                }
-            }
-
-            if (tab === 'analysis') {
+        }
+        if (resolved === 'data') {
+            const section = resolveDataSection(tab, searchParams.get('section'));
+            setDataSection(section);
+            if (section === 'analysis' || tab === 'analysis' || searchParams.get('tool')) {
                 const tool = searchParams.get('tool');
                 if (tool && validAnalyticsTools.includes(tool as AnalyticsToolKey)) {
                     setActiveAnalyticsTool(tool as AnalyticsToolKey);
@@ -409,7 +408,16 @@ const Dashboard: React.FC = () => {
                 }
             }
         }
-    }, [searchParams]);
+        if (tab === 'assets') {
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set('tab', 'data');
+                next.set('section', 'media');
+                next.delete('tool');
+                return next;
+            }, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
 
     const handleShellNavSelect = (key: DashboardNavKey) => {
         setActiveTab(key);
@@ -419,11 +427,41 @@ const Dashboard: React.FC = () => {
         if (key === 'members') {
             setMembersSubTab('teams');
         }
+        if (key === 'data') {
+            setDataSection('datasets');
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set('tab', 'data');
+                next.set('section', 'datasets');
+                next.delete('tool');
+                return next;
+            }, { replace: true });
+        }
+    };
+
+    const handleDataSectionSelect = (section: 'directory' | 'datasets' | 'media') => {
+        setActiveTab('data');
+        setDataSection(section);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', 'data');
+            next.set('section', section);
+            next.delete('tool');
+            return next;
+        }, { replace: true });
     };
 
     const handleAnalyticsToolSelect = (tool: AnalyticsToolKey) => {
-        setActiveTab('analysis');
+        setActiveTab('data');
+        setDataSection('analysis');
         setActiveAnalyticsTool(tool);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', 'data');
+            next.set('section', 'analysis');
+            next.set('tool', tool);
+            return next;
+        }, { replace: true });
     };
 
     const handleCreateProject = async (event: React.FormEvent) => {
@@ -632,12 +670,12 @@ const Dashboard: React.FC = () => {
 
         try {
             setSavingForm(true);
-            const kindToUse = formsSubTab === 'catalog' ? 'catalog' : 'standard';
+            const kindToUse = formsSubTab === 'directory' ? 'directory' : 'standard';
             const newForm = await formAPI.create(projectToUse, {
                 title: inlineFormTitle.trim(),
                 kind: kindToUse,
             });
-            showToast('Form Created', `Successfully created ${kindToUse === 'catalog' ? 'catalog' : 'form'}.`, 'success');
+            showToast('Form Created', `Successfully created ${kindToUse === 'directory' ? 'directory' : 'form'}.`, 'success');
             setIsCreatingFormInline(false);
             setInlineFormTitle('');
             navigate(`/forms/${newForm.id}`);
@@ -668,7 +706,7 @@ const Dashboard: React.FC = () => {
     const filteredForms = useMemo(() => {
         return forms.filter(form => {
             // Tab filtering
-            const matchesSubTab = formsSubTab === 'catalog' ? form.kind === 'catalog' : form.kind !== 'catalog';
+            const matchesSubTab = formsSubTab === 'directory' ? form.kind === 'directory' : form.kind !== 'directory';
             if (!matchesSubTab) return false;
 
             // Project filtering
@@ -705,20 +743,20 @@ const Dashboard: React.FC = () => {
             <div>
                 <div className="flex justify-between items-start mb-4">
                     <div className={`p-3 rounded-md transition-all ${
-                        formsSubTab === 'catalog'
+                        formsSubTab === 'directory'
                             ? 'bg-amber-500/10 text-amber-600 group-hover:bg-amber-500/20'
                             : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] group-hover:bg-[hsl(var(--primary))]/20'
                     }`}>
-                        {formsSubTab === 'catalog' ? (
+                        {formsSubTab === 'directory' ? (
                             <Database className="w-6 h-6" />
                         ) : (
                             <FileText className="w-6 h-6" />
                         )}
                     </div>
                     <div className="flex items-center gap-1.5">
-                        {form.kind === 'catalog' && (
+                        {form.kind === 'directory' && (
                             <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20 select-none">
-                                Catalog
+                                Directory
                             </span>
                         )}
                         <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg ${form.status === 'live' ? 'bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))]'}`}>
@@ -768,11 +806,11 @@ const Dashboard: React.FC = () => {
                             <td className="px-6 py-4 font-semibold text-[hsl(var(--text-primary))]">
                                 <div className="flex items-center gap-3">
                                     <div className={`p-2 rounded-md ${
-                                        form.kind === 'catalog' 
+                                        form.kind === 'directory' 
                                             ? 'bg-amber-500/10 text-amber-600' 
                                             : 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]'
                                     }`}>
-                                        {form.kind === 'catalog' ? <Database className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                                        {form.kind === 'directory' ? <Database className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="group-hover:text-[hsl(var(--primary))] transition-colors">{form.title}</span>
@@ -821,13 +859,15 @@ const Dashboard: React.FC = () => {
                 onSelectNav={handleShellNavSelect}
                 activeAnalyticsTool={activeAnalyticsTool}
                 onSelectAnalyticsTool={handleAnalyticsToolSelect}
-                counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, datasets: datasetSources.length, members: members?.length || 0 }}
+                activeDataSection={dataSection === 'analysis' ? null : (dataSection as 'directory' | 'datasets' | 'media')}
+                onSelectDataSection={handleDataSectionSelect}
+                counts={{ projects: projects.length, tasks: tasks.length, forms: forms.length, data: datasetSources.length, members: members?.length || 0 }}
                 contentClassName={
-                    activeTab === 'forms'
+                    activeTab === 'design'
                         ? 'flex-1 overflow-hidden flex'
-                        : activeTab === 'analysis' && activeAnalyticsTool === 'spatial'
+                        : activeTab === 'data' && activeAnalyticsTool === 'spatial'
                             ? 'flex-1 overflow-hidden p-0'
-                            : activeTab === 'analysis'
+                            : activeTab === 'data'
                                 ? 'flex-1 overflow-y-auto p-4'
                                 : 'flex-1 overflow-y-auto p-10'
                 }
@@ -846,7 +886,7 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'forms' && (
+                {activeTab === 'design' && (
                     <div className="flex w-full h-[calc(100vh-64px)] overflow-hidden bg-[hsl(var(--background))] select-none">
                         {/* Projects Sidebar */}
                         <div className="w-80 border-r border-[hsl(var(--border))]/70 bg-[hsl(var(--surface))] flex flex-col shrink-0">
@@ -887,14 +927,14 @@ const Dashboard: React.FC = () => {
                                 >
                                     <span className="truncate">All Projects</span>
                                     <span className="text-[10px] opacity-60">
-                                        {forms.filter(f => formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog').length}
+                                        {forms.filter(f => formsSubTab === 'directory' ? f.kind === 'directory' : f.kind !== 'directory').length}
                                     </span>
                                 </button>
 
                                 <div className="h-px bg-[hsl(var(--border))]/40 my-2" />
 
                                 {sidebarProjects.map(project => {
-                                    const count = forms.filter(f => f.project_id === project.id && (formsSubTab === 'catalog' ? f.kind === 'catalog' : f.kind !== 'catalog')).length;
+                                    const count = forms.filter(f => f.project_id === project.id && (formsSubTab === 'directory' ? f.kind === 'directory' : f.kind !== 'directory')).length;
                                     const isSelected = selectedProjectId === project.id;
                                     return (
                                         <button
@@ -936,7 +976,7 @@ const Dashboard: React.FC = () => {
                                             projects.find(p => p.id === selectedProjectId)?.name || 'Project forms'
                                         )}
                                         <span className="text-xs font-normal text-[hsl(var(--text-tertiary))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 rounded border border-[hsl(var(--border))]/45">
-                                            {filteredForms.length} {formsSubTab === 'catalog' ? 'Catalog' : 'Standard Forms'}
+                                            {filteredForms.length} {formsSubTab === 'directory' ? 'Directory' : 'Standard Forms'}
                                         </span>
                                     </h2>
                                 </div>
@@ -957,14 +997,14 @@ const Dashboard: React.FC = () => {
                                         Standard
                                     </button>
                                     <button
-                                        onClick={() => setFormsSubTab('catalog')}
+                                        onClick={() => setFormsSubTab('directory')}
                                         className={`pb-2.5 transition-all relative ${
-                                            formsSubTab === 'catalog'
+                                            formsSubTab === 'directory'
                                                 ? 'text-[hsl(var(--primary))] border-b-2 border-[hsl(var(--primary))] font-bold'
                                                 : 'text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--text-primary))]'
                                         }`}
                                     >
-                                        Catalog
+                                        Directory
                                     </button>
                                 </div>
 
@@ -992,7 +1032,7 @@ const Dashboard: React.FC = () => {
                                         }`}
                                     >
                                         <Plus className="w-3.5 h-3.5" />
-                                        <span>Add {formsSubTab === 'catalog' ? 'Catalog' : 'Standard Form'}</span>
+                                        <span>Add {formsSubTab === 'directory' ? 'Directory' : 'Standard Form'}</span>
                                     </button>
 
                                     {/* Grid / List view toggle */}
@@ -1027,7 +1067,7 @@ const Dashboard: React.FC = () => {
                             {isCreatingFormInline && (
                                 <div className="px-8 py-5 border-b border-[hsl(var(--border))]/40 bg-[hsl(var(--surface-elevated))]/20 flex flex-col gap-3 shrink-0 animate-in slide-in-from-top duration-150">
                                     <h3 className="text-xs font-bold text-[hsl(var(--text-primary))]">
-                                        Create New {formsSubTab === 'catalog' ? 'Catalog' : 'Standard Form'}
+                                        Create New {formsSubTab === 'directory' ? 'Directory' : 'Standard Form'}
                                     </h3>
                                     <form onSubmit={handleInlineCreateSubmit} className="flex flex-col md:flex-row items-end gap-4">
                                         {selectedProjectId === 'all' && (
@@ -1049,13 +1089,13 @@ const Dashboard: React.FC = () => {
 
                                         <div className="flex-1 flex flex-col gap-1 w-full">
                                             <label className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
-                                                {formsSubTab === 'catalog' ? 'Catalog Title' : 'Standard Form Title'}
+                                                {formsSubTab === 'directory' ? 'Directory Title' : 'Standard Form Title'}
                                             </label>
                                             <input
                                                 type="text"
                                                 value={inlineFormTitle}
                                                 onChange={(e) => setInlineFormTitle(e.target.value)}
-                                                placeholder={formsSubTab === 'catalog' ? "e.g. Parts Catalog" : "e.g. Customer Feedback"}
+                                                placeholder={formsSubTab === 'directory' ? "e.g. Parts Directory" : "e.g. Customer Feedback"}
                                                 className="w-full bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-lg px-3 py-1.5 text-xs text-[hsl(var(--text-primary))] focus:outline-none focus:border-[hsl(var(--primary))]"
                                                 required
                                                 autoFocus
@@ -1063,7 +1103,7 @@ const Dashboard: React.FC = () => {
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
-                                            {formsSubTab !== 'catalog' ? (
+                                            {formsSubTab !== 'directory' ? (
                                                 <button
                                                     type="button"
                                                     onClick={() => {
@@ -1132,7 +1172,7 @@ const Dashboard: React.FC = () => {
                                 {totalFormsPages > 1 && (
                                     <div className="mt-8 pt-4 border-t border-[hsl(var(--border))]/30 flex items-center justify-between text-xs shrink-0 select-none">
                                         <span className="text-[hsl(var(--text-secondary))] font-medium">
-                                            Showing <span className="font-semibold text-[hsl(var(--text-primary))]">{(formsPage - 1) * formsPageSize + 1}</span> to <span className="font-semibold text-[hsl(var(--text-primary))]">{Math.min(formsPage * formsPageSize, filteredForms.length)}</span> of <span className="font-semibold text-[hsl(var(--text-primary))]">{filteredForms.length}</span> {formsSubTab === 'catalog' ? 'catalog' : 'standard forms'}
+                                            Showing <span className="font-semibold text-[hsl(var(--text-primary))]">{(formsPage - 1) * formsPageSize + 1}</span> to <span className="font-semibold text-[hsl(var(--text-primary))]">{Math.min(formsPage * formsPageSize, filteredForms.length)}</span> of <span className="font-semibold text-[hsl(var(--text-primary))]">{filteredForms.length}</span> {formsSubTab === 'directory' ? 'directory' : 'standard forms'}
                                         </span>
                                         <div className="flex items-center gap-2">
                                             <button
@@ -1589,55 +1629,93 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'analysis' && currentOrg && (
+                {activeTab === 'data' && dataSection === 'analysis' && currentOrg && (
                     <Suspense fallback={<AnalyticsTabFallback />}>
                         <AnalyticsHub orgId={currentOrg.id} projectId={undefined} forms={forms} activeTool={activeAnalyticsTool} />
                     </Suspense>
                 )}
 
-                {activeTab === 'datasets' && (
+                {activeTab === 'data' && (dataSection === 'datasets' || dataSection === 'directory') && (
                     <DatasetsTab
                         sources={datasetSources}
-                        catalogForms={catalogFormSummaries}
+                        directoryForms={directoryFormSummaries}
                         loading={datasetsLoading}
                         error={datasetsError}
                         projects={projects}
                     />
                 )}
 
-                {activeTab === 'threads' && (
+                {activeTab === 'data' && dataSection === 'media' && (
                     <div className="space-y-8">
                         <div className="flex justify-between items-end gap-6">
                             <div>
-                                <h2 className="text-3xl font-bold mb-2">Threads</h2>
+                                <h2 className="text-3xl font-bold mb-2">Media</h2>
+                                <p className="text-[hsl(var(--text-secondary))]">Project files, links, images, and audio that field teams can reference without leaving their workflow.</p>
+                            </div>
+                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                                {mediaItems.length} items across {Math.max(projects.length, 1)} projects
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 lg:grid-cols-2">
+                            {mediaItems.map(item => (
+                                <div key={item.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                    <Paperclip className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-lg font-semibold">{item.title}</h3>
+                                                    <p className="text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">{item.kind} • {item.project_name}</p>
+                                                </div>
+                                            </div>
+                                            <p className="mt-4 text-sm text-[hsl(var(--text-secondary))]">{item.summary}</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
+                                        Media library placeholder: uploads, links, previews, and field-ready references will land here.
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'messages' && (
+                    <div className="space-y-8">
+                        <div className="flex justify-between items-end gap-6">
+                            <div>
+                                <h2 className="text-3xl font-bold mb-2">Messages</h2>
                                 <p className="text-[hsl(var(--text-secondary))]">
                                     General + team channels per project. Open a project hub to read and post.
                                 </p>
                             </div>
                             <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
-                                {threadsLoading
+                                {messagesLoading
                                     ? 'Loading…'
-                                    : `${threadItems.length} channels across ${Math.max(projects.length, 0)} projects`}
+                                    : `${messageItems.length} channels across ${Math.max(projects.length, 0)} projects`}
                             </div>
                         </div>
 
-                        {threadsLoading ? (
+                        {messagesLoading ? (
                             <div className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
                                 <Loader2 className="h-4 w-4 animate-spin" />
                                 Loading channels…
                             </div>
-                        ) : threadItems.length === 0 ? (
+                        ) : messageItems.length === 0 ? (
                             <p className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-8 text-center text-sm text-[hsl(var(--text-tertiary))]">
                                 No channels yet. Open a project hub to seed General (and team channels when teams are granted).
                             </p>
                         ) : (
                             <div className="grid gap-4 lg:grid-cols-2">
-                                {threadItems.map((thread) => (
+                                {messageItems.map((thread) => (
                                     <button
                                         key={`${thread.project_id}-${thread.id}`}
                                         type="button"
                                         onClick={() =>
-                                            navigate(`/projects/${thread.project_id}/hub?thread=${thread.id}`)
+                                            navigate(`/projects/${thread.project_id}/hub?channel=${thread.id}`)
                                         }
                                         className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 text-left shadow-sm transition-shadow hover:shadow-md"
                                     >
@@ -1672,50 +1750,13 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
 
-                {activeTab === 'assets' && (
-                    <div className="space-y-8">
-                        <div className="flex justify-between items-end gap-6">
-                            <div>
-                                <h2 className="text-3xl font-bold mb-2">Assets</h2>
-                                <p className="text-[hsl(var(--text-secondary))]">Project-ready files, links, images, and audio that field teams can reference without leaving their workflow.</p>
-                            </div>
-                            <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
-                                {assetItems.length} starter assets across {Math.max(projects.length, 1)} projects
-                            </div>
-                        </div>
-
-                        <div className="grid gap-4 lg:grid-cols-2">
-                            {assetItems.map(asset => (
-                                <div key={asset.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 shadow-sm">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                    <Paperclip className="h-5 w-5" />
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-lg font-semibold">{asset.title}</h3>
-                                                    <p className="text-xs uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">{asset.kind} • {asset.project_name}</p>
-                                                </div>
-                                            </div>
-                                            <p className="mt-4 text-sm text-[hsl(var(--text-secondary))]">{asset.summary}</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
-                                        Asset browser placeholder: uploads, links, previews, and field-ready references will land here.
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 {activeTab === 'reports' && (
                     <div className="space-y-8">
                         <div className="flex justify-between items-end gap-6">
                             <div>
                                 <h2 className="text-3xl font-bold mb-2">Reports</h2>
-                                <p className="text-[hsl(var(--text-secondary))]">Curated narrative outputs that package analytics, assets, and operational context for review, sharing, and decisions.</p>
+                                <p className="text-[hsl(var(--text-secondary))]">Curated narrative outputs that package analytics, media, and operational context for review, sharing, and decisions.</p>
                             </div>
                             <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
                                 {reports.length} saved across {projects.length} projects

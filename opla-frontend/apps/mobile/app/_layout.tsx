@@ -91,7 +91,7 @@ function RootGuard() {
     if (status === 'loading') return;
 
     const inAuth = segments[0] === '(auth)';
-    const inYard = segments[0] === '(main)' && segments[1] === '(yard)';
+    const inPulse = segments[0] === '(main)' && segments[1] === '(pulse)';
 
     if (status === 'unauthenticated') {
       if (inAuth) {
@@ -100,7 +100,7 @@ function RootGuard() {
         }
         return;
       }
-      if (!inYard) {
+      if (!inPulse) {
         router.replace(buildAuthHref('/(auth)/login', currentPath));
         return;
       }
@@ -129,7 +129,7 @@ function RootGuard() {
     }
 
     if (status === 'authenticated' && inAuth) {
-      router.replace((redirectTarget || '/(main)/(yard)') as Href);
+      router.replace((redirectTarget || '/(main)/(pulse)') as Href);
     }
   }, [currentPath, pathname, redirectTarget, router, segments, status]);
 

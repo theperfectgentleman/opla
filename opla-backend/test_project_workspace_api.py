@@ -16,7 +16,8 @@ from app.models.project_access import AccessorType, ProjectAccess, ProjectRole
 from app.models.project_asset import ProjectAsset, ProjectAssetKind
 from app.models.project_report import ProjectReport
 from app.models.project_role_template import ProjectRoleTemplate
-from app.models.project_thread import ProjectThread
+from app.models.project_message_channel import ProjectMessageChannel
+from app.models.project_message import ProjectMessage, ProjectMessageNotification
 from app.models.project_task import ProjectTask, ProjectTaskKind, ProjectTaskStatus
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType as RoleAccessorType
 from app.models.submission import Submission, SubmissionReviewStatus
@@ -176,7 +177,9 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.db.query(Form).filter(Form.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectAsset).filter(ProjectAsset.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectReport).filter(ProjectReport.project_id.in_(project_ids)).delete(synchronize_session=False)
-        self.db.query(ProjectThread).filter(ProjectThread.project_id.in_(project_ids)).delete(synchronize_session=False)
+        self.db.query(ProjectMessageNotification).filter(ProjectMessageNotification.project_id.in_(project_ids)).delete(synchronize_session=False)
+        self.db.query(ProjectMessage).filter(ProjectMessage.project_id.in_(project_ids)).delete(synchronize_session=False)
+        self.db.query(ProjectMessageChannel).filter(ProjectMessageChannel.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectAccess).filter(ProjectAccess.project_id.in_(project_ids)).delete(synchronize_session=False)
         self.db.query(ProjectRoleTemplate).filter(ProjectRoleTemplate.org_id == org_id).delete(synchronize_session=False)
         self.db.query(OrgRoleAssignment).filter(OrgRoleAssignment.org_id == org_id).delete(synchronize_session=False)
@@ -323,7 +326,7 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(len(list_response.json()), 1)
 
-    def test_admin_can_create_journey_visit_task_linked_to_submission(self):
+    def test_admin_can_create_field_visit_task_linked_to_submission(self):
         form = Form(
             project_id=self.open_project.id,
             title=f"Recruitment Form {self.suffix}",
@@ -353,8 +356,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
             headers=self.auth_headers(self.admin_user),
             json={
                 "title": "Visit Makola Central",
-                "kind": "journey_visit",
-                "visit_date": "2026-05-23",
+                "kind": "field_visit",
+                "scheduled_date": "2026-05-23",
                 "source_submission_id": str(submission.id),
                 "context_json": {
                     "source_record_label": "Makola Central",
@@ -368,8 +371,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         payload = response.json()
-        self.assertEqual(payload["kind"], "journey_visit")
-        self.assertEqual(payload["visit_date"], "2026-05-23")
+        self.assertEqual(payload["kind"], "field_visit")
+        self.assertEqual(payload["scheduled_date"], "2026-05-23")
         self.assertEqual(payload["source_submission_id"], str(submission.id))
         self.assertEqual(payload["context_json"]["source_record_label"], "Makola Central")
         self.assertEqual(payload["context_json"]["routing"]["cluster"], "A1")
@@ -378,8 +381,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         today_task = ProjectTask(
             project_id=self.open_project.id,
             title=f"Visit Kaneshie {self.suffix}",
-            kind=ProjectTaskKind.JOURNEY_VISIT,
-            visit_date=date(2026, 5, 23),
+            kind=ProjectTaskKind.FIELD_VISIT,
+            scheduled_date=date(2026, 5, 23),
             assigned_accessor_id=self.member_user.id,
             assigned_accessor_type=AccessorType.USER,
             created_by=self.admin_user.id,
@@ -387,8 +390,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         other_day_task = ProjectTask(
             project_id=self.open_project.id,
             title=f"Visit Makola {self.suffix}",
-            kind=ProjectTaskKind.JOURNEY_VISIT,
-            visit_date=date(2026, 5, 24),
+            kind=ProjectTaskKind.FIELD_VISIT,
+            scheduled_date=date(2026, 5, 24),
             assigned_accessor_id=self.member_user.id,
             assigned_accessor_type=AccessorType.USER,
             created_by=self.admin_user.id,
@@ -396,8 +399,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         other_user_task = ProjectTask(
             project_id=self.open_project.id,
             title=f"Visit Kejetia {self.suffix}",
-            kind=ProjectTaskKind.JOURNEY_VISIT,
-            visit_date=date(2026, 5, 23),
+            kind=ProjectTaskKind.FIELD_VISIT,
+            scheduled_date=date(2026, 5, 23),
             assigned_accessor_id=self.admin_user.id,
             assigned_accessor_type=AccessorType.USER,
             created_by=self.admin_user.id,
@@ -414,7 +417,7 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(len(payload), 1)
         self.assertEqual(payload[0]["id"], str(today_task.id))
-        self.assertEqual(payload[0]["kind"], "journey_visit")
+        self.assertEqual(payload[0]["kind"], "field_visit")
 
     def test_member_can_check_in_and_out_for_project_attendance(self):
         check_in_response = self.client.post(
@@ -651,8 +654,8 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
                 "action_config_json": {
                     "title_template": "Visit {{ data.outlet_name }}",
                     "description_template": "Review {{ data.outlet_name }} in {{ data.region }}",
-                    "kind": "journey_visit",
-                    "visit_date_value": "2026-06-03",
+                    "kind": "field_visit",
+                    "scheduled_date_value": "2026-06-03",
                     "context_mapping_json": {
                         "source_record_label": "data.outlet_name",
                         "location_label": "{{ data.region }} cluster",
@@ -900,51 +903,34 @@ class ProjectWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertEqual(detail_response.json()["id"], created["id"])
 
-    def test_admin_can_create_update_and_list_project_threads(self):
-        create_response = self.client.post(
-            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads",
-            headers=self.auth_headers(self.admin_user),
-            json={
-                "title": "Launch thread",
-                "summary": "Operational launch notices and escalations.",
-                "reply_count": 4,
-            },
-        )
-
-        self.assertEqual(create_response.status_code, 201)
-        created = create_response.json()
-        self.assertEqual(created["title"], "Launch thread")
-        self.assertEqual(created["reply_count"], 4)
-
-        update_response = self.client.patch(
-            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads/{created['id']}",
-            headers=self.auth_headers(self.admin_user),
-            json={
-                "summary": "Pinned notices and follow-up actions.",
-                "reply_count": 6,
-            },
-        )
-
-        self.assertEqual(update_response.status_code, 200)
-        updated = update_response.json()
-        self.assertEqual(updated["summary"], "Pinned notices and follow-up actions.")
-        self.assertEqual(updated["reply_count"], 6)
-
+    def test_admin_can_list_and_post_project_messages(self):
         list_response = self.client.get(
-            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads",
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/messages",
             headers=self.auth_headers(self.member_user),
         )
 
         self.assertEqual(list_response.status_code, 200)
-        self.assertEqual(len(list_response.json()), 1)
+        channels = list_response.json()
+        self.assertGreaterEqual(len(channels), 1)
+        general = next(channel for channel in channels if channel["kind"] == "general")
+
+        post_response = self.client.post(
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/message-channels/{general['id']}/messages",
+            headers=self.auth_headers(self.admin_user),
+            json={"body": "Launch coordination note for the team."},
+        )
+        self.assertEqual(post_response.status_code, 201)
+        created = post_response.json()
+        self.assertEqual(created["body"], "Launch coordination note for the team.")
+        self.assertEqual(created["channel_id"], general["id"])
 
         detail_response = self.client.get(
-            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/threads/{created['id']}",
+            f"/api/v1/organizations/{self.organization.id}/projects/{self.open_project.id}/message-channels/{general['id']}",
             headers=self.auth_headers(self.member_user),
         )
 
         self.assertEqual(detail_response.status_code, 200)
-        self.assertEqual(detail_response.json()["id"], created["id"])
+        self.assertEqual(detail_response.json()["id"], general["id"])
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, ChevronRight, Database, FileText, FolderOpen, Loader2, Search, Table2 } from 'lucide-react';
 import type { AnalyticsSource } from './analytics/types';
 
-type CatalogFormSummary = {
+type DirectoryFormSummary = {
     id: string;
     title: string;
     project_id?: string;
@@ -13,7 +13,7 @@ type CatalogFormSummary = {
 
 export type DatasetsTabProps = {
     sources: AnalyticsSource[];
-    catalogForms: CatalogFormSummary[];
+    directoryForms: DirectoryFormSummary[];
     loading?: boolean;
     error?: string | null;
     projects: Array<{ id: string; name: string }>;
@@ -21,7 +21,7 @@ export type DatasetsTabProps = {
 
 const DatasetsTab: React.FC<DatasetsTabProps> = ({
     sources,
-    catalogForms,
+    directoryForms,
     loading = false,
     error = null,
     projects,
@@ -49,9 +49,9 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
         });
     }, [projectFilter, searchQuery, sources]);
 
-    const filteredCatalogs = useMemo(() => {
+    const filteredDirectories = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
-        return catalogForms.filter((form) => {
+        return directoryForms.filter((form) => {
             if (projectFilter !== 'all' && form.project_id !== projectFilter) {
                 return false;
             }
@@ -60,7 +60,7 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
             }
             return `${form.title} ${form.project_name || ''}`.toLowerCase().includes(query);
         });
-    }, [catalogForms, projectFilter, searchQuery]);
+    }, [directoryForms, projectFilter, searchQuery]);
 
     const totalRecords = filteredSources.reduce((sum, source) => sum + (source.record_count || 0), 0);
 
@@ -71,7 +71,7 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
                     <h2 className="text-3xl font-bold mb-2">Datasets</h2>
                     <p className="text-[hsl(var(--text-secondary))] text-sm leading-relaxed">
                         Submission datasets are created automatically when you publish a standard form and collect responses.
-                        Use catalogs for reference data (regions, products, districts) that power dropdowns — not custom tables here.
+                        Use directories for reference data (regions, products, districts) that power dropdowns — not custom tables here.
                     </p>
                 </div>
                 <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))] shrink-0">
@@ -130,7 +130,7 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
                                 </p>
                                 <button
                                     type="button"
-                                    onClick={() => navigate('/dashboard?tab=forms')}
+                                    onClick={() => navigate('/dashboard?tab=design')}
                                     className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-3 py-1.5 text-xs font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/20"
                                 >
                                     <FileText className="w-3.5 h-3.5" />
@@ -177,7 +177,7 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
                                                         )}
                                                         <button
                                                             type="button"
-                                                            onClick={() => navigate('/dashboard?tab=analysis&tool=lab')}
+                                                            onClick={() => navigate('/dashboard?tab=data&tool=lab')}
                                                             className="inline-flex items-center gap-1 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/20"
                                                         >
                                                             <BarChart3 className="w-3.5 h-3.5" />
@@ -198,53 +198,53 @@ const DatasetsTab: React.FC<DatasetsTabProps> = ({
                             <div className="flex items-center gap-2">
                                 <Database className="w-4 h-4 text-amber-600" />
                                 <h3 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--text-secondary))]">
-                                    Reference catalogs
+                                    Reference directories
                                 </h3>
                             </div>
                             <button
                                 type="button"
-                                onClick={() => navigate('/dashboard?tab=forms')}
+                                onClick={() => navigate('/dashboard?tab=design')}
                                 className="text-[11px] font-semibold text-[hsl(var(--primary))] hover:underline"
                             >
-                                Manage catalogs in Forms
+                                Manage directories in Forms
                             </button>
                         </div>
                         <p className="text-xs text-[hsl(var(--text-tertiary))] max-w-3xl">
-                            Catalogs replace the old idea of custom data tables. Build a catalog form, publish it, then add records in the project Catalog tab.
-                            Survey dropdowns can source options from catalogs (including cascading region → district).
+                            Directories replace the old idea of custom data tables. Build a directory form, publish it, then add records in the project Directory tab.
+                            Survey dropdowns can source options from directories (including cascading region → district).
                         </p>
 
-                        {filteredCatalogs.length === 0 ? (
+                        {filteredDirectories.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-amber-500/25 bg-amber-500/5 p-6 text-center">
-                                <p className="text-sm text-[hsl(var(--text-secondary))]">No published catalogs in this filter.</p>
+                                <p className="text-sm text-[hsl(var(--text-secondary))]">No published directories in this filter.</p>
                             </div>
                         ) : (
                             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {filteredCatalogs.map((catalog) => (
+                                {filteredDirectories.map((directory) => (
                                     <div
-                                        key={catalog.id}
+                                        key={directory.id}
                                         className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-4 hover:shadow-sm transition-shadow"
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div>
-                                                <h4 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{catalog.title}</h4>
-                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))] mt-0.5">{catalog.project_name || 'Project'}</p>
+                                                <h4 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{directory.title}</h4>
+                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))] mt-0.5">{directory.project_name || 'Project'}</p>
                                             </div>
                                             <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                                                catalog.status === 'live'
+                                                directory.status === 'live'
                                                     ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
                                                     : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-tertiary))] border border-[hsl(var(--border))]/40'
                                             }`}>
-                                                {catalog.status || 'draft'}
+                                                {directory.status || 'draft'}
                                             </span>
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => catalog.project_id && navigate(`/projects/${catalog.project_id}?tab=catalog`)}
-                                            disabled={!catalog.project_id}
+                                            onClick={() => directory.project_id && navigate(`/projects/${directory.project_id}?tab=data&section=directory`)}
+                                            disabled={!directory.project_id}
                                             className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-40"
                                         >
-                                            Open catalog data
+                                            Open directory data
                                             <ChevronRight className="w-3.5 h-3.5" />
                                         </button>
                                     </div>

@@ -185,7 +185,7 @@ export default function AnalyticsHub({ orgId, projectId, forms = [], activeTool 
             description="Publish a form or upload a CSV to create a dataset for Analysis Lab."
             actions={
               <>
-                <button type="button" onClick={() => navigate('/dashboard?tab=forms')} className={analyticsGhostButtonClass}>
+                <button type="button" onClick={() => navigate('/dashboard?tab=design')} className={analyticsGhostButtonClass}>
                   Go to forms
                 </button>
                 <button

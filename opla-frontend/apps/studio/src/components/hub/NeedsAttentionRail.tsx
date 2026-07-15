@@ -54,6 +54,7 @@ function severityStyles(severity: string) {
 }
 
 function kindLabel(kind: string) {
+    if (kind === 'automation_alert') return 'automation';
     return kind.replaceAll('_', ' ');
 }
 

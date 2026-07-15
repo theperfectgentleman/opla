@@ -67,7 +67,7 @@ type TableCellType = 'checkbox' | 'radio' | 'text' | 'number' | 'dropdown';
 type ObjectPropertyType = 'string' | 'number' | 'integer' | 'decimal' | 'boolean' | 'select' | 'computed';
 type ObjectPropertyEditMode = 'fixed' | 'defaulted' | 'editable' | 'hidden';
 
-interface CatalogSourceItem {
+interface DirectorySourceItem {
     id: string;
     sku_code: string;
     label: string;
@@ -79,12 +79,12 @@ interface CatalogSourceItem {
 }
 
 interface ObjectReferenceDefinition {
-    source_type: 'dataset' | 'catalog' | 'catalog_form' | 'user' | 'team' | 'submission' | 'custom';
+    source_type: 'dataset' | 'directory' | 'directory_form' | 'user' | 'team' | 'submission' | 'custom';
     source_id?: string;
     label_field?: string;
     value_field?: string;
     filters?: Record<string, any>;
-    source_items?: CatalogSourceItem[];
+    source_items?: DirectorySourceItem[];
     field_mappings?: Record<string, string>;
 }
 
@@ -114,7 +114,7 @@ interface FormObjectDefinition {
     max_items?: number;
 }
 
-interface ProjectCatalogItem {
+interface ProjectDirectoryItem {
     id: string;
     sku_code: string;
     label: string;
@@ -164,15 +164,15 @@ interface FormField {
     collection_layout?: 'cards' | 'table';
     allow_add_items?: boolean;
     allow_remove_items?: boolean;
-    catalog_source_type?: 'project_catalog' | 'catalog_form';
-    catalog_form_id?: string;
-    catalog_prepopulate_mode?: string;
-    required_catalog_item_ids?: string[];
-    options_source?: 'manual' | 'catalog_form';
-    catalog_display_field?: string;
-    catalog_value_field?: string;
-    catalog_unique_values?: boolean;
-    catalog_cascade_filter_column?: string;
+    directory_source_type?: 'project_directory' | 'directory_form';
+    directory_form_id?: string;
+    directory_prepopulate_mode?: string;
+    required_directory_item_ids?: string[];
+    options_source?: 'manual' | 'directory_form';
+    directory_display_field?: string;
+    directory_value_field?: string;
+    directory_unique_values?: boolean;
+    directory_cascade_filter_column?: string;
 
     // Cascading / filtered dropdown support
     cascade_parent_field_id?: string;
@@ -352,7 +352,7 @@ const widgetHints: Record<FieldType, string> = {
     lookup_list: 'Fetches and suggests items from remote dynamic APIs',
     rating_scale: 'Responsive 5-star custom visual scale review meter widget',
     object_collection: 'Manage a repeating collection of custom object structures',
-    object_instance: 'Reference a single structured data object or catalog item',
+    object_instance: 'Reference a single structured data object or directory item',
     form_link: 'Navigational link card that opens a different form with optional parameter passing',
 };
 
@@ -456,15 +456,15 @@ const propertyMetaDetails: Record<string, { name: string; description: string }>
     },
     lookup_source: {
         name: "Lookup API Source",
-        description: "Connect catalog datasets or CSV options lists to dynamically populate suggestions."
+        description: "Connect directory datasets or CSV options lists to dynamically populate suggestions."
     },
     object_schema_key: {
         name: "Reference Schema ID",
         description: "Programmatic identifier of the structured schema template model queried."
     },
-    catalog_source_type: {
+    directory_source_type: {
         name: "Source Provider Type",
-        description: "Toggle catalog index reference lookup versus localized CSV options tables."
+        description: "Toggle directory index reference lookup versus localized CSV options tables."
     },
     exclude_from_export: {
         name: "Exclude Export",
@@ -737,9 +737,9 @@ const ObjectPropertiesInput: React.FC<{
     addSelectedObjectProperty: () => void;
     removeSelectedObjectProperty: (index: number) => void;
     updateSelectedObjectProperty: (index: number, patch: any) => void;
-    catalogForms: Array<{ id: string; title: string }>;
-    defaultCatalogFormId?: string;
-}> = ({ selectedObjectProperties, addSelectedObjectProperty, removeSelectedObjectProperty, updateSelectedObjectProperty, catalogForms, defaultCatalogFormId }) => {
+    directoryForms: Array<{ id: string; title: string }>;
+    defaultDirectoryFormId?: string;
+}> = ({ selectedObjectProperties, addSelectedObjectProperty, removeSelectedObjectProperty, updateSelectedObjectProperty, directoryForms, defaultDirectoryFormId }) => {
     const [isOpen, setIsOpen] = useState(false);
     return (
         <div className="w-full">
@@ -843,24 +843,24 @@ const ObjectPropertiesInput: React.FC<{
                                     <div>
                                         <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Select Source</label>
                                         <select
-                                            value={property.reference?.source_type === 'catalog_form' ? 'catalog_form' : property.reference?.source_type === 'catalog' ? 'catalog' : 'manual'}
+                                            value={property.reference?.source_type === 'directory_form' ? 'directory_form' : property.reference?.source_type === 'directory' ? 'directory' : 'manual'}
                                             onChange={(e) => {
-                                                if (e.target.value === 'catalog_form') {
+                                                if (e.target.value === 'directory_form') {
                                                     updateSelectedObjectProperty(propertyIndex, {
                                                         reference: {
-                                                            source_type: 'catalog_form',
-                                                            source_id: defaultCatalogFormId || catalogForms[0]?.id || '',
+                                                            source_type: 'directory_form',
+                                                            source_id: defaultDirectoryFormId || directoryForms[0]?.id || '',
                                                             label_field: 'label',
                                                             value_field: 'sku_code',
                                                             field_mappings: {},
                                                         },
                                                         options: undefined,
                                                     });
-                                                } else if (e.target.value === 'catalog') {
+                                                } else if (e.target.value === 'directory') {
                                                     updateSelectedObjectProperty(propertyIndex, {
                                                         reference: {
-                                                            source_type: 'catalog',
-                                                            source_id: 'project_catalog',
+                                                            source_type: 'directory',
+                                                            source_id: 'project_directory',
                                                             label_field: 'label',
                                                             value_field: 'id',
                                                         },
@@ -879,14 +879,14 @@ const ObjectPropertiesInput: React.FC<{
                                             className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[11px] outline-none text-[hsl(var(--text-primary))]"
                                         >
                                             <option value="manual">Manual Options</option>
-                                            <option value="catalog_form">Catalog Form</option>
-                                            <option value="catalog">Legacy Project Catalog</option>
+                                            <option value="directory_form">Directory Form</option>
+                                            <option value="directory">Legacy Project Directory</option>
                                         </select>
                                     </div>
-                                    {property.reference?.source_type === 'catalog_form' ? (
+                                    {property.reference?.source_type === 'directory_form' ? (
                                         <div className="space-y-2">
                                             <div>
-                                                <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Catalog Form</label>
+                                                <label className="text-[9px] font-bold text-[hsl(var(--text-tertiary))] block mb-0.5">Directory Form</label>
                                                 <select
                                                     value={property.reference.source_id || ''}
                                                     onChange={(e) => updateSelectedObjectProperty(propertyIndex, {
@@ -897,19 +897,19 @@ const ObjectPropertiesInput: React.FC<{
                                                     })}
                                                     className="w-full bg-[hsl(var(--surface))] px-1 py-0.5 border border-[hsl(var(--border))]/40 rounded text-[11px] outline-none text-[hsl(var(--text-primary))]"
                                                 >
-                                                    <option value="">Select catalog...</option>
-                                                    {catalogForms.map((catalog) => (
-                                                        <option key={catalog.id} value={catalog.id}>{catalog.title}</option>
+                                                    <option value="">Select directory...</option>
+                                                    {directoryForms.map((directory) => (
+                                                        <option key={directory.id} value={directory.id}>{directory.title}</option>
                                                     ))}
                                                 </select>
                                             </div>
                                             <div className="text-[9px] text-[hsl(var(--text-tertiary))] leading-normal bg-[hsl(var(--surface-elevated))]/20 p-2 rounded border border-[hsl(var(--border))]/25">
-                                                Options load from the published catalog at runtime. Stored values use the catalog key field.
+                                                Options load from the published directory at runtime. Stored values use the directory key field.
                                             </div>
                                         </div>
-                                    ) : property.reference?.source_type === 'catalog' ? (
+                                    ) : property.reference?.source_type === 'directory' ? (
                                         <div className="text-[9px] text-[hsl(var(--text-tertiary))] leading-normal bg-[hsl(var(--surface-elevated))]/20 p-2 rounded border border-[hsl(var(--border))]/25">
-                                            Linked to Project Catalog. Properties named <code>unit_price</code> or <code>price</code> will auto-fill with selected product MSRP.
+                                            Linked to Project Directory. Properties named <code>unit_price</code> or <code>price</code> will auto-fill with selected product MSRP.
                                         </div>
                                     ) : (
                                         <div>
@@ -1250,7 +1250,7 @@ const CATALOG_BLOCKED_TYPES: Set<FieldType> = new Set([
     'form_link',
 ]);
 
-/** Scalar fields that can serve as catalog key or display label */
+/** Scalar fields that can serve as directory key or display label */
 const CATALOG_DESIGNATABLE_FIELD_TYPES: Set<FieldType> = new Set([
     'input_text',
     'input_number',
@@ -1277,9 +1277,9 @@ const FormBuilder: React.FC = () => {
         is_public: boolean;
         status?: 'draft' | 'live' | 'archived';
         published_version?: number | null;
-        kind?: 'standard' | 'catalog';
-        catalog_key_field_id?: string | null;
-        catalog_label_field_id?: string | null;
+        kind?: 'standard' | 'directory';
+        directory_key_field_id?: string | null;
+        directory_label_field_id?: string | null;
     } | null>(null);
     const [title, setTitle] = useState('Untitled Form');
     const [, setTemplates] = useState<any[]>([]);
@@ -1373,7 +1373,7 @@ const FormBuilder: React.FC = () => {
 
     const quickButtons = useMemo(() => {
         const POOL: FieldType[] = ['input_text', 'input_number', 'date_picker', 'dropdown', 'checkbox_group'];
-        let recent = recentFields.filter(t => !(formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(t)));
+        let recent = recentFields.filter(t => !(formMeta?.kind === 'directory' && CATALOG_BLOCKED_TYPES.has(t)));
         for (const item of POOL) {
             if (recent.length >= 2) break;
             if (!recent.includes(item)) {
@@ -1605,12 +1605,12 @@ const FormBuilder: React.FC = () => {
         created_at?: string;
         blueprint?: any;
     }>>([]);
-    const [catalogItems, setCatalogItems] = useState<ProjectCatalogItem[]>([]);
-    const [catalogForms, setCatalogForms] = useState<Array<{
+    const [directoryItems, setDirectoryItems] = useState<ProjectDirectoryItem[]>([]);
+    const [directoryForms, setDirectoryForms] = useState<Array<{
         id: string;
         title: string;
-        catalog_key_field_id: string;
-        catalog_label_field_id: string;
+        directory_key_field_id: string;
+        directory_label_field_id: string;
         fields: Array<{ bind: string; label: string }>;
     }>>([]);
 
@@ -2006,7 +2006,7 @@ const FormBuilder: React.FC = () => {
         return links;
     };
 
-    const buildCatalogSourceItems = (items: ProjectCatalogItem[]): CatalogSourceItem[] => (
+    const buildDirectorySourceItems = (items: ProjectDirectoryItem[]): DirectorySourceItem[] => (
         items
             .filter((item) => item.is_active !== false)
             .map((item) => ({
@@ -2032,14 +2032,14 @@ const FormBuilder: React.FC = () => {
 
 
 
-    const hydrateCatalogReferences = (definition: FormObjectDefinition | undefined, field: FormField): FormObjectDefinition | undefined => {
+    const hydrateDirectoryReferences = (definition: FormObjectDefinition | undefined, field: FormField): FormObjectDefinition | undefined => {
         if (!definition) {
             return undefined;
         }
 
-        const catalogSourceItems = buildCatalogSourceItems(catalogItems);
+        const directorySourceItems = buildDirectorySourceItems(directoryItems);
         const nextProperties = (definition.properties || []).map((property) => {
-            if (property.reference?.source_type === 'catalog_form') {
+            if (property.reference?.source_type === 'directory_form') {
                 return {
                     ...property,
                     reference: {
@@ -2048,7 +2048,7 @@ const FormBuilder: React.FC = () => {
                     },
                 };
             }
-            if (property.reference?.source_type !== 'catalog') {
+            if (property.reference?.source_type !== 'directory') {
                 return property;
             }
 
@@ -2056,10 +2056,10 @@ const FormBuilder: React.FC = () => {
                 ...property,
                 reference: {
                     ...property.reference,
-                    source_id: property.reference.source_id || 'project_catalog',
+                    source_id: property.reference.source_id || 'project_directory',
                     label_field: property.reference.label_field || 'label',
                     value_field: property.reference.value_field || 'id',
-                    source_items: catalogSourceItems,
+                    source_items: directorySourceItems,
                 },
             };
         });
@@ -2139,47 +2139,47 @@ const FormBuilder: React.FC = () => {
 
 
     useEffect(() => {
-        const loadCatalogItems = async () => {
+        const loadDirectoryItems = async () => {
             if (!currentOrg?.id || !formMeta?.project_id) {
-                setCatalogItems([]);
+                setDirectoryItems([]);
                 return;
             }
 
             try {
-                const items = await projectAPI.listCatalogItems(currentOrg.id, formMeta.project_id);
-                setCatalogItems(Array.isArray(items) ? items : []);
+                const items = await projectAPI.listDirectoryItems(currentOrg.id, formMeta.project_id);
+                setDirectoryItems(Array.isArray(items) ? items : []);
             } catch (error) {
-                console.error('Failed to load project catalog items', error);
-                setCatalogItems([]);
+                console.error('Failed to load project directory items', error);
+                setDirectoryItems([]);
             }
         };
 
-        loadCatalogItems();
+        loadDirectoryItems();
     }, [currentOrg?.id, formMeta?.project_id]);
 
     useEffect(() => {
-        const loadCatalogForms = async () => {
+        const loadDirectoryForms = async () => {
             if (!formId) {
-                setCatalogForms([]);
+                setDirectoryForms([]);
                 return;
             }
             try {
-                const sources = await formAPI.listCatalogLookupSources(formId);
-                const liveCatalogs = (Array.isArray(sources) ? sources : []).map((item: any) => ({
+                const sources = await formAPI.listDirectoryLookupSources(formId);
+                const liveDirectorys = (Array.isArray(sources) ? sources : []).map((item: any) => ({
                     id: item.id,
                     title: item.title,
-                    catalog_key_field_id: item.catalog_key_field_id || '',
-                    catalog_label_field_id: item.catalog_label_field_id || '',
+                    directory_key_field_id: item.directory_key_field_id || '',
+                    directory_label_field_id: item.directory_label_field_id || '',
                     fields: Array.isArray(item.fields) ? item.fields : [],
                 }));
-                setCatalogForms(liveCatalogs);
+                setDirectoryForms(liveDirectorys);
             } catch (error) {
-                console.error('Failed to load catalog forms', error);
-                setCatalogForms([]);
+                console.error('Failed to load directory forms', error);
+                setDirectoryForms([]);
             }
         };
 
-        loadCatalogForms();
+        loadDirectoryForms();
     }, [formId]);
 
     const getSlotVersion = (slot: 1 | 2 | 3) => activeVersions.find(v => v.kind === 'draft' && v.slot_index === slot);
@@ -2239,15 +2239,15 @@ const FormBuilder: React.FC = () => {
                 collection_layout: child.collection_layout,
                 allow_add_items: child.allow_add_items,
                 allow_remove_items: child.allow_remove_items,
-                catalog_source_type: child.catalog_source_type,
-                catalog_form_id: child.catalog_form_id,
-                catalog_prepopulate_mode: child.catalog_prepopulate_mode,
-                required_catalog_item_ids: child.required_catalog_item_ids || [],
+                directory_source_type: child.directory_source_type,
+                directory_form_id: child.directory_form_id,
+                directory_prepopulate_mode: child.directory_prepopulate_mode,
+                required_directory_item_ids: child.required_directory_item_ids || [],
                 options_source: child.options_source,
-                catalog_display_field: child.catalog_display_field,
-                catalog_value_field: child.catalog_value_field,
-                catalog_unique_values: !!child.catalog_unique_values,
-                catalog_cascade_filter_column: child.catalog_cascade_filter_column,
+                directory_display_field: child.directory_display_field,
+                directory_value_field: child.directory_value_field,
+                directory_unique_values: !!child.directory_unique_values,
+                directory_cascade_filter_column: child.directory_cascade_filter_column,
                 cascade_parent_field_id: child.cascade_parent_field_id,
                 linked_form_id: child.linked_form_id,
                 linked_form_slug: child.linked_form_slug,
@@ -2294,8 +2294,8 @@ const FormBuilder: React.FC = () => {
                     status: data.status,
                     published_version: data.published_version,
                     kind: data.kind,
-                    catalog_key_field_id: data.catalog_key_field_id,
-                    catalog_label_field_id: data.catalog_label_field_id,
+                    directory_key_field_id: data.directory_key_field_id,
+                    directory_label_field_id: data.directory_label_field_id,
                 });
                 setActiveVersions(Array.isArray(versions) ? versions : []);
                 setTitle(data.title || 'Untitled Form');
@@ -2558,8 +2558,8 @@ const FormBuilder: React.FC = () => {
         }
         if (['object_collection', 'object_instance'].includes(field.type)) {
             entry.object_schema_key = field.object_schema_key;
-            entry.item_definition = hydrateCatalogReferences(field.object_definition, field);
-            entry.catalog_source_type = field.catalog_source_type;
+            entry.item_definition = hydrateDirectoryReferences(field.object_definition, field);
+            entry.directory_source_type = field.directory_source_type;
         }
         if (field.type === 'generic_range') {
             entry.range_type = field.range_type;
@@ -2603,19 +2603,19 @@ const FormBuilder: React.FC = () => {
         min_label: field.min_label,
         max_label: field.max_label,
         object_schema_key: field.object_schema_key,
-        object_definition: hydrateCatalogReferences(field.object_definition, field),
+        object_definition: hydrateDirectoryReferences(field.object_definition, field),
         collection_layout: field.collection_layout,
         allow_add_items: field.allow_add_items,
         allow_remove_items: field.allow_remove_items,
-        catalog_source_type: field.catalog_source_type,
-        catalog_form_id: field.catalog_form_id,
-        catalog_prepopulate_mode: field.catalog_prepopulate_mode,
-        required_catalog_item_ids: field.required_catalog_item_ids,
+        directory_source_type: field.directory_source_type,
+        directory_form_id: field.directory_form_id,
+        directory_prepopulate_mode: field.directory_prepopulate_mode,
+        required_directory_item_ids: field.required_directory_item_ids,
         options_source: field.options_source,
-        catalog_display_field: field.catalog_display_field,
-        catalog_value_field: field.catalog_value_field,
-        catalog_unique_values: field.catalog_unique_values,
-        catalog_cascade_filter_column: field.catalog_cascade_filter_column,
+        directory_display_field: field.directory_display_field,
+        directory_value_field: field.directory_value_field,
+        directory_unique_values: field.directory_unique_values,
+        directory_cascade_filter_column: field.directory_cascade_filter_column,
         cascade_parent_field_id: field.cascade_parent_field_id,
         // Form link
         linked_form_id: field.linked_form_id,
@@ -2705,14 +2705,14 @@ const FormBuilder: React.FC = () => {
         if (!formId || isPublishing) return;
         setIsPublishing(true);
 
-        if (formMeta?.kind === 'catalog') {
-            if (!formMeta.catalog_key_field_id) {
-                showToast('Publish failed', 'Catalog forms require a Key Field designation before publishing.', 'error');
+        if (formMeta?.kind === 'directory') {
+            if (!formMeta.directory_key_field_id) {
+                showToast('Publish failed', 'Directory forms require a Key Field designation before publishing.', 'error');
                 setIsPublishing(false);
                 return;
             }
-            if (!formMeta.catalog_label_field_id) {
-                showToast('Publish failed', 'Catalog forms require a Label Field designation before publishing.', 'error');
+            if (!formMeta.directory_label_field_id) {
+                showToast('Publish failed', 'Directory forms require a Label Field designation before publishing.', 'error');
                 setIsPublishing(false);
                 return;
             }
@@ -3115,7 +3115,7 @@ const FormBuilder: React.FC = () => {
                                 <p className="text-xs font-semibold text-[hsl(var(--text-primary))] truncate">{field.object_schema_key || 'Object Reference'}</p>
                             </div>
                         </div>
-                        <span className="text-[9px] bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded border border-[hsl(var(--border))]/30 text-[hsl(var(--text-secondary))] font-mono shrink-0">Catalog Source</span>
+                        <span className="text-[9px] bg-[hsl(var(--surface-elevated))] px-1.5 py-0.5 rounded border border-[hsl(var(--border))]/30 text-[hsl(var(--text-secondary))] font-mono shrink-0">Directory Source</span>
                     </div>
                 );
             case 'toggle':
@@ -3218,9 +3218,9 @@ const FormBuilder: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
-                        {formMeta?.kind === 'catalog' && (
+                        {formMeta?.kind === 'directory' && (
                             <div className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-600">
-                                Catalog Mode
+                                Directory Mode
                             </div>
                         )}
                         <div className="rounded-md bg-[hsl(var(--surface-elevated))]/70 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
@@ -3430,7 +3430,7 @@ const FormBuilder: React.FC = () => {
                                         {(() => {
                                             const filteredCategories = ['Standard Inputs', 'Time & Date', 'Selection Fields', 'Device Metrics', 'Media Input', 'Advanced Inputs'].map(category => {
                                                 const categoryWidgets = widgetLibrary.filter(w => {
-                                                    if (formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(w.type)) {
+                                                    if (formMeta?.kind === 'directory' && CATALOG_BLOCKED_TYPES.has(w.type)) {
                                                         return false;
                                                     }
                                                     return widgetCategoryMap[w.type] === category;
@@ -4017,12 +4017,12 @@ const FormBuilder: React.FC = () => {
                                                                         onChange={(e) => updateFieldLabel(field.id, e.target.value)}
                                                                         className="text-[15px] font-bold text-[hsl(var(--text-primary))] bg-transparent border-b border-transparent focus:outline-none flex-1 min-w-0"
                                                                     />
-                                                                    {formMeta?.kind === 'catalog' && formMeta.catalog_key_field_id === field.id && (
+                                                                    {formMeta?.kind === 'directory' && formMeta.directory_key_field_id === field.id && (
                                                                         <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shadow-sm whitespace-nowrap" title="Unique key identifier">
                                                                             ⚿ Key
                                                                         </span>
                                                                     )}
-                                                                    {formMeta?.kind === 'catalog' && formMeta.catalog_label_field_id === field.id && (
+                                                                    {formMeta?.kind === 'directory' && formMeta.directory_label_field_id === field.id && (
                                                                         <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-blue-600 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 shadow-sm whitespace-nowrap" title="Dropdown display label">
                                                                             🏷 Label
                                                                         </span>
@@ -4603,7 +4603,7 @@ const FormBuilder: React.FC = () => {
                                                             }
                                                         ];
 
-                                                        const categories = formMeta?.kind === 'catalog'
+                                                        const categories = formMeta?.kind === 'directory'
                                                             ? ['Appearance', 'Behavior']
                                                             : ['Appearance', 'Logic & Events', 'Behavior'];
 
@@ -4887,12 +4887,12 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalogKey',
-                                                                            label: 'Catalog Key',
+                                                                            key: 'directoryKey',
+                                                                            label: 'Directory Key',
                                                                             metaKey: undefined as any,
-                                                                            visible: formMeta?.kind === 'catalog' && CATALOG_DESIGNATABLE_FIELD_TYPES.has(selectedField.type),
+                                                                            visible: formMeta?.kind === 'directory' && CATALOG_DESIGNATABLE_FIELD_TYPES.has(selectedField.type),
                                                                             render: () => {
-                                                                                const isKey = formMeta?.catalog_key_field_id === selectedField.id;
+                                                                                const isKey = formMeta?.directory_key_field_id === selectedField.id;
                                                                                 return (
                                                                                     <div className="flex items-center justify-between w-full">
                                                                                         <span className="text-[10px] text-[hsl(var(--text-tertiary))] italic leading-none max-w-[70%]">
@@ -4905,21 +4905,21 @@ const FormBuilder: React.FC = () => {
                                                                                                 const checked = e.target.checked;
                                                                                                 const nextKeyId = checked ? selectedField.id : null;
                                                                                                 try {
-                                                                                                    await formAPI.updateCatalogDesignations(formId!, {
-                                                                                                        catalog_key_field_id: nextKeyId,
-                                                                                                        catalog_label_field_id: formMeta?.catalog_label_field_id
+                                                                                                    await formAPI.updateDirectoryDesignations(formId!, {
+                                                                                                        directory_key_field_id: nextKeyId,
+                                                                                                        directory_label_field_id: formMeta?.directory_label_field_id
                                                                                                     });
                                                                                                     setFormMeta(prev => prev ? {
                                                                                                         ...prev,
-                                                                                                        catalog_key_field_id: nextKeyId
+                                                                                                        directory_key_field_id: nextKeyId
                                                                                                     } : null);
                                                                                                     if (checked) {
                                                                                                         updateField(selectedField.id, { required: true });
                                                                                                     }
-                                                                                                    showToast('Designation updated', 'Catalog Key updated successfully.', 'success');
+                                                                                                    showToast('Designation updated', 'Directory Key updated successfully.', 'success');
                                                                                                 } catch (err) {
                                                                                                     console.error(err);
-                                                                                                    showToast('Error', 'Failed to update catalog designation.', 'error');
+                                                                                                    showToast('Error', 'Failed to update directory designation.', 'error');
                                                                                                 }
                                                                                             }}
                                                                                             className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
@@ -4930,12 +4930,12 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalogLabel',
+                                                                            key: 'directoryLabel',
                                                                             label: 'Display Label',
                                                                             metaKey: undefined as any,
-                                                                            visible: formMeta?.kind === 'catalog' && CATALOG_DESIGNATABLE_FIELD_TYPES.has(selectedField.type),
+                                                                            visible: formMeta?.kind === 'directory' && CATALOG_DESIGNATABLE_FIELD_TYPES.has(selectedField.type),
                                                                             render: () => {
-                                                                                const isLabel = formMeta?.catalog_label_field_id === selectedField.id;
+                                                                                const isLabel = formMeta?.directory_label_field_id === selectedField.id;
                                                                                 return (
                                                                                     <div className="flex items-center justify-between w-full">
                                                                                         <span className="text-[10px] text-[hsl(var(--text-tertiary))] italic leading-none max-w-[70%]">
@@ -4948,13 +4948,13 @@ const FormBuilder: React.FC = () => {
                                                                                                 const checked = e.target.checked;
                                                                                                 const nextLabelId = checked ? selectedField.id : null;
                                                                                                 try {
-                                                                                                    await formAPI.updateCatalogDesignations(formId!, {
-                                                                                                        catalog_key_field_id: formMeta?.catalog_key_field_id,
-                                                                                                        catalog_label_field_id: nextLabelId
+                                                                                                    await formAPI.updateDirectoryDesignations(formId!, {
+                                                                                                        directory_key_field_id: formMeta?.directory_key_field_id,
+                                                                                                        directory_label_field_id: nextLabelId
                                                                                                     });
                                                                                                     setFormMeta(prev => prev ? {
                                                                                                         ...prev,
-                                                                                                        catalog_label_field_id: nextLabelId
+                                                                                                        directory_label_field_id: nextLabelId
                                                                                                     } : null);
                                                                                                     if (checked) {
                                                                                                         updateField(selectedField.id, { required: true });
@@ -4962,7 +4962,7 @@ const FormBuilder: React.FC = () => {
                                                                                                     showToast('Designation updated', 'Display Label updated successfully.', 'success');
                                                                                                 } catch (err) {
                                                                                                     console.error(err);
-                                                                                                    showToast('Error', 'Failed to update catalog designation.', 'error');
+                                                                                                    showToast('Error', 'Failed to update directory designation.', 'error');
                                                                                                 }
                                                                                             }}
                                                                                             className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
@@ -4981,61 +4981,61 @@ const FormBuilder: React.FC = () => {
                                                                                 <select
                                                                                     value={selectedField.options_source || 'manual'}
                                                                                     onChange={(e) => {
-                                                                                        const nextSource = e.target.value === 'catalog_form' ? 'catalog_form' : 'manual';
+                                                                                        const nextSource = e.target.value === 'directory_form' ? 'directory_form' : 'manual';
                                                                                         updateField(selectedField.id, {
                                                                                             options_source: nextSource,
-                                                                                            catalog_form_id: nextSource === 'catalog_form' ? selectedField.catalog_form_id : undefined,
+                                                                                            directory_form_id: nextSource === 'directory_form' ? selectedField.directory_form_id : undefined,
                                                                                         });
                                                                                     }}
                                                                                     className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                 >
                                                                                     <option value="manual">Manual choices</option>
-                                                                                    <option value="catalog_form">Catalog form</option>
+                                                                                    <option value="directory_form">Directory form</option>
                                                                                 </select>
                                                                             )
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_form_id',
-                                                                            label: 'Catalog Form',
+                                                                            key: 'directory_form_id',
+                                                                            label: 'Directory Form',
                                                                             metaKey: 'lookup_source',
-                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type) && selectedField.options_source === 'catalog_form',
+                                                                            visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type) && selectedField.options_source === 'directory_form',
                                                                             render: () => (
                                                                                 <select
-                                                                                    value={selectedField.catalog_form_id || ''}
-                                                                                    onChange={(e) => updateField(selectedField.id, { catalog_form_id: e.target.value || undefined })}
+                                                                                    value={selectedField.directory_form_id || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { directory_form_id: e.target.value || undefined })}
                                                                                     className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                 >
-                                                                                    <option value="">Select catalog...</option>
-                                                                                    {catalogForms.map((catalog) => (
-                                                                                        <option key={catalog.id} value={catalog.id}>{catalog.title}</option>
+                                                                                    <option value="">Select directory...</option>
+                                                                                    {directoryForms.map((directory) => (
+                                                                                        <option key={directory.id} value={directory.id}>{directory.title}</option>
                                                                                     ))}
                                                                                 </select>
                                                                             )
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_display_field',
+                                                                            key: 'directory_display_field',
                                                                             label: 'Display Column',
                                                                             metaKey: 'lookup_source',
                                                                             visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
-                                                                                && selectedField.options_source === 'catalog_form'
-                                                                                && !!selectedField.catalog_form_id,
+                                                                                && selectedField.options_source === 'directory_form'
+                                                                                && !!selectedField.directory_form_id,
                                                                             render: () => {
-                                                                                const catalog = catalogForms.find((item) => item.id === selectedField.catalog_form_id);
-                                                                                const catalogFields = catalog?.fields || [];
+                                                                                const directory = directoryForms.find((item) => item.id === selectedField.directory_form_id);
+                                                                                const directoryFields = directory?.fields || [];
                                                                                 return (
                                                                                     <select
-                                                                                        value={selectedField.catalog_display_field || ''}
-                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_display_field: e.target.value || undefined })}
+                                                                                        value={selectedField.directory_display_field || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { directory_display_field: e.target.value || undefined })}
                                                                                         className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                     >
-                                                                                        <option value="">Default (catalog label field)</option>
-                                                                                        {catalogFields.map((column) => (
+                                                                                        <option value="">Default (directory label field)</option>
+                                                                                        {directoryFields.map((column) => (
                                                                                             <option key={column.bind} value={column.bind}>
                                                                                                 {column.label}
-                                                                                                {column.bind === catalog?.catalog_label_field_id ? ' (Label)' : ''}
-                                                                                                {column.bind === catalog?.catalog_key_field_id ? ' (Key)' : ''}
+                                                                                                {column.bind === directory?.directory_label_field_id ? ' (Label)' : ''}
+                                                                                                {column.bind === directory?.directory_key_field_id ? ' (Key)' : ''}
                                                                                             </option>
                                                                                         ))}
                                                                                     </select>
@@ -5044,27 +5044,27 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_value_field',
+                                                                            key: 'directory_value_field',
                                                                             label: 'Stored Value',
                                                                             metaKey: 'lookup_source',
                                                                             visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
-                                                                                && selectedField.options_source === 'catalog_form'
-                                                                                && !!selectedField.catalog_form_id,
+                                                                                && selectedField.options_source === 'directory_form'
+                                                                                && !!selectedField.directory_form_id,
                                                                             render: () => {
-                                                                                const catalog = catalogForms.find((item) => item.id === selectedField.catalog_form_id);
-                                                                                const catalogFields = catalog?.fields || [];
+                                                                                const directory = directoryForms.find((item) => item.id === selectedField.directory_form_id);
+                                                                                const directoryFields = directory?.fields || [];
                                                                                 return (
                                                                                     <select
-                                                                                        value={selectedField.catalog_value_field || ''}
-                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_value_field: e.target.value || undefined })}
+                                                                                        value={selectedField.directory_value_field || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { directory_value_field: e.target.value || undefined })}
                                                                                         className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                     >
-                                                                                        <option value="">Default (catalog key field)</option>
-                                                                                        {catalogFields.map((column) => (
+                                                                                        <option value="">Default (directory key field)</option>
+                                                                                        {directoryFields.map((column) => (
                                                                                             <option key={column.bind} value={column.bind}>
                                                                                                 {column.label}
-                                                                                                {column.bind === catalog?.catalog_label_field_id ? ' (Label)' : ''}
-                                                                                                {column.bind === catalog?.catalog_key_field_id ? ' (Key)' : ''}
+                                                                                                {column.bind === directory?.directory_label_field_id ? ' (Label)' : ''}
+                                                                                                {column.bind === directory?.directory_key_field_id ? ' (Key)' : ''}
                                                                                             </option>
                                                                                         ))}
                                                                                     </select>
@@ -5073,18 +5073,18 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_unique_values',
+                                                                            key: 'directory_unique_values',
                                                                             label: 'Unique Values',
                                                                             metaKey: 'lookup_source',
                                                                             visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
-                                                                                && selectedField.options_source === 'catalog_form'
-                                                                                && !!selectedField.catalog_form_id,
+                                                                                && selectedField.options_source === 'directory_form'
+                                                                                && !!selectedField.directory_form_id,
                                                                             render: () => (
                                                                                 <label className="flex items-center gap-2 text-xs text-[hsl(var(--text-primary))] cursor-pointer select-none">
                                                                                     <input
                                                                                         type="checkbox"
-                                                                                        checked={!!selectedField.catalog_unique_values}
-                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_unique_values: e.target.checked })}
+                                                                                        checked={!!selectedField.directory_unique_values}
+                                                                                        onChange={(e) => updateField(selectedField.id, { directory_unique_values: e.target.checked })}
                                                                                         className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
                                                                                     />
                                                                                     Show each stored value once
@@ -5097,8 +5097,8 @@ const FormBuilder: React.FC = () => {
                                                                             label: 'Cascade Parent',
                                                                             metaKey: 'lookup_source',
                                                                             visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
-                                                                                && selectedField.options_source === 'catalog_form'
-                                                                                && !!selectedField.catalog_form_id,
+                                                                                && selectedField.options_source === 'directory_form'
+                                                                                && !!selectedField.directory_form_id,
                                                                             render: () => {
                                                                                 const parentCandidates = sections.flatMap((section) => section.fields).filter((field) => (
                                                                                     field.id !== selectedField.id
@@ -5109,7 +5109,7 @@ const FormBuilder: React.FC = () => {
                                                                                         value={selectedField.cascade_parent_field_id || ''}
                                                                                         onChange={(e) => updateField(selectedField.id, {
                                                                                             cascade_parent_field_id: e.target.value || undefined,
-                                                                                            catalog_cascade_filter_column: e.target.value ? selectedField.catalog_cascade_filter_column : undefined,
+                                                                                            directory_cascade_filter_column: e.target.value ? selectedField.directory_cascade_filter_column : undefined,
                                                                                         })}
                                                                                         className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                     >
@@ -5123,28 +5123,28 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_cascade_filter_column',
+                                                                            key: 'directory_cascade_filter_column',
                                                                             label: 'Filter Column',
                                                                             metaKey: 'lookup_source',
                                                                             visible: ['dropdown', 'radio_group', 'multi_select_dropdown'].includes(selectedField.type)
-                                                                                && selectedField.options_source === 'catalog_form'
-                                                                                && !!selectedField.catalog_form_id
+                                                                                && selectedField.options_source === 'directory_form'
+                                                                                && !!selectedField.directory_form_id
                                                                                 && !!selectedField.cascade_parent_field_id,
                                                                             render: () => {
-                                                                                const catalog = catalogForms.find((item) => item.id === selectedField.catalog_form_id);
-                                                                                const catalogFields = catalog?.fields || [];
+                                                                                const directory = directoryForms.find((item) => item.id === selectedField.directory_form_id);
+                                                                                const directoryFields = directory?.fields || [];
                                                                                 return (
                                                                                     <select
-                                                                                        value={selectedField.catalog_cascade_filter_column || ''}
-                                                                                        onChange={(e) => updateField(selectedField.id, { catalog_cascade_filter_column: e.target.value || undefined })}
+                                                                                        value={selectedField.directory_cascade_filter_column || ''}
+                                                                                        onChange={(e) => updateField(selectedField.id, { directory_cascade_filter_column: e.target.value || undefined })}
                                                                                         className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                     >
-                                                                                        <option value="">Select catalog column...</option>
-                                                                                        {catalogFields.map((column) => (
+                                                                                        <option value="">Select directory column...</option>
+                                                                                        {directoryFields.map((column) => (
                                                                                             <option key={column.bind} value={column.bind}>
                                                                                                 {column.label}
-                                                                                                {column.bind === catalog?.catalog_label_field_id ? ' (Label)' : ''}
-                                                                                                {column.bind === catalog?.catalog_key_field_id ? ' (Key)' : ''}
+                                                                                                {column.bind === directory?.directory_label_field_id ? ' (Label)' : ''}
+                                                                                                {column.bind === directory?.directory_key_field_id ? ' (Key)' : ''}
                                                                                             </option>
                                                                                         ))}
                                                                                     </select>
@@ -5228,33 +5228,33 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_source_type',
-                                                                            label: 'Catalog Source',
-                                                                            metaKey: 'catalog_source_type',
+                                                                            key: 'directory_source_type',
+                                                                            label: 'Directory Source',
+                                                                            metaKey: 'directory_source_type',
                                                                             visible: ['object_collection', 'object_instance'].includes(selectedField.type),
                                                                             render: () => (
                                                                                 <select
-                                                                                    value={selectedField.catalog_source_type || ''}
+                                                                                    value={selectedField.directory_source_type || ''}
                                                                                     onChange={(e) => {
                                                                                         const nextValue = e.target.value || undefined;
                                                                                         let patch: any = {
-                                                                                            catalog_source_type: nextValue,
-                                                                                            catalog_form_id: nextValue === 'catalog_form' ? selectedField.catalog_form_id : undefined,
+                                                                                            directory_source_type: nextValue,
+                                                                                            directory_form_id: nextValue === 'directory_form' ? selectedField.directory_form_id : undefined,
                                                                                         };
-                                                                                        if (nextValue === 'project_catalog' || nextValue === 'catalog_form') {
+                                                                                        if (nextValue === 'project_directory' || nextValue === 'directory_form') {
                                                                                             const currentDef: any = selectedField.object_definition || {};
                                                                                             const currentProps = currentDef.properties || [];
                                                                                             if (currentProps.length === 0) {
-                                                                                                const productReference = nextValue === 'catalog_form'
+                                                                                                const productReference = nextValue === 'directory_form'
                                                                                                     ? {
-                                                                                                        source_type: 'catalog_form',
-                                                                                                        source_id: selectedField.catalog_form_id || '',
+                                                                                                        source_type: 'directory_form',
+                                                                                                        source_id: selectedField.directory_form_id || '',
                                                                                                         label_field: 'label',
                                                                                                         value_field: 'sku_code',
                                                                                                         field_mappings: {},
                                                                                                     }
                                                                                                     : {
-                                                                                                        source_type: 'catalog',
+                                                                                                        source_type: 'directory',
                                                                                                         field_mappings: {},
                                                                                                     };
                                                                                                 patch.object_definition = {
@@ -5282,38 +5282,38 @@ const FormBuilder: React.FC = () => {
                                                                                         updateField(selectedField.id, patch);
                                                                                     }}
                                                                                     className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
-                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.catalog_source_type)}
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.directory_source_type)}
                                                                                     onBlur={() => setHoveredProperty(null)}
                                                                                 >
                                                                                     <option value="">None / Custom Row</option>
-                                                                                    <option value="catalog_form">Catalog Form</option>
-                                                                                    <option value="project_catalog">Legacy Project Catalog</option>
+                                                                                    <option value="directory_form">Directory Form</option>
+                                                                                    <option value="project_directory">Legacy Project Directory</option>
                                                                                 </select>
                                                                             )
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_form_id_collection',
-                                                                            label: 'Catalog Form',
-                                                                            metaKey: 'catalog_source_type',
-                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && selectedField.catalog_source_type === 'catalog_form',
+                                                                            key: 'directory_form_id_collection',
+                                                                            label: 'Directory Form',
+                                                                            metaKey: 'directory_source_type',
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && selectedField.directory_source_type === 'directory_form',
                                                                             render: () => (
                                                                                 <select
-                                                                                    value={selectedField.catalog_form_id || ''}
+                                                                                    value={selectedField.directory_form_id || ''}
                                                                                     onChange={(e) => {
-                                                                                        const catalogFormId = e.target.value || undefined;
+                                                                                        const directoryFormId = e.target.value || undefined;
                                                                                         const currentDef: any = selectedField.object_definition || {};
                                                                                         const nextProps = (currentDef.properties || []).map((property: any) => {
                                                                                             if (property.type !== 'select' || !property.reference) {
                                                                                                 return property;
                                                                                             }
-                                                                                            if (property.reference.source_type === 'catalog_form' || property.reference.source_type === 'catalog') {
+                                                                                            if (property.reference.source_type === 'directory_form' || property.reference.source_type === 'directory') {
                                                                                                 return {
                                                                                                     ...property,
                                                                                                     reference: {
                                                                                                         ...property.reference,
-                                                                                                        source_type: 'catalog_form',
-                                                                                                        source_id: catalogFormId,
+                                                                                                        source_type: 'directory_form',
+                                                                                                        source_id: directoryFormId,
                                                                                                         label_field: 'label',
                                                                                                         value_field: 'sku_code',
                                                                                                     },
@@ -5322,7 +5322,7 @@ const FormBuilder: React.FC = () => {
                                                                                             return property;
                                                                                         });
                                                                                         updateField(selectedField.id, {
-                                                                                            catalog_form_id: catalogFormId,
+                                                                                            directory_form_id: directoryFormId,
                                                                                             object_definition: {
                                                                                                 ...currentDef,
                                                                                                 properties: nextProps,
@@ -5331,9 +5331,9 @@ const FormBuilder: React.FC = () => {
                                                                                     }}
                                                                                     className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                 >
-                                                                                    <option value="">Select catalog...</option>
-                                                                                    {catalogForms.map((catalog) => (
-                                                                                        <option key={catalog.id} value={catalog.id}>{catalog.title}</option>
+                                                                                    <option value="">Select directory...</option>
+                                                                                    {directoryForms.map((directory) => (
+                                                                                        <option key={directory.id} value={directory.id}>{directory.title}</option>
                                                                                     ))}
                                                                                 </select>
                                                                             )
@@ -5357,16 +5357,16 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
-                                                                            key: 'catalog_prepopulate_mode',
+                                                                            key: 'directory_prepopulate_mode',
                                                                             label: 'Prepopulate Format',
-                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && (selectedField.catalog_source_type === 'project_catalog' || selectedField.catalog_source_type === 'catalog_form'),
+                                                                            visible: ['object_collection', 'object_instance'].includes(selectedField.type) && (selectedField.directory_source_type === 'project_directory' || selectedField.directory_source_type === 'directory_form'),
                                                                             render: () => (
                                                                                 <select
-                                                                                    value={selectedField.catalog_prepopulate_mode || 'all'}
-                                                                                    onChange={(e) => updateField(selectedField.id, { catalog_prepopulate_mode: e.target.value })}
+                                                                                    value={selectedField.directory_prepopulate_mode || 'all'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { directory_prepopulate_mode: e.target.value })}
                                                                                     className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
                                                                                 >
-                                                                                    <option value="all">All Catalog Items</option>
+                                                                                    <option value="all">All Directory Items</option>
                                                                                     <option value="required_only">Mandatory Items Only</option>
                                                                                     <option value="none">None - Start Empty</option>
                                                                                 </select>
@@ -5568,8 +5568,8 @@ const FormBuilder: React.FC = () => {
                                                                                         addSelectedObjectProperty={addSelectedObjectProperty}
                                                                                         removeSelectedObjectProperty={removeSelectedObjectProperty}
                                                                                         updateSelectedObjectProperty={updateSelectedObjectProperty}
-                                                                                        catalogForms={catalogForms}
-                                                                                        defaultCatalogFormId={selectedField.catalog_form_id}
+                                                                                        directoryForms={directoryForms}
+                                                                                        defaultDirectoryFormId={selectedField.directory_form_id}
                                                                                     />
                                                                                 )
                                                                         },
@@ -5824,15 +5824,15 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Behavior',
-                                                                            key: 'catalog_source_type',
-                                                                            label: 'Catalog-backed',
+                                                                            key: 'directory_source_type',
+                                                                            label: 'Directory-backed',
                                                                             metaKey: undefined as any,
                                                                             visible: selectedField.type === 'object_collection',
                                                                             render: () => (
                                                                                 <input
                                                                                     type="checkbox"
-                                                                                    checked={selectedField.catalog_source_type === 'project_catalog'}
-                                                                                    onChange={(e) => updateField(selectedField.id, { catalog_source_type: e.target.checked ? 'project_catalog' : undefined })}
+                                                                                    checked={selectedField.directory_source_type === 'project_directory'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { directory_source_type: e.target.checked ? 'project_directory' : undefined })}
                                                                                     className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
                                                                                 />
                                                                             )
@@ -6158,7 +6158,7 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                     ];
 
-                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'Data Source', 'Form Link', 'Navigation', 'System Settings'].filter(cat => !(formMeta?.kind === 'catalog' && cat === 'Logic & Events'));
+                                                                                                                                         const categories = ['Appearance', 'Data', 'Logic & Events', 'Validation', 'Behavior', 'Matrix Setup', 'Data Source', 'Form Link', 'Navigation', 'System Settings'].filter(cat => !(formMeta?.kind === 'directory' && cat === 'Logic & Events'));
 
                                                                      return (
                                                                          <div className="overflow-y-auto hide-scrollbar border-b border-[hsl(var(--border))]/25 bg-[hsl(var(--background))]">
@@ -6763,7 +6763,7 @@ const FormBuilder: React.FC = () => {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => {
                             const filteredWidgets = widgetLibrary
-                                .filter(w => !(formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(w.type)))
+                                .filter(w => !(formMeta?.kind === 'directory' && CATALOG_BLOCKED_TYPES.has(w.type)))
                                 .filter(w =>
                                     w.label.toLowerCase().includes(quickAddSearchQuery.toLowerCase()) ||
                                     w.type.toLowerCase().includes(quickAddSearchQuery.toLowerCase())
@@ -6822,7 +6822,7 @@ const FormBuilder: React.FC = () => {
                         <div className="flex-1 overflow-y-auto p-4 space-y-4" id="quick-add-widgets-list">
                             {(() => {
                                 const filteredWidgets = widgetLibrary
-                                    .filter(w => !(formMeta?.kind === 'catalog' && CATALOG_BLOCKED_TYPES.has(w.type)))
+                                    .filter(w => !(formMeta?.kind === 'directory' && CATALOG_BLOCKED_TYPES.has(w.type)))
                                     .filter(w =>
                                         w.label.toLowerCase().includes(quickAddSearchQuery.toLowerCase()) ||
                                         w.type.toLowerCase().includes(quickAddSearchQuery.toLowerCase())

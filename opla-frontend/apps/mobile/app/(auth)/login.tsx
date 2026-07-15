@@ -267,7 +267,7 @@ export default function LoginScreen() {
 
         {/* Skip to Yard */}
         <TouchableOpacity
-          onPress={() => router.replace('/(main)/(yard)')}
+          onPress={() => router.replace('/(main)/(pulse)')}
           style={{ marginTop: 28, alignItems: 'center' }}
         >
           <Text style={{ color: '#475569', fontSize: 14 }}>

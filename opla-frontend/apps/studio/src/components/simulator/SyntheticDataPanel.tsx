@@ -23,7 +23,7 @@ import {
 interface SyntheticDataPanelProps {
   formId: string;
   blueprint: any;
-  catalogItems?: any[];
+  directoryItems?: any[];
 }
 
 type GenPhase = 'idle' | 'generating' | 'submitting' | 'done' | 'error';
@@ -35,7 +35,7 @@ function newRuleId() {
 const SyntheticDataPanel: React.FC<SyntheticDataPanelProps> = ({
   formId,
   blueprint,
-  catalogItems = [],
+  directoryItems = [],
 }) => {
   const [open, setOpen] = useState(true);
   const [count, setCount] = useState(25);
@@ -138,7 +138,7 @@ const SyntheticDataPanel: React.FC<SyntheticDataPanelProps> = ({
           seed: seedNum !== undefined && !Number.isNaN(seedNum) ? seedNum : undefined,
           ratioRules,
         },
-        catalogItems,
+        directoryItems,
       );
       setWarnings(w);
       setLastBatch(responses);
@@ -222,7 +222,7 @@ const SyntheticDataPanel: React.FC<SyntheticDataPanelProps> = ({
           <div>
             <div className="font-bold text-[hsl(var(--text-primary))] text-sm">Synthetic Data</div>
             <div className="text-[11px] text-[hsl(var(--text-tertiary))]">
-              Path-aware · rules · catalogs · ratios
+              Path-aware · rules · directories · ratios
             </div>
           </div>
         </div>
@@ -236,7 +236,7 @@ const SyntheticDataPanel: React.FC<SyntheticDataPanelProps> = ({
       {open && (
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           <p className="text-xs text-[hsl(var(--text-secondary))] leading-relaxed">
-            Generates responses that walk your survey path — cascades, catalog filters, show/hide,
+            Generates responses that walk your survey path — cascades, directory filters, show/hide,
             jumps, and set-value rules — then submits them as tagged test data.
           </p>
 

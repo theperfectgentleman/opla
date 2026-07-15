@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.api.dependencies import get_current_user, get_db, get_optional_user
 from app.api.schemas.submission import SubmissionCreate, PublicSubmissionCreate, SubmissionOut, SubmissionReviewUpdate
-from app.api.schemas.form import CatalogLookupOptionsOut, FormRuntimeOut
+from app.api.schemas.form import DirectoryLookupOptionsOut, FormRuntimeOut
 from app.api.schemas.dataset import LookupOptionsOut
-from app.services.catalog_form_service import CatalogFormService
+from app.services.directory_form_service import DirectoryFormService
 from app.services.dataset_service import DatasetService
 from app.services.submission_service import SubmissionService
 from app.services.project_access_service import ProjectAccessService
@@ -156,19 +156,19 @@ def get_public_lookup_options(
     )
 
 
-@router.get("/public/forms/{slug}/catalog-lookup-sources/{catalog_form_id}/options", response_model=CatalogLookupOptionsOut)
-def get_public_catalog_lookup_options(
+@router.get("/public/forms/{slug}/directory-lookup-sources/{directory_form_id}/options", response_model=DirectoryLookupOptionsOut)
+def get_public_directory_lookup_options(
     slug: str,
-    catalog_form_id: uuid.UUID,
+    directory_form_id: uuid.UUID,
     search: str | None = None,
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
     bounded_limit = max(1, min(limit, 500))
-    return CatalogFormService.get_public_lookup_options(
+    return DirectoryFormService.get_public_lookup_options(
         db,
         slug=slug,
-        catalog_form_id=catalog_form_id,
+        directory_form_id=directory_form_id,
         search=search,
         limit=bounded_limit,
     )

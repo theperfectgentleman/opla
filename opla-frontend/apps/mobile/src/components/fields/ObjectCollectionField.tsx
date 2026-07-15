@@ -105,7 +105,7 @@ function resolveSelectOptions(property: ObjectPropertyDefinition) {
         return property.options;
     }
 
-    if (property.reference?.source_type === 'catalog' && property.reference.source_items?.length) {
+    if (property.reference?.source_type === 'directory' && property.reference.source_items?.length) {
         const labelField = property.reference.label_field || 'label';
         const valueField = property.reference.value_field || 'id';
         return property.reference.source_items.map((item) => ({
@@ -114,7 +114,7 @@ function resolveSelectOptions(property: ObjectPropertyDefinition) {
         }));
     }
 
-    if (property.reference?.source_type === 'catalog_form' && property.reference.source_items?.length) {
+    if (property.reference?.source_type === 'directory_form' && property.reference.source_items?.length) {
         const labelField = property.reference.label_field || 'label';
         const valueField = property.reference.value_field || 'sku_code';
         return property.reference.source_items.map((item) => ({
@@ -126,15 +126,15 @@ function resolveSelectOptions(property: ObjectPropertyDefinition) {
     return [];
 }
 
-function applyCatalogSelection(record: RowValue, path: string[], property: ObjectPropertyDefinition, selectedValue: any) {
+function applyDirectorySelection(record: RowValue, path: string[], property: ObjectPropertyDefinition, selectedValue: any) {
     let nextRecord = setNestedValue(record, path, selectedValue);
     const reference = property.reference;
 
-    if ((reference?.source_type !== 'catalog' && reference?.source_type !== 'catalog_form') || !reference.source_items?.length) {
+    if ((reference?.source_type !== 'directory' && reference?.source_type !== 'directory_form') || !reference.source_items?.length) {
         return nextRecord;
     }
 
-    const valueField = reference.value_field || (reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
+    const valueField = reference.value_field || (reference.source_type === 'directory_form' ? 'sku_code' : 'id');
     const selectedItem = reference.source_items.find((item) => String((item as Record<string, any>)[valueField] ?? item.id) === String(selectedValue));
     if (!selectedItem) {
         return nextRecord;
@@ -148,7 +148,7 @@ function applyCatalogSelection(record: RowValue, path: string[], property: Objec
         }
     });
 
-    // GAP-8: Auto-inject default_price (MSRP) if it exists on the selected catalog item
+    // GAP-8: Auto-inject default_price (MSRP) if it exists on the selected directory item
     const defaultPrice = selectedItem.default_price;
     if (defaultPrice !== undefined && defaultPrice !== null) {
         if (!reference.field_mappings || !reference.field_mappings.hasOwnProperty('unit_price')) {
@@ -185,20 +185,20 @@ export function ObjectCollectionField({
         let loadedItems: RowValue[] = [];
         if (Array.isArray(value) && value.length > 0) {
             loadedItems = value.map((entry) => applyComputedProperties((entry as RowValue) || {}, properties));
-        } else if (field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form') {
-            const propWithCatalog = properties.find((p) => p.type === 'select' && (p.reference?.source_type === 'catalog' || p.reference?.source_type === 'catalog_form'));
-            const sourceItems = propWithCatalog?.reference?.source_items || [];
-            const mode = (field as any).catalog_prepopulate_mode || 'all';
+        } else if (field.directory_source_type === 'project_directory' || field.directory_source_type === 'directory_form') {
+            const propWithDirectory = properties.find((p) => p.type === 'select' && (p.reference?.source_type === 'directory' || p.reference?.source_type === 'directory_form'));
+            const sourceItems = propWithDirectory?.reference?.source_items || [];
+            const mode = (field as any).directory_prepopulate_mode || 'all';
             if (mode !== 'none' && sourceItems.length > 0) {
                 const targetItems = mode === 'required_only'
                     ? sourceItems.filter((item: any) => !!item.metadata_json?.is_mandatory)
                     : sourceItems;
 
                 loadedItems = targetItems.map((item) => {
-                    let row: RowValue = { _isCatalogItem: true };
+                    let row: RowValue = { _isDirectoryItem: true };
                     properties.forEach((prop) => {
-                        if (prop.type === 'select' && (prop.reference?.source_type === 'catalog' || prop.reference?.source_type === 'catalog_form')) {
-                            const valueField = prop.reference.value_field || (prop.reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
+                        if (prop.type === 'select' && (prop.reference?.source_type === 'directory' || prop.reference?.source_type === 'directory_form')) {
+                            const valueField = prop.reference.value_field || (prop.reference.source_type === 'directory_form' ? 'sku_code' : 'id');
                             row[prop.key] = (item as Record<string, any>)[valueField] ?? item.id;
                             Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]) => {
                                 const val = (item as Record<string, any>)[sourceKey];
@@ -217,7 +217,7 @@ export function ObjectCollectionField({
             }
         }
         return loadedItems;
-    }, [isInstance, value, properties, field.catalog_source_type, (field as any).catalog_prepopulate_mode]);
+    }, [isInstance, value, properties, field.directory_source_type, (field as any).directory_prepopulate_mode]);
 
     const commitItems = (nextItems: RowValue[]) => {
         if (isInstance) {
@@ -228,24 +228,24 @@ export function ObjectCollectionField({
     };
 
     React.useEffect(() => {
-        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && (field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form')) {
-            const mode = (field as any).catalog_prepopulate_mode || 'all';
+        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && (field.directory_source_type === 'project_directory' || field.directory_source_type === 'directory_form')) {
+            const mode = (field as any).directory_prepopulate_mode || 'all';
             if (mode !== 'none') {
-                const propWithCatalog = properties.find((p) => p.type === 'select' && (p.reference?.source_type === 'catalog' || p.reference?.source_type === 'catalog_form'));
-                const sourceItems = propWithCatalog?.reference?.source_items || [];
+                const propWithDirectory = properties.find((p) => p.type === 'select' && (p.reference?.source_type === 'directory' || p.reference?.source_type === 'directory_form'));
+                const sourceItems = propWithDirectory?.reference?.source_items || [];
                 if (sourceItems.length > 0) {
                     commitItems(items);
                 }
             }
         }
-    }, [properties, value, field.catalog_source_type, (field as any).catalog_prepopulate_mode]);
+    }, [properties, value, field.directory_source_type, (field as any).directory_prepopulate_mode]);
 
     const updateRow = (rowIndex: number, path: string[], nextValue: any, property?: ObjectPropertyDefinition) => {
         const nextItems = items.map((entry, index) => {
             if (index !== rowIndex) {
                 return entry;
             }
-            const updated = property ? applyCatalogSelection(entry, path, property, nextValue) : setNestedValue(entry, path, nextValue);
+            const updated = property ? applyDirectorySelection(entry, path, property, nextValue) : setNestedValue(entry, path, nextValue);
             return applyComputedProperties(updated, properties);
         });
         commitItems(nextItems);
@@ -256,7 +256,7 @@ export function ObjectCollectionField({
     };
 
     const removeRow = (rowIndex: number) => {
-        if (items[rowIndex]?._isCatalogItem) return;
+        if (items[rowIndex]?._isDirectoryItem) return;
         commitItems(items.filter((_, index) => index !== rowIndex));
     };
 
@@ -427,10 +427,10 @@ export function ObjectCollectionField({
                                     {(field.allow_remove_items ?? definition?.allow_manual_remove ?? true) && (
                                         <TouchableOpacity 
                                             onPress={() => removeRow(rowIndex)} 
-                                            disabled={!!row._isCatalogItem}
-                                            style={{ width: 70, alignItems: 'center', justifyContent: 'center', opacity: row._isCatalogItem ? 0.3 : 1 }}
+                                            disabled={!!row._isDirectoryItem}
+                                            style={{ width: 70, alignItems: 'center', justifyContent: 'center', opacity: row._isDirectoryItem ? 0.3 : 1 }}
                                         >
-                                            <Text style={{ color: row._isCatalogItem ? '#64748b' : '#ef4444', fontSize: 12, fontWeight: '700' }}>Delete</Text>
+                                            <Text style={{ color: row._isDirectoryItem ? '#64748b' : '#ef4444', fontSize: 12, fontWeight: '700' }}>Delete</Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -477,7 +477,7 @@ export function ObjectCollectionField({
                         <Text style={{ color: '#f1f5f9', fontSize: 14, fontWeight: '700' }}>
                             {definition?.label || field.label} {isInstance ? '' : `#${rowIndex + 1}`}
                         </Text>
-                        {!isInstance && (field.allow_remove_items ?? definition?.allow_manual_remove ?? true) && !row._isCatalogItem ? (
+                        {!isInstance && (field.allow_remove_items ?? definition?.allow_manual_remove ?? true) && !row._isDirectoryItem ? (
                             <TouchableOpacity onPress={() => removeRow(rowIndex)}>
                                 <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: '700' }}>Remove</Text>
                             </TouchableOpacity>

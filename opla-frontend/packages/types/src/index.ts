@@ -74,7 +74,7 @@ export type SchemaFieldType =
 
 export type ObjectPropertyEditMode = 'fixed' | 'defaulted' | 'editable' | 'hidden';
 
-export interface CatalogSourceItem {
+export interface DirectorySourceItem {
   id: string;
   sku_code: string;
   label: string;
@@ -86,12 +86,12 @@ export interface CatalogSourceItem {
 }
 
 export interface ObjectReferenceDefinition {
-  source_type: 'dataset' | 'catalog' | 'catalog_form' | 'user' | 'team' | 'submission' | 'custom';
+  source_type: 'dataset' | 'directory' | 'directory_form' | 'user' | 'team' | 'submission' | 'custom';
   source_id?: string;
   label_field?: string;
   value_field?: string;
   filters?: Record<string, any>;
-  source_items?: CatalogSourceItem[];
+  source_items?: DirectorySourceItem[];
   field_mappings?: Record<string, string>;
 }
 
@@ -130,7 +130,7 @@ export interface FormSchemaField extends ObjectPropertyDefinition {
 }
 
 export type Platform = 'mobile' | 'web' | 'ussd';
-export type FormArea = 'yard' | 'desk'; // which app area can use this form
+export type FormArea = 'pulse' | 'agent'; // which app area can use this form
 
 export interface FieldOption {
   label: string;
@@ -138,7 +138,7 @@ export interface FieldOption {
   skip_to?: string;
 }
 
-export type CatalogRuntimeEntry = {
+export type DirectoryRuntimeEntry = {
   label: string;
   value: string;
   submission_id?: string;
@@ -194,28 +194,28 @@ export interface FormField {
   collection_layout?: 'cards' | 'table';
   allow_add_items?: boolean;
   allow_remove_items?: boolean;
-  catalog_source_type?: 'project_catalog' | 'catalog_form';
-  catalog_form_id?: string;
-  catalog_prepopulate_mode?: string;
-  required_catalog_item_ids?: string[];
-  options_source?: 'manual' | 'catalog_form';
-  /** Catalog column bind used as dropdown display label (defaults to catalog label field). */
-  catalog_display_field?: string;
-  /** Catalog column bind stored as the submitted value (defaults to catalog key field). */
-  catalog_value_field?: string;
+  directory_source_type?: 'project_directory' | 'directory_form';
+  directory_form_id?: string;
+  directory_prepopulate_mode?: string;
+  required_directory_item_ids?: string[];
+  options_source?: 'manual' | 'directory_form';
+  /** Directory column bind used as dropdown display label (defaults to directory label field). */
+  directory_display_field?: string;
+  /** Directory column bind stored as the submitted value (defaults to directory key field). */
+  directory_value_field?: string;
   /** When true, deduplicate options by stored value (e.g. unique regions from repeated rows). */
-  catalog_unique_values?: boolean;
-  /** Parent survey field bind — child options filter when catalog_cascade_filter_column is set. */
+  directory_unique_values?: boolean;
+  /** Parent survey field bind — child options filter when directory_cascade_filter_column is set. */
   cascade_parent_field_id?: string;
   cascade_options_map?: Record<string, FieldOption[]>;
   cascade_dataset_filter_key?: string;
-  /** Catalog column bind matched against the parent field's stored value for cascading. */
-  catalog_cascade_filter_column?: string;
-  /** Runtime-only: full catalog rows loaded at form render time. Not persisted in blueprint. */
-  catalog_runtime_entries?: CatalogRuntimeEntry[];
-  /** Runtime-only: default key/label binds from the source catalog form. */
-  catalog_default_value_field?: string;
-  catalog_default_label_field?: string;
+  /** Directory column bind matched against the parent field's stored value for cascading. */
+  directory_cascade_filter_column?: string;
+  /** Runtime-only: full directory rows loaded at form render time. Not persisted in blueprint. */
+  directory_runtime_entries?: DirectoryRuntimeEntry[];
+  /** Runtime-only: default key/label binds from the source directory form. */
+  directory_default_value_field?: string;
+  directory_default_label_field?: string;
 
   // Decimal / currency input support
   decimal_places?: number;
@@ -423,7 +423,7 @@ export interface FormBlueprintMeta {
   title: string;
   slug: string;
   is_public: boolean;
-  /** Which area this form is intended for. Defaults to 'yard' when public. */
+  /** Which area this form is intended for. Defaults to 'pulse' when public. */
   area?: FormArea;
   /** Controls whether this form appears in the mobile form list.
    *  'listed' (default) = visible in form list.
@@ -446,7 +446,7 @@ export interface FormBlueprint {
 
 // ─── Submission ────────────────────────────────────────────────────────────
 export interface SubmissionMetadata {
-  source: string; // e.g. 'mobile_yard' | 'mobile_desk' | 'web_simulator'
+  source: string; // e.g. 'mobile_pulse' | 'mobile_agent' | 'web_simulator'
   area: FormArea;
   user_agent?: string;
   device_id?: string;
@@ -480,6 +480,6 @@ export interface GenericRangeValue {
 }
 
 export {
-    fieldUsesCatalogOptionResolver,
-    resolveCatalogFormFieldOptions,
-} from './catalogFormOptions';
+    fieldUsesDirectoryOptionResolver,
+    resolveDirectoryFormFieldOptions,
+} from './directoryFormOptions';

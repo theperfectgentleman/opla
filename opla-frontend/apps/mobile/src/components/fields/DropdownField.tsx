@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
 import { FormField } from '@opla/types';
-import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
+import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -15,8 +15,8 @@ export function DropdownField({ field, value, onChange, error, responses = {} }:
     const [modalVisible, setModalVisible] = useState(false);
 
     const options = useMemo(() => {
-        if (fieldUsesCatalogOptionResolver(field)) {
-            return resolveCatalogFormFieldOptions(field, responses);
+        if (fieldUsesDirectoryOptionResolver(field)) {
+            return resolveDirectoryFormFieldOptions(field, responses);
         }
         if (field.cascade_parent_field_id && field.cascade_options_map) {
             const parentValue = responses[field.cascade_parent_field_id];
@@ -29,13 +29,13 @@ export function DropdownField({ field, value, onChange, error, responses = {} }:
     }, [field, responses]);
 
     useEffect(() => {
-        if ((field.cascade_parent_field_id || field.catalog_cascade_filter_column) && value) {
+        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value) {
             const stillValid = options.some(o => o.value === value);
             if (!stillValid) {
                 onChange('');
             }
         }
-    }, [options, value, field.cascade_parent_field_id, field.catalog_cascade_filter_column, onChange]);
+    }, [options, value, field.cascade_parent_field_id, field.directory_cascade_filter_column, onChange]);
 
     const selectedOption = options.find(o => o.value === value);
 

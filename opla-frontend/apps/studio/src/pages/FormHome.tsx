@@ -132,7 +132,7 @@ const FormHome: React.FC = () => {
                                 <nav className="flex flex-wrap items-center gap-2 text-xs font-medium text-[hsl(var(--text-tertiary))]">
                                     <button
                                         type="button"
-                                        onClick={() => navigate('/dashboard?tab=forms')}
+                                        onClick={() => navigate('/dashboard?tab=design')}
                                         className="hover:text-[hsl(var(--text-secondary))]"
                                     >
                                         All Forms
@@ -169,9 +169,9 @@ const FormHome: React.FC = () => {
                                             >
                                                 {form.status}
                                             </span>
-                                            {form.kind === 'catalog' && (
+                                            {form.kind === 'directory' && (
                                                 <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                                                    Catalog
+                                                    Directory
                                                 </span>
                                             )}
                                         </div>

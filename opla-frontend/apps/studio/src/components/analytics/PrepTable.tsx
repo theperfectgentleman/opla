@@ -331,16 +331,16 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 					? sources.find(source => source.dataset_id === selectedSource.derived?.parent_dataset_id) ?? null
 					: null;
 
-				// Full source field catalog for the column picker
-				const catalog: PrepColumn[] = parentSource
+				// Full source field directory for the column picker
+				const directory: PrepColumn[] = parentSource
 					? fieldsToPrepColumns(parentSource.fields)
 					: fieldsToPrepColumns(
 							selectedSource.fields.filter(field => !field.field_key.startsWith('calc_')),
 						);
 
-				// Load all catalog fields so users can add/remove without re-fetching
-				const selectKeys = catalog.length
-					? catalog.map(column => column.key)
+				// Load all directory fields so users can add/remove without re-fetching
+				const selectKeys = directory.length
+					? directory.map(column => column.key)
 					: selectedSource.fields.map(field => field.field_key);
 
 				const response = await analyticsAPI.runQuery(orgId, {
@@ -357,15 +357,15 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 				);
 
 				// If this is a saved derived table, restore its column selection; otherwise start with all.
-				const catalogByKey = new Map(catalog.map(column => [column.key, column]));
+				const directoryByKey = new Map(directory.map(column => [column.key, column]));
 				let nextColumns: PrepColumn[] =
 					metaColumns.length > 0
 						? metaColumns.map(column => ({
 								...column,
-								options: column.options ?? catalogByKey.get(column.key)?.options ?? null,
+								options: column.options ?? directoryByKey.get(column.key)?.options ?? null,
 							}))
-						: catalog.length > 0
-							? catalog
+						: directory.length > 0
+							? directory
 							: fieldsToPrepColumns(selectedSource.fields);
 				let nextRows: Array<Record<string, unknown>> = response.rows ?? [];
 
@@ -377,18 +377,18 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 					nextRows = applied.rows;
 				}
 
-				// Expand catalog with any base fields present in the derived selection
-				const catalogKeys = new Set(catalog.map(column => column.key));
-				const mergedCatalog = [...catalog];
+				// Expand directory with any base fields present in the derived selection
+				const directoryKeys = new Set(directory.map(column => column.key));
+				const mergedCatalog = [...directory];
 				for (const column of nextColumns) {
-					if (!column.calculated && !catalogKeys.has(column.key)) {
+					if (!column.calculated && !directoryKeys.has(column.key)) {
 						mergedCatalog.push({
 							key: column.key,
 							label: column.label,
 							field_type: column.field_type,
 							calculated: false,
 						});
-						catalogKeys.add(column.key);
+						directoryKeys.add(column.key);
 					}
 				}
 

@@ -17,6 +17,7 @@ class FormAutomationEvent(str, enum.Enum):
 
 class FormAutomationAction(str, enum.Enum):
     CREATE_TASK = "create_task"
+    CREATE_ALERT = "create_alert"
 
 
 class FormAutomationRule(Base):

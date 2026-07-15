@@ -85,7 +85,7 @@ export default function InvitationAcceptScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableOpacity
-          onPress={() => router.canGoBack() ? router.back() : router.replace('/(main)/(yard)')}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(main)/(pulse)')}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 24 }}
         >
           <ArrowLeft size={18} color="#94a3b8" />
@@ -268,7 +268,7 @@ export default function InvitationAcceptScreen() {
             </View>
 
             <TouchableOpacity
-              onPress={() => router.replace('/(main)/(yard)')}
+              onPress={() => router.replace('/(main)/(pulse)')}
               style={{
                 marginTop: 18,
                 borderRadius: 16,

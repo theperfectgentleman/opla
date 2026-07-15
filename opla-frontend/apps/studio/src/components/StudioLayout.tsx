@@ -15,7 +15,6 @@ import {
     BarChart3,
     FileBarChart2,
     MessageSquare,
-    Paperclip,
     ChevronDown,
     LogOut,
     PanelLeftClose,
@@ -26,23 +25,23 @@ import {
 type StudioNavKey =
     | 'projects'
     | 'ops'
-    | 'forms'
-    | 'datasets'
+    | 'tasks'
+    | 'design'
+    | 'data'
     | 'members'
     | 'audience'
-    | 'analysis'
-    | 'threads'
-    | 'assets'
+    | 'messages'
     | 'reports'
     | 'settings';
 
 type AnalyticsNavTool = 'lab' | 'prep' | 'dashboard' | 'spatial';
+type DataNavSection = 'directory' | 'datasets' | 'media';
 
 type NavCounts = {
     projects?: number;
     tasks?: number;
     forms?: number;
-    datasets?: number;
+    data?: number;
     members?: number;
 };
 
@@ -51,6 +50,8 @@ type StudioLayoutProps = {
     onSelectNav: (key: StudioNavKey) => void;
     activeAnalyticsTool?: AnalyticsNavTool;
     onSelectAnalyticsTool?: (key: AnalyticsNavTool) => void;
+    activeDataSection?: DataNavSection | null;
+    onSelectDataSection?: (key: DataNavSection) => void;
     children: React.ReactNode;
     counts?: NavCounts;
     contentClassName?: string;
@@ -59,16 +60,21 @@ type StudioLayoutProps = {
 
 const navItems: Array<{ key: StudioNavKey; label: string; icon: React.ReactNode; countKey?: keyof NavCounts }> = [
     { key: 'projects', label: 'Projects', icon: <Folder className="w-5 h-5" />, countKey: 'projects' },
-    { key: 'forms', label: 'All Forms', icon: <Layout className="w-5 h-5" />, countKey: 'forms' },
-    { key: 'datasets', label: 'Datasets', icon: <Database className="w-5 h-5" />, countKey: 'datasets' },
+    { key: 'tasks', label: 'Tasks', icon: <CheckSquare className="w-5 h-5" />, countKey: 'tasks' },
+    { key: 'ops', label: 'Ops', icon: <CheckSquare className="w-5 h-5" /> },
+    { key: 'design', label: 'Design', icon: <Layout className="w-5 h-5" />, countKey: 'forms' },
+    { key: 'data', label: 'Data', icon: <Database className="w-5 h-5" />, countKey: 'data' },
+    { key: 'messages', label: 'Messages', icon: <MessageSquare className="w-5 h-5" /> },
     { key: 'members', label: 'Teams', icon: <Users className="w-5 h-5" />, countKey: 'members' },
-    { key: 'ops', label: 'Ops', icon: <CheckSquare className="w-5 h-5" />, countKey: 'tasks' },
     { key: 'audience', label: 'Audience', icon: <Target className="w-5 h-5" /> },
-    { key: 'analysis', label: 'Analytics', icon: <BarChart3 className="w-5 h-5" /> },
-    { key: 'threads', label: 'Threads', icon: <MessageSquare className="w-5 h-5" /> },
-    { key: 'assets', label: 'Assets', icon: <Paperclip className="w-5 h-5" /> },
     { key: 'reports', label: 'Reports', icon: <FileBarChart2 className="w-5 h-5" /> },
     { key: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
+];
+
+const dataSectionSubItems: Array<{ key: DataNavSection; label: string }> = [
+    { key: 'directory', label: 'Directory' },
+    { key: 'datasets', label: 'Datasets' },
+    { key: 'media', label: 'Media' },
 ];
 
 const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
@@ -83,6 +89,8 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
     onSelectNav,
     activeAnalyticsTool,
     onSelectAnalyticsTool,
+    activeDataSection,
+    onSelectDataSection,
     children,
     counts,
     contentClassName = 'flex-1 overflow-y-auto p-10',
@@ -168,7 +176,8 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                         {navItems.map(item => {
                             const isActive = activeNav === item.key;
                             const count = item.countKey ? (counts?.[item.countKey] ?? 0) : 0;
-                            const showAnalyticsSubmenu = !isSidebarCollapsed && item.key === 'analysis' && isActive && onSelectAnalyticsTool;
+                            const showDataSubmenu = !isSidebarCollapsed && item.key === 'data' && isActive
+                                && (onSelectDataSection || onSelectAnalyticsTool);
 
                             return (
                                 <div key={item.key} className="space-y-1">
@@ -181,7 +190,7 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                             {item.icon}
                                             {!isSidebarCollapsed && <span className="font-medium">{item.label}</span>}
                                         </div>
-                                        {!isSidebarCollapsed && item.key === 'analysis' && onSelectAnalyticsTool ? (
+                                        {!isSidebarCollapsed && item.key === 'data' && onSelectAnalyticsTool ? (
                                             <ChevronDown className={`h-4 w-4 transition-transform ${isActive ? 'rotate-180 text-white' : 'text-[hsl(var(--text-tertiary))]'}`} />
                                         ) : null}
                                         {!isSidebarCollapsed && item.countKey && count > 0 && (
@@ -191,22 +200,39 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                         )}
                                     </button>
 
-                                    {showAnalyticsSubmenu ? (
-                                        <div className="ml-4 border-l border-[hsl(var(--border))] pl-3">
-                                            {analyticsSubItems.map(subItem => {
-                                                const isSubItemActive = activeAnalyticsTool === subItem.key;
+                                    {showDataSubmenu ? (
+                                        <div className="ml-4 border-l border-[hsl(var(--border))] pl-3 space-y-0.5">
+                                            {onSelectDataSection
+                                                ? dataSectionSubItems.map(subItem => {
+                                                    const isSubItemActive = activeDataSection === subItem.key && !activeAnalyticsTool;
+                                                    return (
+                                                        <button
+                                                            key={subItem.key}
+                                                            type="button"
+                                                            onClick={() => onSelectDataSection(subItem.key)}
+                                                            className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
+                                                        >
+                                                            <span className="truncate font-medium">{subItem.label}</span>
+                                                        </button>
+                                                    );
+                                                })
+                                                : null}
+                                            {onSelectAnalyticsTool
+                                                ? analyticsSubItems.map(subItem => {
+                                                    const isSubItemActive = activeAnalyticsTool === subItem.key;
 
-                                                return (
-                                                    <button
-                                                        key={subItem.key}
-                                                        type="button"
-                                                        onClick={() => onSelectAnalyticsTool(subItem.key)}
-                                                        className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
-                                                    >
-                                                        <span className="truncate font-medium">{subItem.label}</span>
-                                                    </button>
-                                                );
-                                            })}
+                                                    return (
+                                                        <button
+                                                            key={subItem.key}
+                                                            type="button"
+                                                            onClick={() => onSelectAnalyticsTool(subItem.key)}
+                                                            className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
+                                                        >
+                                                            <span className="truncate font-medium">{subItem.label}</span>
+                                                        </button>
+                                                    );
+                                                })
+                                                : null}
                                         </div>
                                     ) : null}
                                 </div>

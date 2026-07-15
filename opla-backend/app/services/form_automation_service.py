@@ -196,6 +196,12 @@ class FormAutomationService:
         actor_id: Optional[uuid.UUID],
         event_context: dict[str, Any],
     ) -> None:
+        if rule.action_type == FormAutomationAction.CREATE_ALERT:
+            FormAutomationService._execute_create_alert(
+                db, form, submission, rule, event_context=event_context
+            )
+            return
+
         if rule.action_type != FormAutomationAction.CREATE_TASK:
             return
 
@@ -217,13 +223,55 @@ class FormAutomationService:
             kind=kind,
             starts_at=FormAutomationService._resolve_datetime_value(config, event_context, field_key="starts_at_field", value_key="starts_at_value"),
             due_at=FormAutomationService._resolve_datetime_value(config, event_context, field_key="due_at_field", value_key="due_at_value"),
-            visit_date=FormAutomationService._resolve_date_value(config, event_context, field_key="visit_date_field", value_key="visit_date_value"),
+            scheduled_date=FormAutomationService._resolve_date_value(
+                config, event_context, field_key="scheduled_date_field", value_key="scheduled_date_value"
+            ),
             source_submission_id=submission.id,
             context_json=FormAutomationService._resolve_context_json(config, event_context),
             assigned_accessor_id=FormAutomationService._coerce_uuid(config.get("assigned_accessor_id")),
             assigned_accessor_type=assigned_accessor_type,
             created_by=actor_id or submission.user_id or rule.created_by,
             automation_rule_id=rule.id,
+        )
+
+    @staticmethod
+    def _execute_create_alert(
+        db: Session,
+        form: Form,
+        submission: Submission,
+        rule: FormAutomationRule,
+        *,
+        event_context: dict[str, Any],
+    ) -> None:
+        from app.services.project_attention_service import ProjectAttentionService
+
+        if not form.project:
+            return
+
+        config = rule.action_config_json or {}
+        title = FormAutomationService._render_template(
+            str(config.get("title_template") or "Alert for {{ submission.id }}"),
+            event_context,
+        )
+        detail_template = config.get("detail_template") or config.get("description_template")
+        detail = (
+            FormAutomationService._render_template(str(detail_template), event_context)
+            if detail_template
+            else None
+        )
+        severity = str(config.get("severity") or "warning").lower().strip()
+        deep_link = f"/projects/{form.project_id}?tab=ops&view=review"
+
+        ProjectAttentionService.upsert_automation_alert(
+            db,
+            project=form.project,
+            rule=rule,
+            submission=submission,
+            title=title,
+            detail=detail,
+            severity=severity,
+            deep_link=deep_link,
+            commit=False,
         )
 
     @staticmethod

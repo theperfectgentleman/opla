@@ -14,9 +14,9 @@ from app.api.schemas.project import (
     ProjectAttentionHookCreate,
     ProjectAttentionHookOut,
     ProjectAttentionItemOut,
-    ProjectCatalogItemCreate,
-    ProjectCatalogItemOut,
-    ProjectCatalogItemUpdate,
+    ProjectDirectoryItemCreate,
+    ProjectDirectoryItemOut,
+    ProjectDirectoryItemUpdate,
     ProjectCreate,
     ProjectOut,
     ProjectPinnedAnalyticsListOut,
@@ -34,7 +34,7 @@ from app.api.schemas.form import FormSubmissionMediaListOut, FormSubmissionMedia
 from app.services.form_service import ProjectService
 from app.services.organization_service import OrganizationService
 from app.services.project_access_service import ProjectAccessService
-from app.services.project_catalog_service import ProjectCatalogService
+from app.services.project_directory_service import ProjectDirectoryService
 from app.services.project_attendance_service import ProjectAttendanceService
 from app.services.project_attention_service import ProjectAttentionService
 from app.services.form_submission_media_service import FormSubmissionMediaService
@@ -425,7 +425,7 @@ def create_project_task(
         kind=payload.kind,
         starts_at=payload.starts_at,
         due_at=payload.due_at,
-        visit_date=payload.visit_date,
+        scheduled_date=payload.scheduled_date,
         source_submission_id=payload.source_submission_id,
         context_json=payload.context_json,
         assigned_accessor_id=payload.assigned_accessor_id,
@@ -457,7 +457,7 @@ def update_project_task(
         status=payload.status,
         starts_at=payload.starts_at,
         due_at=payload.due_at,
-        visit_date=payload.visit_date,
+        scheduled_date=payload.scheduled_date,
         source_submission_id=payload.source_submission_id,
         context_json=payload.context_json,
         assigned_accessor_id=None if payload.clear_assignment else payload.assigned_accessor_id,
@@ -483,8 +483,8 @@ def delete_project_task(
     return None
 
 
-@router.get("/{project_id}/catalog-items", response_model=List[ProjectCatalogItemOut])
-def list_project_catalog_items(
+@router.get("/{project_id}/directory-items", response_model=List[ProjectDirectoryItemOut])
+def list_project_directory_items(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
     db: Session = Depends(get_db),
@@ -493,21 +493,21 @@ def list_project_catalog_items(
     project = ProjectAccessService.ensure_can_view_project(db, current_user.id, project_id)
     if project.org_id != org_id:
         raise HTTPException(status_code=404, detail="Project not found")
-    return ProjectCatalogService.list_items(db, project_id)
+    return ProjectDirectoryService.list_items(db, project_id)
 
 
-@router.post("/{project_id}/catalog-items", response_model=ProjectCatalogItemOut, status_code=status.HTTP_201_CREATED)
-def create_project_catalog_item(
+@router.post("/{project_id}/directory-items", response_model=ProjectDirectoryItemOut, status_code=status.HTTP_201_CREATED)
+def create_project_directory_item(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
-    payload: ProjectCatalogItemCreate,
+    payload: ProjectDirectoryItemCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
     if project.org_id != org_id:
         raise HTTPException(status_code=404, detail="Project not found")
-    return ProjectCatalogService.create_item(
+    return ProjectDirectoryService.create_item(
         db,
         project,
         sku_code=payload.sku_code,
@@ -522,20 +522,20 @@ def create_project_catalog_item(
     )
 
 
-@router.patch("/{project_id}/catalog-items/{item_id}", response_model=ProjectCatalogItemOut)
-def update_project_catalog_item(
+@router.patch("/{project_id}/directory-items/{item_id}", response_model=ProjectDirectoryItemOut)
+def update_project_directory_item(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
     item_id: uuid.UUID,
-    payload: ProjectCatalogItemUpdate,
+    payload: ProjectDirectoryItemUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
     if project.org_id != org_id:
         raise HTTPException(status_code=404, detail="Project not found")
-    item = ProjectCatalogService.get_item_or_404(db, project_id, item_id)
-    return ProjectCatalogService.update_item(
+    item = ProjectDirectoryService.get_item_or_404(db, project_id, item_id)
+    return ProjectDirectoryService.update_item(
         db,
         project,
         item,
@@ -550,8 +550,8 @@ def update_project_catalog_item(
     )
 
 
-@router.delete("/{project_id}/catalog-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_project_catalog_item(
+@router.delete("/{project_id}/directory-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_directory_item(
     org_id: uuid.UUID,
     project_id: uuid.UUID,
     item_id: uuid.UUID,
@@ -561,8 +561,8 @@ def delete_project_catalog_item(
     project = ProjectAccessService.ensure_can_edit_project(db, current_user.id, project_id)
     if project.org_id != org_id:
         raise HTTPException(status_code=404, detail="Project not found")
-    item = ProjectCatalogService.get_item_or_404(db, project_id, item_id)
-    ProjectCatalogService.delete_item(db, project, item)
+    item = ProjectDirectoryService.get_item_or_404(db, project_id, item_id)
+    ProjectDirectoryService.delete_item(db, project, item)
     return None
 
 

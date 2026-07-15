@@ -18,7 +18,7 @@ class ProjectTaskStatus(str, enum.Enum):
 
 class ProjectTaskKind(str, enum.Enum):
     GENERAL = "general"
-    JOURNEY_VISIT = "journey_visit"
+    FIELD_VISIT = "field_visit"
 
 
 class ProjectTask(Base):
@@ -40,7 +40,7 @@ class ProjectTask(Base):
     )
     starts_at = Column(DateTime, nullable=True)
     due_at = Column(DateTime, nullable=True)
-    visit_date = Column(Date, nullable=True)
+    scheduled_date = Column(Date, nullable=True)
     source_submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id"), nullable=True, index=True)
     context_json = Column(JSONB, nullable=True)
     automation_rule_id = Column(

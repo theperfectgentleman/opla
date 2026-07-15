@@ -36,10 +36,10 @@ import { TimeRangeField } from './fields/TimeRangeField';
 import { MultiSelectDropdownField } from './fields/MultiSelectDropdownField';
 import { FormLinkField } from './fields/FormLinkField';
 import { GenericRangeField } from './fields/GenericRangeField';
-import { deskFormAPI, publicFormAPI } from '../../services/api';
+import { agentFormAPI, publicFormAPI } from '../../services/api';
 import { syncAllLookupDatasets } from '../utils/lookupCache';
-import { hydrateBlueprintCatalogForms } from '../utils/catalogFormLookup';
-import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
+import { hydrateBlueprintDirectoryForms } from '../utils/directoryFormLookup';
+import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
 
 function getNestedValue(value: unknown, path: string[]): unknown {
     return path.reduce<unknown>((current, segment) => {
@@ -344,16 +344,16 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         );
     }
 
-    const catalogResolvedField = fieldUsesCatalogOptionResolver(field)
-        ? { ...field, options: resolveCatalogFormFieldOptions(field, responses) }
+    const directoryResolvedField = fieldUsesDirectoryOptionResolver(field)
+        ? { ...field, options: resolveDirectoryFormFieldOptions(field, responses) }
         : field;
 
     const filteredOptions = rulesResult
-        ? getFilteredOptionsByRules(field.id, rulesResult, responses, catalogResolvedField.options)
+        ? getFilteredOptionsByRules(field.id, rulesResult, responses, directoryResolvedField.options)
         : null;
     const effectiveField = filteredOptions
-        ? { ...catalogResolvedField, options: filteredOptions }
-        : catalogResolvedField;
+        ? { ...directoryResolvedField, options: filteredOptions }
+        : directoryResolvedField;
 
     switch (effectiveField.type) {
         case 'input_text':
@@ -430,7 +430,7 @@ export function FormRenderer({
     onSaveDraft?: (responses: Record<string, any>) => void,
     onSubmitSuccess?: () => void,
     /**
-     * When provided (desk mode with sync choice), this callback receives the
+     * When provided (agent mode with sync choice), this callback receives the
      * raw form payload and the parent decides whether to sync immediately or
      * queue offline. The parent is responsible for clearing the draft and
      * navigating away after the user makes their choice.
@@ -440,7 +440,7 @@ export function FormRenderer({
     onFormLinkPress?: (link: { formId?: string; formSlug?: string; params: Record<string, any> }) => void,
     /** Pre-fill data passed from a parent form via form_link parameter mapping */
     prefillData?: Record<string, any>,
-    lookupMode?: 'public' | 'desk',
+    lookupMode?: 'public' | 'agent',
     /** Height of any persistent UI (e.g. tab bar) that overlaps this view from the bottom. */
     extraBottomPad?: number,
 }) {
@@ -461,7 +461,7 @@ export function FormRenderer({
 
     useEffect(() => {
         let mounted = true;
-        hydrateBlueprintCatalogForms(blueprint, lookupContext).then((next) => {
+        hydrateBlueprintDirectoryForms(blueprint, lookupContext).then((next) => {
             if (mounted) {
                 setRuntimeBlueprint(next);
             }
@@ -815,13 +815,13 @@ export function FormRenderer({
                 }
             });
 
-            if (onSubmitAttempt && lookupMode === 'desk') {
-                onSubmitAttempt(runtimeBlueprint.meta.form_id, finalResponses, { source: 'mobile_desk' });
+            if (onSubmitAttempt && lookupMode === 'agent') {
+                onSubmitAttempt(runtimeBlueprint.meta.form_id, finalResponses, { source: 'mobile_agent' });
                 return;
-            } else if (lookupMode === 'desk') {
-                await deskFormAPI.submit(runtimeBlueprint.meta.form_id, finalResponses, { source: 'mobile_desk' });
+            } else if (lookupMode === 'agent') {
+                await agentFormAPI.submit(runtimeBlueprint.meta.form_id, finalResponses, { source: 'mobile_agent' });
             } else {
-                await publicFormAPI.submit(runtimeBlueprint.meta.slug, finalResponses, { source: 'mobile_yard' });
+                await publicFormAPI.submit(runtimeBlueprint.meta.slug, finalResponses, { source: 'mobile_pulse' });
             }
             await AsyncStorage.removeItem(draftKey); // Clear draft on success
             if (onSubmitSuccess) onSubmitSuccess();
@@ -836,7 +836,7 @@ export function FormRenderer({
         setSyncingLookups(true);
         try {
             const synced = await syncAllLookupDatasets(runtimeBlueprint, lookupContext);
-            const hydrated = await hydrateBlueprintCatalogForms(runtimeBlueprint, lookupContext);
+            const hydrated = await hydrateBlueprintDirectoryForms(runtimeBlueprint, lookupContext);
             setRuntimeBlueprint(hydrated);
             Alert.alert('Lookup data synced', synced > 0 ? `Updated ${synced} dataset source${synced === 1 ? '' : 's'}.` : 'Catalog and dataset lookups refreshed.');
         } catch {

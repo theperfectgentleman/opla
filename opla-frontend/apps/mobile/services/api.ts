@@ -96,7 +96,7 @@ export const authAPI = {
   },
 };
 
-// ─── Public (Yard) form endpoints ─────────────────────────────────────────────
+// ─── Public (Pulse) form endpoints ──────────────────────────────────────────
 export const publicFormAPI = {
   getBySlug: async (slug: string) => {
     const res = await apiClient.get(`/public/forms/${slug}`);
@@ -118,18 +118,18 @@ export const publicFormAPI = {
     const res = await apiClient.get(`/public/forms/${slug}/lookup-sources/${datasetId}/options`, { params });
     return res.data;
   },
-  catalogLookupOptions: async (
+  directoryLookupOptions: async (
     slug: string,
-    catalogFormId: string,
+    directoryFormId: string,
     params?: { search?: string; limit?: number },
   ) => {
-    const res = await apiClient.get(`/public/forms/${slug}/catalog-lookup-sources/${catalogFormId}/options`, { params });
+    const res = await apiClient.get(`/public/forms/${slug}/directory-lookup-sources/${directoryFormId}/options`, { params });
     return res.data;
   },
 };
 
-// ─── Desk form endpoints (authenticated) ────────────────────────────────────
-export const deskFormAPI = {
+// ─── Agent form endpoints (authenticated) ───────────────────────────────────
+export const agentFormAPI = {
   get: async (formId: string) => {
     const res = await apiClient.get(`/forms/${formId}/runtime`);
     return res.data;
@@ -159,15 +159,18 @@ export const deskFormAPI = {
     const res = await apiClient.get(`/forms/${formId}/lookup-sources/${datasetId}/options`, { params });
     return res.data;
   },
-  catalogLookupOptions: async (
+  directoryLookupOptions: async (
     formId: string,
-    catalogFormId: string,
+    directoryFormId: string,
     params?: { search?: string; limit?: number },
   ) => {
-    const res = await apiClient.get(`/forms/${formId}/catalog-lookup-sources/${catalogFormId}/options`, { params });
+    const res = await apiClient.get(`/forms/${formId}/directory-lookup-sources/${directoryFormId}/options`, { params });
     return res.data;
   },
 };
+
+/** @deprecated Use agentFormAPI */
+export const deskFormAPI = agentFormAPI;
 
 // ─── Project endpoints ───────────────────────────────────────────────────────
 export const projectAPI = {
@@ -276,7 +279,7 @@ export const projectAPI = {
       status?: 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
       starts_at?: string;
       due_at?: string;
-      visit_date?: string;
+      scheduled_date?: string;
       assigned_accessor_id?: string;
       assigned_accessor_type?: 'user' | 'team';
       clear_assignment?: boolean;

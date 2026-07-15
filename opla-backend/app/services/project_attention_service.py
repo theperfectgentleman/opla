@@ -19,8 +19,8 @@ from app.models.project_attention import (
     ProjectAttentionItem,
 )
 from app.models.project_task import ProjectTask, ProjectTaskStatus
-from app.models.project_thread import ProjectThread
-from app.models.project_thread_message import ProjectThreadMessage
+from app.models.project_message_channel import ProjectMessageChannel
+from app.models.project_message import ProjectMessage
 from app.models.submission import Submission, SubmissionReviewStatus
 from app.models.team_member import TeamMember
 
@@ -157,7 +157,7 @@ class ProjectAttentionService:
         db: Session,
         *,
         project_id: uuid.UUID,
-        hook: ProjectAttentionHook,
+        hook: ProjectAttentionHook | None,
         kind: str,
         dedupe_key: str,
         severity: str,
@@ -167,16 +167,19 @@ class ProjectAttentionService:
         source_submission_id: uuid.UUID | None = None,
         source_task_id: uuid.UUID | None = None,
         source_attendance_id: uuid.UUID | None = None,
-        source_thread_id: uuid.UUID | None = None,
+        source_channel_id: uuid.UUID | None = None,
+        source_automation_rule_id: uuid.UUID | None = None,
     ) -> ProjectAttentionItem | None:
         existing = ProjectAttentionService._get_by_dedupe(db, project_id, dedupe_key)
         if existing and existing.status == AttentionItemStatus.DISMISSED.value:
             return existing
 
+        hook_id = hook.id if hook is not None else None
+
         if existing is None:
             item = ProjectAttentionItem(
                 project_id=project_id,
-                hook_id=hook.id,
+                hook_id=hook_id,
                 kind=kind,
                 dedupe_key=dedupe_key,
                 severity=severity,
@@ -187,12 +190,14 @@ class ProjectAttentionService:
                 source_submission_id=source_submission_id,
                 source_task_id=source_task_id,
                 source_attendance_id=source_attendance_id,
-                source_thread_id=source_thread_id,
+                source_channel_id=source_channel_id,
+                source_automation_rule_id=source_automation_rule_id,
             )
             db.add(item)
             return item
 
-        existing.hook_id = hook.id
+        if hook_id is not None:
+            existing.hook_id = hook_id
         existing.kind = kind
         if SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK.get(existing.severity, 0) or existing.status != AttentionItemStatus.OPEN.value:
             existing.severity = severity
@@ -208,10 +213,64 @@ class ProjectAttentionService:
             existing.source_task_id = source_task_id
         if source_attendance_id is not None:
             existing.source_attendance_id = source_attendance_id
-        if source_thread_id is not None:
-            existing.source_thread_id = source_thread_id
+        if source_channel_id is not None:
+            existing.source_channel_id = source_channel_id
+        if source_automation_rule_id is not None:
+            existing.source_automation_rule_id = source_automation_rule_id
         existing.updated_at = datetime.utcnow()
         return existing
+
+    @staticmethod
+    def upsert_automation_alert(
+        db: Session,
+        *,
+        project: Project,
+        rule: Any,
+        submission: Any,
+        title: str,
+        detail: str | None,
+        severity: str,
+        deep_link: str | None,
+        commit: bool = False,
+    ) -> ProjectAttentionItem | None:
+        """Create/update an attention item from a form automation create_alert action.
+
+        Not part of DEFAULT_HOOKS reconcile — lives until dismissed.
+        """
+        valid = {
+            AttentionSeverity.INFO.value,
+            AttentionSeverity.WARNING.value,
+            AttentionSeverity.CRITICAL.value,
+        }
+        severity_value = severity if severity in valid else AttentionSeverity.WARNING.value
+        dedupe_key = f"automation:{rule.id}:{submission.id}"
+        provenance = f"Automation · {getattr(rule, 'name', 'rule')}"
+        merged_detail = detail.strip() if detail else None
+        if merged_detail:
+            merged_detail = f"{merged_detail}\n{provenance}"
+        else:
+            merged_detail = provenance
+
+        item = ProjectAttentionService._upsert_open_item(
+            db,
+            project_id=project.id,
+            hook=None,
+            kind=AttentionHookKind.AUTOMATION_ALERT.value,
+            dedupe_key=dedupe_key,
+            severity=severity_value,
+            title=title[:240] or "Automation alert",
+            detail=merged_detail,
+            deep_link=deep_link,
+            source_submission_id=getattr(submission, "id", None),
+            source_automation_rule_id=getattr(rule, "id", None),
+        )
+        if commit:
+            db.commit()
+            if item is not None:
+                db.refresh(item)
+        else:
+            db.flush()
+        return item
 
     @staticmethod
     def _resolve_if_open(db: Session, project_id: uuid.UUID, dedupe_key: str) -> None:
@@ -251,30 +310,30 @@ class ProjectAttentionService:
         return user_ids
 
     @staticmethod
-    def _ensure_attendance_thread(
+    def _ensure_attendance_channel(
         db: Session,
         project: Project,
         *,
         day: date,
         missing_count: int,
         expected_count: int,
-        existing_thread_id: uuid.UUID | None,
+        existing_channel_id: uuid.UUID | None,
         actor_id: uuid.UUID | None,
     ) -> uuid.UUID | None:
-        from app.services.project_thread_service import ProjectThreadService
+        from app.services.project_message_service import ProjectMessageService
 
-        ProjectThreadService.ensure_project_channels(db, project.id, created_by=actor_id, commit=False)
+        ProjectMessageService.ensure_project_channels(db, project.id, created_by=actor_id, commit=False)
         general = (
-            db.query(ProjectThread)
+            db.query(ProjectMessageChannel)
             .filter(
-                ProjectThread.project_id == project.id,
-                ProjectThread.kind == "general",
-                ProjectThread.archived_at.is_(None),
+                ProjectMessageChannel.project_id == project.id,
+                ProjectMessageChannel.kind == "general",
+                ProjectMessageChannel.archived_at.is_(None),
             )
             .first()
         )
         if not general:
-            return existing_thread_id
+            return existing_channel_id
 
         summary = (
             f"{missing_count} of {expected_count} expected people have not checked in on {day.isoformat()} "
@@ -285,11 +344,11 @@ class ProjectAttentionService:
 
         # Avoid duplicate attendance posts for the same day when reconciling repeatedly.
         already = (
-            db.query(ProjectThreadMessage)
+            db.query(ProjectMessage)
             .filter(
-                ProjectThreadMessage.thread_id == general.id,
-                ProjectThreadMessage.body.like(f"%Attendance gap — {day.isoformat()}%"),
-                ProjectThreadMessage.deleted_at.is_(None),
+                ProjectMessage.channel_id == general.id,
+                ProjectMessage.body.like(f"%Attendance gap — {day.isoformat()}%"),
+                ProjectMessage.deleted_at.is_(None),
             )
             .first()
         )
@@ -299,15 +358,15 @@ class ProjectAttentionService:
                 f"{missing_count} of {expected_count} expected people have not checked in during the collection window."
             )
             db.add(
-                ProjectThreadMessage(
-                    thread_id=general.id,
+                ProjectMessage(
+                    channel_id=general.id,
                     project_id=project.id,
                     author_id=actor_id,
                     body=body,
                 )
             )
             db.flush()
-            ProjectThreadService._refresh_reply_count(db, general)
+            ProjectMessageService._refresh_reply_count(db, general)
 
         return general.id
 
@@ -445,18 +504,18 @@ class ProjectAttentionService:
                             dedupe = f"attendance_gap:{project.id}:{today.isoformat()}"
                             active_keys.add(dedupe)
                             existing = ProjectAttentionService._get_by_dedupe(db, project.id, dedupe)
-                            thread_id = ProjectAttentionService._ensure_attendance_thread(
+                            channel_id = ProjectAttentionService._ensure_attendance_channel(
                                 db,
                                 project,
                                 day=today,
                                 missing_count=len(missing),
                                 expected_count=len(expected),
-                                existing_thread_id=existing.source_thread_id if existing else None,
+                                existing_channel_id=existing.source_channel_id if existing else None,
                                 actor_id=actor_id,
                             )
                             deep_link = (
-                                f"/projects/{project.id}/hub?thread={thread_id}"
-                                if thread_id
+                                f"/projects/{project.id}/hub?channel={channel_id}"
+                                if channel_id
                                 else f"/projects/{project.id}?tab=ops&view=tasks"
                             )
                             ProjectAttentionService._upsert_open_item(
@@ -469,7 +528,7 @@ class ProjectAttentionService:
                                 title="Attendance gap during collection window",
                                 detail=f"{len(missing)} of {len(expected)} expected people have not checked in today.",
                                 deep_link=deep_link,
-                                source_thread_id=thread_id,
+                                source_channel_id=channel_id,
                             )
 
         # Resolve open items whose conditions cleared (same kinds only)

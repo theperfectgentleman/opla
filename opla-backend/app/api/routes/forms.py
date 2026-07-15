@@ -6,12 +6,12 @@ from app.api.schemas.automation import FormAutomationRuleCreate, FormAutomationR
 from app.api.dependencies import get_current_user, get_db
 from app.api.schemas.dataset import FormDatasetOut, FormDatasetUpdateIn, LookupDatasetSourceOut, LookupOptionsOut
 from app.api.schemas.form import (
-    CatalogDesignationIn,
-    CatalogEntryDeleteOut,
-    CatalogEntryOut,
-    CatalogEntryUpsertIn,
-    CatalogLookupOptionsOut,
-    CatalogLookupSourceOut,
+    DirectoryDesignationIn,
+    DirectoryEntryDeleteOut,
+    DirectoryEntryOut,
+    DirectoryEntryUpsertIn,
+    DirectoryLookupOptionsOut,
+    DirectoryLookupSourceOut,
     FormCreateIn,
     FormOut,
     FormRuntimeOut,
@@ -22,7 +22,7 @@ from app.api.schemas.form import (
     PublishFormIn,
     FormResponsibilityUpdateIn,
 )
-from app.services.catalog_form_service import CatalogFormService
+from app.services.directory_form_service import DirectoryFormService
 from app.services.dataset_service import DatasetService
 from app.services.form_automation_service import FormAutomationService
 from app.services.form_service import FormService
@@ -274,8 +274,8 @@ def publish_form(
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_publish_form(db, current_user.id, source_form)
 
-    # Extra validation for catalog forms: key + label fields must be designated
-    CatalogFormService.validate_ready_to_publish(source_form)
+    # Extra validation for directory forms: key + label fields must be designated
+    DirectoryFormService.validate_ready_to_publish(source_form)
 
     payload = payload or PublishFormIn()
 
@@ -297,66 +297,65 @@ def publish_form(
 
 
 # ---------------------------------------------------------------------------
-# Catalog-specific endpoints
+# Directory-specific endpoints
 # ---------------------------------------------------------------------------
 
-@router.patch("/{form_id}/catalog-designations", response_model=FormOut)
-def update_catalog_designations(
+@router.patch("/{form_id}/directory-designations", response_model=FormOut)
+def update_directory_designations(
     form_id: uuid.UUID,
-    payload: CatalogDesignationIn,
+    payload: DirectoryDesignationIn,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Set or update the key/label field designations for a catalog form."""
+    """Set or update the key/label field designations for a directory form."""
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
-    return CatalogFormService.update_catalog_designations(
+    return DirectoryFormService.update_directory_designations(
         db,
         form,
-        catalog_key_field_id=payload.catalog_key_field_id,
-        catalog_label_field_id=payload.catalog_label_field_id,
+        directory_key_field_id=payload.directory_key_field_id,
+        directory_label_field_id=payload.directory_label_field_id,
     )
 
 
-@router.get("/{form_id}/catalog-entries", response_model=List[CatalogEntryOut])
-def get_catalog_entries(
+@router.get("/{form_id}/directory-entries", response_model=List[DirectoryEntryOut])
+def get_directory_entries(
     form_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return resolved catalog entries (latest per key, active only)."""
+    """Return resolved directory entries (latest per key, active only)."""
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
-    return CatalogFormService.get_catalog_entries(db, form)
+    return DirectoryFormService.get_directory_entries(db, form)
 
 
-@router.post("/{form_id}/catalog-entries", response_model=CatalogEntryOut, status_code=status.HTTP_201_CREATED)
-def upsert_catalog_entry(
+@router.post("/{form_id}/directory-entries", response_model=DirectoryEntryOut, status_code=status.HTTP_201_CREATED)
+def upsert_directory_entry(
     form_id: uuid.UUID,
-    payload: CatalogEntryUpsertIn,
+    payload: DirectoryEntryUpsertIn,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create or update a catalog entry (append-only; latest per key wins)."""
+    """Create or update a directory entry (append-only; latest per key wins)."""
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
-    submission = CatalogFormService.upsert_entry(db, form, payload.data, actor_id=current_user.id)
-    # Return in CatalogEntryOut shape
-    key_field = form.catalog_key_field_id or ""
-    label_field = form.catalog_label_field_id or key_field
+    submission = DirectoryFormService.upsert_entry(db, form, payload.data, actor_id=current_user.id)
+    key_field = form.directory_key_field_id or ""
+    label_field = form.directory_label_field_id or key_field
     data = submission.data or {}
-    return CatalogEntryOut(
+    return DirectoryEntryOut(
         submission_id=str(submission.id),
         key_value=data.get(key_field),
         label_value=data.get(label_field),
         data=data,
-        catalog_is_active=True,
+        directory_is_active=True,
         created_at=submission.created_at.isoformat() if submission.created_at else None,
     )
 
@@ -365,70 +364,70 @@ class _ActivePayload(BaseModel):
     active: bool
 
 
-@router.patch("/{form_id}/catalog-entries/{submission_id}/active", response_model=CatalogEntryOut)
-def set_catalog_entry_active(
+@router.patch("/{form_id}/directory-entries/{submission_id}/active", response_model=DirectoryEntryOut)
+def set_directory_entry_active(
     form_id: uuid.UUID,
     submission_id: uuid.UUID,
     payload: _ActivePayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Activate or deactivate a catalog entry in one click."""
+    """Activate or deactivate a directory entry in one click."""
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
-    return CatalogFormService.set_entry_active(db, form, submission_id, payload.active)
+    return DirectoryFormService.set_entry_active(db, form, submission_id, payload.active)
 
 
-@router.delete("/{form_id}/catalog-entries/{submission_id}", response_model=CatalogEntryDeleteOut)
-def delete_catalog_entry(
+@router.delete("/{form_id}/directory-entries/{submission_id}", response_model=DirectoryEntryDeleteOut)
+def delete_directory_entry(
     form_id: uuid.UUID,
     submission_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Permanently delete a catalog entry and all historical versions for its key."""
+    """Permanently delete a directory entry and all historical versions for its key."""
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_edit_form(db, current_user.id, form)
-    return CatalogFormService.delete_entry(db, form, submission_id)
+    return DirectoryFormService.delete_entry(db, form, submission_id)
 
 
-@router.get("/{form_id}/catalog-lookup-sources", response_model=List[CatalogLookupSourceOut])
-def list_catalog_lookup_sources(
+@router.get("/{form_id}/directory-lookup-sources", response_model=List[DirectoryLookupSourceOut])
+def list_directory_lookup_sources(
     form_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List published catalog forms in the same project that can populate survey lookups."""
+    """List published directory forms in the same project that can populate survey lookups."""
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
-    return CatalogFormService.list_lookup_sources(db, form)
+    return DirectoryFormService.list_lookup_sources(db, form)
 
 
-@router.get("/{form_id}/catalog-lookup-sources/{catalog_form_id}/options", response_model=CatalogLookupOptionsOut)
-def get_catalog_lookup_options(
+@router.get("/{form_id}/directory-lookup-sources/{directory_form_id}/options", response_model=DirectoryLookupOptionsOut)
+def get_directory_lookup_options(
     form_id: uuid.UUID,
-    catalog_form_id: uuid.UUID,
+    directory_form_id: uuid.UUID,
     search: str | None = None,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return dropdown/lookup options from a catalog form for use in a standard survey form."""
+    """Return dropdown/lookup options from a directory form for use in a standard survey form."""
     form = FormService.get_form(db, form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found")
     ProjectAccessService.ensure_can_view_form(db, current_user.id, form)
     bounded_limit = max(1, min(limit, 500))
-    return CatalogFormService.get_lookup_options(
+    return DirectoryFormService.get_lookup_options(
         db,
         consumer_form=form,
-        catalog_form_id=catalog_form_id,
+        directory_form_id=directory_form_id,
         search=search,
         limit=bounded_limit,
     )

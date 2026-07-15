@@ -76,7 +76,7 @@ const ProjectThreadsPanel: React.FC<Props> = ({
         setLoadingThreads(true);
         setError(null);
         try {
-            const rows: ProjectThread[] = await projectAPI.listThreads(orgId, projectId);
+            const rows: ProjectThread[] = await projectAPI.listMessages(orgId, projectId);
             setThreads(Array.isArray(rows) ? rows : []);
             setActiveThreadId((prev) => {
                 if (prev && rows.some((t) => t.id === prev)) return prev;
@@ -96,7 +96,7 @@ const ProjectThreadsPanel: React.FC<Props> = ({
         async (threadId: string) => {
             setLoadingMessages(true);
             try {
-                const rows: ThreadMessage[] = await projectAPI.listThreadMessages(orgId, projectId, threadId, {
+                const rows: ThreadMessage[] = await projectAPI.listChannelMessages(orgId, projectId, threadId, {
                     limit: 80,
                 });
                 setMessages(Array.isArray(rows) ? rows : []);
@@ -131,7 +131,7 @@ const ProjectThreadsPanel: React.FC<Props> = ({
         setSending(true);
         setError(null);
         try {
-            const created = await projectAPI.postThreadMessage(orgId, projectId, activeThreadId, {
+            const created = await projectAPI.postChannelMessage(orgId, projectId, activeThreadId, {
                 body: composer.trim(),
             });
             setMessages((prev) => [...prev, created]);
@@ -159,7 +159,7 @@ const ProjectThreadsPanel: React.FC<Props> = ({
         if (!editBody.trim()) return;
         setBusyMessageId(messageId);
         try {
-            const updated = await projectAPI.editThreadMessage(orgId, projectId, messageId, {
+            const updated = await projectAPI.editMessage(orgId, projectId, messageId, {
                 body: editBody.trim(),
             });
             setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
@@ -175,7 +175,7 @@ const ProjectThreadsPanel: React.FC<Props> = ({
     const removeMessage = async (messageId: string) => {
         setBusyMessageId(messageId);
         try {
-            const updated = await projectAPI.deleteThreadMessage(orgId, projectId, messageId);
+            const updated = await projectAPI.deleteMessage(orgId, projectId, messageId);
             setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
             setThreads((prev) =>
                 prev.map((t) =>

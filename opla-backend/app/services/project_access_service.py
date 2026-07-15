@@ -309,9 +309,9 @@ class ProjectAccessService:
             db.add(access)
 
         if accessor_type == AccessorType.TEAM:
-            from app.services.project_thread_service import ProjectThreadService
+            from app.services.project_message_service import ProjectMessageService
 
-            ProjectThreadService.ensure_project_channels(db, project.id, commit=False)
+            ProjectMessageService.ensure_project_channels(db, project.id, commit=False)
 
         db.commit()
         db.refresh(access)
@@ -340,8 +340,8 @@ class ProjectAccessService:
         db.delete(access)
 
         if was_team:
-            from app.services.project_thread_service import ProjectThreadService
+            from app.services.project_message_service import ProjectMessageService
 
-            ProjectThreadService.ensure_project_channels(db, project_id, commit=False)
+            ProjectMessageService.ensure_project_channels(db, project_id, commit=False)
 
         db.commit()

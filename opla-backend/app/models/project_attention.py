@@ -28,6 +28,7 @@ class AttentionHookKind(str, enum.Enum):
     TASK_BLOCKED = "task_blocked"
     TASK_OVERDUE = "task_overdue"
     ATTENDANCE_GAP = "attendance_gap"
+    AUTOMATION_ALERT = "automation_alert"
 
 
 class ProjectAttentionHook(Base):
@@ -73,7 +74,13 @@ class ProjectAttentionItem(Base):
         ForeignKey("project_attendance_records.id", ondelete="SET NULL"),
         nullable=True,
     )
-    source_thread_id = Column(UUID(as_uuid=True), ForeignKey("project_threads.id", ondelete="SET NULL"), nullable=True)
+    source_channel_id = Column(UUID(as_uuid=True), ForeignKey("project_message_channels.id", ondelete="SET NULL"), nullable=True)
+    source_automation_rule_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("form_automation_rules.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     dismissed_at = Column(DateTime, nullable=True)
     dismissed_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

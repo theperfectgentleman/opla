@@ -72,9 +72,9 @@ class ProjectTaskService:
             raise HTTPException(status_code=400, detail="Source submission was not found in this project")
 
     @staticmethod
-    def _validate_kind(kind: ProjectTaskKind, visit_date: date | None) -> None:
-        if kind == ProjectTaskKind.JOURNEY_VISIT and visit_date is None:
-            raise HTTPException(status_code=400, detail="Journey visit tasks must include a visit date")
+    def _validate_kind(kind: ProjectTaskKind, scheduled_date: date | None) -> None:
+        if kind == ProjectTaskKind.FIELD_VISIT and scheduled_date is None:
+            raise HTTPException(status_code=400, detail="Field visit tasks must include a scheduled date")
 
     @staticmethod
     def list_tasks(db: Session, project_id: uuid.UUID) -> list[ProjectTask]:
@@ -106,7 +106,7 @@ class ProjectTaskService:
         kind: ProjectTaskKind,
         starts_at: datetime | None,
         due_at: datetime | None,
-        visit_date: date | None,
+        scheduled_date: date | None,
         source_submission_id: uuid.UUID | None,
         context_json: dict | None,
         assigned_accessor_id: uuid.UUID | None,
@@ -116,7 +116,7 @@ class ProjectTaskService:
     ) -> ProjectTask:
         ProjectAccessService.ensure_project_is_mutable(project)
         ProjectTaskService._validate_timeline(starts_at, due_at)
-        ProjectTaskService._validate_kind(kind, visit_date)
+        ProjectTaskService._validate_kind(kind, scheduled_date)
         ProjectTaskService._validate_assignment(db, project, assigned_accessor_id, assigned_accessor_type)
         ProjectTaskService._validate_source_submission(db, project, source_submission_id)
 
@@ -127,7 +127,7 @@ class ProjectTaskService:
             kind=kind,
             starts_at=starts_at,
             due_at=due_at,
-            visit_date=visit_date,
+            scheduled_date=scheduled_date,
             source_submission_id=source_submission_id,
             context_json=context_json,
             automation_rule_id=automation_rule_id,
@@ -188,7 +188,7 @@ class ProjectTaskService:
         status: ProjectTaskStatus | None = None,
         starts_at: datetime | None = None,
         due_at: datetime | None = None,
-        visit_date: date | None = None,
+        scheduled_date: date | None = None,
         source_submission_id: uuid.UUID | None = None,
         context_json: dict | None = None,
         assigned_accessor_id: uuid.UUID | None = None,
@@ -201,9 +201,9 @@ class ProjectTaskService:
         next_starts_at = starts_at if starts_at is not None else task.starts_at
         next_due_at = due_at if due_at is not None else task.due_at
         next_kind = kind if kind is not None else task.kind
-        next_visit_date = visit_date if visit_date is not None else task.visit_date
+        next_scheduled_date = scheduled_date if scheduled_date is not None else task.scheduled_date
         ProjectTaskService._validate_timeline(next_starts_at, next_due_at)
-        ProjectTaskService._validate_kind(next_kind, next_visit_date)
+        ProjectTaskService._validate_kind(next_kind, next_scheduled_date)
 
         if title is not None:
             task.title = title.strip()
@@ -215,8 +215,8 @@ class ProjectTaskService:
             task.starts_at = starts_at
         if due_at is not None:
             task.due_at = due_at
-        if visit_date is not None:
-            task.visit_date = visit_date
+        if scheduled_date is not None:
+            task.scheduled_date = scheduled_date
         if status is not None:
             task.status = status
             task.completed_at = datetime.utcnow() if status == ProjectTaskStatus.DONE else None
@@ -276,11 +276,11 @@ class ProjectTaskService:
                 ProjectTask.project_id == project_id,
                 or_(*assignment_filters),
                 or_(
-                    ProjectTask.visit_date == target_date,
+                    ProjectTask.scheduled_date == target_date,
                     func.date(ProjectTask.starts_at) == target_date,
                     func.date(ProjectTask.due_at) == target_date,
                 ),
             )
-            .order_by(ProjectTask.visit_date.asc(), ProjectTask.due_at.asc(), ProjectTask.created_at.desc())
+            .order_by(ProjectTask.scheduled_date.asc(), ProjectTask.due_at.asc(), ProjectTask.created_at.desc())
             .all()
         )

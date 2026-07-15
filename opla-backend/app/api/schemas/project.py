@@ -154,7 +154,7 @@ class ProjectTaskCreate(BaseModel):
     kind: ProjectTaskKind = ProjectTaskKind.GENERAL
     starts_at: Optional[datetime] = None
     due_at: Optional[datetime] = None
-    visit_date: Optional[date] = None
+    scheduled_date: Optional[date] = None
     source_submission_id: Optional[UUID] = None
     context_json: Optional[dict] = None
     assigned_accessor_id: Optional[UUID] = None
@@ -164,8 +164,8 @@ class ProjectTaskCreate(BaseModel):
     def validate_task(self):
         if self.starts_at and self.due_at and self.due_at < self.starts_at:
             raise ValueError("Task due date must be after the start date")
-        if self.kind == ProjectTaskKind.JOURNEY_VISIT and self.visit_date is None:
-            raise ValueError("Journey visit tasks must include a visit date")
+        if self.kind == ProjectTaskKind.FIELD_VISIT and self.scheduled_date is None:
+            raise ValueError("Field visit tasks must include a scheduled date")
         if bool(self.assigned_accessor_id) != bool(self.assigned_accessor_type):
             raise ValueError("Assigned accessor id and type must be provided together")
         return self
@@ -178,7 +178,7 @@ class ProjectTaskUpdate(BaseModel):
     status: Optional[ProjectTaskStatus] = None
     starts_at: Optional[datetime] = None
     due_at: Optional[datetime] = None
-    visit_date: Optional[date] = None
+    scheduled_date: Optional[date] = None
     source_submission_id: Optional[UUID] = None
     context_json: Optional[dict] = None
     assigned_accessor_id: Optional[UUID] = None
@@ -189,8 +189,8 @@ class ProjectTaskUpdate(BaseModel):
     def validate_task(self):
         if self.starts_at and self.due_at and self.due_at < self.starts_at:
             raise ValueError("Task due date must be after the start date")
-        if self.kind == ProjectTaskKind.JOURNEY_VISIT and self.visit_date is None:
-            raise ValueError("Journey visit tasks must include a visit date")
+        if self.kind == ProjectTaskKind.FIELD_VISIT and self.scheduled_date is None:
+            raise ValueError("Field visit tasks must include a scheduled date")
         if not self.clear_assignment and (self.assigned_accessor_id is not None or self.assigned_accessor_type is not None):
             if bool(self.assigned_accessor_id) != bool(self.assigned_accessor_type):
                 raise ValueError("Assigned accessor id and type must be provided together")
@@ -208,7 +208,7 @@ class ProjectTaskOut(BaseModel):
     status: ProjectTaskStatus
     starts_at: Optional[datetime] = None
     due_at: Optional[datetime] = None
-    visit_date: Optional[date] = None
+    scheduled_date: Optional[date] = None
     source_submission_id: Optional[UUID] = None
     context_json: Optional[dict] = None
     automation_rule_id: Optional[UUID] = None
@@ -265,7 +265,7 @@ class ProjectAttendanceOut(BaseModel):
     updated_at: datetime
 
 
-class ProjectCatalogItemCreate(BaseModel):
+class ProjectDirectoryItemCreate(BaseModel):
     sku_code: str
     label: str
     default_price: Optional[float] = None
@@ -276,7 +276,7 @@ class ProjectCatalogItemCreate(BaseModel):
     metadata_json: Optional[dict] = None
 
 
-class ProjectCatalogItemUpdate(BaseModel):
+class ProjectDirectoryItemUpdate(BaseModel):
     sku_code: Optional[str] = None
     label: Optional[str] = None
     default_price: Optional[float] = None
@@ -287,7 +287,7 @@ class ProjectCatalogItemUpdate(BaseModel):
     metadata_json: Optional[dict] = None
 
 
-class ProjectCatalogItemOut(BaseModel):
+class ProjectDirectoryItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -363,7 +363,8 @@ class ProjectAttentionItemOut(BaseModel):
     source_submission_id: Optional[UUID] = None
     source_task_id: Optional[UUID] = None
     source_attendance_id: Optional[UUID] = None
-    source_thread_id: Optional[UUID] = None
+    source_channel_id: Optional[UUID] = None
+    source_automation_rule_id: Optional[UUID] = None
     dismissed_at: Optional[datetime] = None
     dismissed_by: Optional[UUID] = None
     created_at: datetime

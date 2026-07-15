@@ -41,4 +41,4 @@ class Project(Base):
     forms = relationship("Form", back_populates="project", cascade="all, delete-orphan")
     reports = relationship("ProjectReport", back_populates="project", cascade="all, delete-orphan")
     assets = relationship("ProjectAsset", back_populates="project", cascade="all, delete-orphan")
-    threads = relationship("ProjectThread", back_populates="project", cascade="all, delete-orphan")
+    message_channels = relationship("ProjectMessageChannel", back_populates="project", cascade="all, delete-orphan")

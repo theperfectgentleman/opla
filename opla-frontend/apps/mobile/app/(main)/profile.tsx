@@ -129,7 +129,7 @@ export default function ProfileScreen() {
                                         activeOpacity={0.75}
                                         onPress={() =>
                                             router.push({
-                                                pathname: '/(main)/(desk)/org/[id]',
+                                                pathname: '/(main)/(agent)/org/[id]',
                                                 params: {
                                                     id: org.id,
                                                     name: org.name,

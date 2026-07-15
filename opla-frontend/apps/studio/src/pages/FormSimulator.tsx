@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { formAPI, projectAPI, submissionAPI } from '../lib/api';
-import { hydrateBlueprintCatalogForms } from '../utils/catalogFormLookup';
+import { hydrateBlueprintDirectoryForms } from '../utils/directoryFormLookup';
 import { useOrg } from '../contexts/OrgContext';
 import {
     Smartphone, ChevronLeft, Send, RotateCcw,
@@ -15,7 +15,7 @@ import {
     isFieldVisibleByRules,
     getFilteredOptionsByRules
 } from '../../../mobile/src/utils/rulesEngine';
-import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
+import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
 
 interface UIField {
     type: string;
@@ -49,7 +49,7 @@ interface UIField {
     collection_layout?: 'cards' | 'table';
     allow_add_items?: boolean;
     allow_remove_items?: boolean;
-    catalog_source_type?: string;
+    directory_source_type?: string;
 }
 
 interface LogicCondition {
@@ -360,7 +360,7 @@ const LookupFieldRenderer = ({ field, value, onChange, rulesResult, responses }:
     );
 };
 
-const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: any) => {
+const ObjectFieldSimulatorRenderer = ({ field, value, onChange, directoryItems }: any) => {
     const isInstance = field.type === 'object_instance';
     const definition = field.object_definition || {};
     const properties = definition.properties || [];
@@ -418,23 +418,23 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
         if (Array.isArray(value) && value.length > 0) {
             loadedItems = value.map((entry) => calculateItemComputedProperties(entry || {}));
         } else {
-            const catalogBacked = field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form';
-            const catalogProp = properties.find((prop: any) => prop.type === 'select' && prop.reference?.source_items?.length);
-            const runtimeCatalogItems = catalogProp?.reference?.source_items || [];
+            const directoryBacked = field.directory_source_type === 'project_directory' || field.directory_source_type === 'directory_form';
+            const directoryProp = properties.find((prop: any) => prop.type === 'select' && prop.reference?.source_items?.length);
+            const runtimeDirectoryItems = directoryProp?.reference?.source_items || [];
 
-            if (catalogBacked && (catalogItems.length > 0 || runtimeCatalogItems.length > 0)) {
-            const mode = field.catalog_prepopulate_mode || 'all';
+            if (directoryBacked && (directoryItems.length > 0 || runtimeDirectoryItems.length > 0)) {
+            const mode = field.directory_prepopulate_mode || 'all';
             if (mode !== 'none') {
-                const sourceItems = runtimeCatalogItems.length > 0 ? runtimeCatalogItems : catalogItems;
+                const sourceItems = runtimeDirectoryItems.length > 0 ? runtimeDirectoryItems : directoryItems;
                 const targetItems = mode === 'required_only'
                     ? sourceItems.filter((item: any) => !!item.metadata_json?.is_mandatory)
                     : sourceItems;
 
                 loadedItems = targetItems.map((item: any) => {
-                    const row: any = { _isCatalogItem: true };
+                    const row: any = { _isDirectoryItem: true };
                     properties.forEach((prop: any) => {
-                        if (prop.type === 'select' && (prop.reference?.source_type === 'catalog' || prop.reference?.source_type === 'catalog_form')) {
-                            const valueField = prop.reference.value_field || (prop.reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
+                        if (prop.type === 'select' && (prop.reference?.source_type === 'directory' || prop.reference?.source_type === 'directory_form')) {
+                            const valueField = prop.reference.value_field || (prop.reference.source_type === 'directory_form' ? 'sku_code' : 'id');
                             row[prop.key] = item[valueField] ?? item.id;
                             Object.entries(prop.reference.field_mappings || {}).forEach(([targetKey, sourceKey]: any) => {
                                 row[targetKey] = item[sourceKey];
@@ -451,7 +451,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
             }
         }
         return loadedItems;
-    }, [isInstance, value, properties, field.catalog_source_type, catalogItems, field.catalog_prepopulate_mode]);
+    }, [isInstance, value, properties, field.directory_source_type, directoryItems, field.directory_prepopulate_mode]);
 
     const commitItems = (nextItems: any[]) => {
         if (isInstance) {
@@ -462,25 +462,25 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
     };
 
     React.useEffect(() => {
-        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && (field.catalog_source_type === 'project_catalog' || field.catalog_source_type === 'catalog_form')) {
-            const mode = field.catalog_prepopulate_mode || 'all';
+        if (!isInstance && (!value || (Array.isArray(value) && value.length === 0)) && (field.directory_source_type === 'project_directory' || field.directory_source_type === 'directory_form')) {
+            const mode = field.directory_prepopulate_mode || 'all';
             if (mode !== 'none') {
                 commitItems(items);
             }
         }
-    }, [catalogItems, value, field.catalog_source_type, field.catalog_prepopulate_mode]);
+    }, [directoryItems, value, field.directory_source_type, field.directory_prepopulate_mode]);
 
     const updateRow = (rowIndex: number, propertyKey: string, propValue: any, propDef: any) => {
         const nextItems = items.map((entry, index) => {
             if (index !== rowIndex) return entry;
             let updated = { ...entry, [propertyKey]: propValue };
 
-            // Catalog references auto-injection
-            if (propDef?.type === 'select' && (propDef.reference?.source_type === 'catalog' || propDef.reference?.source_type === 'catalog_form')) {
-                const valueField = propDef.reference.value_field || (propDef.reference.source_type === 'catalog_form' ? 'sku_code' : 'id');
+            // Directory references auto-injection
+            if (propDef?.type === 'select' && (propDef.reference?.source_type === 'directory' || propDef.reference?.source_type === 'directory_form')) {
+                const valueField = propDef.reference.value_field || (propDef.reference.source_type === 'directory_form' ? 'sku_code' : 'id');
                 const sourceItems = propDef.reference.source_items?.length
                     ? propDef.reference.source_items
-                    : (catalogItems.length ? catalogItems : []);
+                    : (directoryItems.length ? directoryItems : []);
                 const selectedItem = sourceItems.find((item: any) => String(item[valueField] ?? item.id) === String(propValue));
 
                 if (selectedItem) {
@@ -514,7 +514,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
     };
 
     const removeRow = (rowIndex: number) => {
-        if (items[rowIndex]?._isCatalogItem) return;
+        if (items[rowIndex]?._isDirectoryItem) return;
         commitItems(items.filter((_, idx) => idx !== rowIndex));
     };
 
@@ -528,13 +528,13 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
         const isReadOnly = property.type === 'computed' || property.edit_mode === 'fixed';
 
         if (property.type === 'select') {
-            const isCatalog = property.reference?.source_type === 'catalog' || property.reference?.source_type === 'catalog_form';
-            const valueField = property.reference?.value_field || (property.reference?.source_type === 'catalog_form' ? 'sku_code' : 'id');
+            const isDirectory = property.reference?.source_type === 'directory' || property.reference?.source_type === 'directory_form';
+            const valueField = property.reference?.value_field || (property.reference?.source_type === 'directory_form' ? 'sku_code' : 'id');
             const labelField = property.reference?.label_field || 'label';
-            const options = isCatalog
+            const options = isDirectory
                 ? (property.reference?.source_items?.length
                     ? property.reference.source_items
-                    : (catalogItems.length ? catalogItems : []))
+                    : (directoryItems.length ? directoryItems : []))
                     .map((item: any) => ({
                         label: String(item[labelField] ?? item.label ?? item.id),
                         value: String(item[valueField] ?? item.id),
@@ -636,7 +636,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
                                         ))}
                                         {(field.allow_remove_items ?? true) && (
                                             <td className="p-2 text-center">
-                                                {!row._isCatalogItem && (
+                                                {!row._isDirectoryItem && (
                                                     <button
                                                         type="button"
                                                         onClick={() => removeRow(rowIndex)}
@@ -677,7 +677,7 @@ const ObjectFieldSimulatorRenderer = ({ field, value, onChange, catalogItems }: 
                             {isInstance ? <Database className="w-3.5 h-3.5 text-[hsl(var(--primary))]" /> : <Layers className="w-3.5 h-3.5 text-[hsl(var(--primary))]" />}
                             {isInstance ? 'Reference Card' : `Card #${rowIndex + 1}`}
                         </span>
-                        {!isInstance && (field.allow_remove_items ?? true) && !row._isCatalogItem && (
+                        {!isInstance && (field.allow_remove_items ?? true) && !row._isDirectoryItem && (
                             <button
                                 type="button"
                                 onClick={() => removeRow(rowIndex)}
@@ -720,21 +720,21 @@ const FormSimulator: React.FC = () => {
 
     const { currentOrg } = useOrg();
     const [projectId, setProjectId] = useState<string | null>(null);
-    const [catalogItems, setCatalogItems] = useState<any[]>([]);
+    const [directoryItems, setDirectoryItems] = useState<any[]>([]);
 
     useEffect(() => {
-        const loadCatalog = async () => {
+        const loadDirectory = async () => {
             if (currentOrg?.id && projectId) {
                 try {
-                    const items = await projectAPI.listCatalogItems(currentOrg.id, projectId);
-                    setCatalogItems(Array.isArray(items) ? items : []);
+                    const items = await projectAPI.listDirectoryItems(currentOrg.id, projectId);
+                    setDirectoryItems(Array.isArray(items) ? items : []);
                 } catch (e) {
-                    console.error("Failed to load project catalog items in simulator", e);
-                    setCatalogItems([]);
+                    console.error("Failed to load project directory items in simulator", e);
+                    setDirectoryItems([]);
                 }
             }
         };
-        loadCatalog();
+        loadDirectory();
     }, [currentOrg, projectId]);
 
     const rulesResult = useMemo(() => {
@@ -772,9 +772,9 @@ const FormSimulator: React.FC = () => {
                 const data = await formAPI.get(formId);
                 const loaded = data.blueprint_draft || data.blueprint_live;
                 if (loaded) {
-                    const hydrated = await hydrateBlueprintCatalogForms(loaded, data.id, {
-                        listSources: (consumerFormId) => formAPI.listCatalogLookupSources(consumerFormId),
-                        getOptions: (consumerFormId, catalogFormId) => formAPI.getCatalogLookupOptions(consumerFormId, catalogFormId),
+                    const hydrated = await hydrateBlueprintDirectoryForms(loaded, data.id, {
+                        listSources: (consumerFormId) => formAPI.listDirectoryLookupSources(consumerFormId),
+                        getOptions: (consumerFormId, directoryFormId) => formAPI.getDirectoryLookupOptions(consumerFormId, directoryFormId),
                     });
                     setBlueprint(hydrated as FormBlueprint);
                     setProjectId(data.project_id || hydrated?.meta?.app_id || null);
@@ -1066,9 +1066,9 @@ const FormSimulator: React.FC = () => {
                                     .filter(field => isFieldVisible(field.bind))
                                     .filter(field => !activeFieldId || field.bind === activeFieldId)
                                     .map((field, idx) => {
-                                        const catalogField = field as import('@opla/types').FormField;
-                                        const baseOptions = fieldUsesCatalogOptionResolver(catalogField)
-                                            ? resolveCatalogFormFieldOptions(catalogField, formData)
+                                        const directoryField = field as import('@opla/types').FormField;
+                                        const baseOptions = fieldUsesDirectoryOptionResolver(directoryField)
+                                            ? resolveDirectoryFormFieldOptions(directoryField, formData)
                                             : (field.options || []);
                                         const displayOptions = baseOptions.filter((opt: any) => {
                                             if (rulesResult && formData) {
@@ -1091,7 +1091,7 @@ const FormSimulator: React.FC = () => {
                                                     field={field}
                                                     value={formData[field.bind]}
                                                     onChange={(val: any) => handleInputChange(field.bind, val)}
-                                                    catalogItems={catalogItems}
+                                                    directoryItems={directoryItems}
                                                 />
                                             ) : field.type === 'gps_capture' ? (
                                                  <div className="space-y-2">
@@ -1689,7 +1689,7 @@ const FormSimulator: React.FC = () => {
                         <SyntheticDataPanel
                             formId={formId}
                             blueprint={blueprint}
-                            catalogItems={catalogItems}
+                            directoryItems={directoryItems}
                         />
                     </div>
                 )}

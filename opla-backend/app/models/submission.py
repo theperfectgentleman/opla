@@ -32,9 +32,9 @@ class Submission(Base):
     reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     review_comment = Column(Text, nullable=True)
-    # For catalog form submissions only: True/False to activate or deactivate an entry.
+    # For directory form submissions only: True/False to activate or deactivate an entry.
     # NULL for regular form submissions (irrelevant).
-    catalog_is_active = Column(Boolean, nullable=True, default=None)
+    directory_is_active = Column(Boolean, nullable=True, default=None)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     form = relationship("Form", backref="submissions")

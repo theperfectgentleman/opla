@@ -22,16 +22,26 @@ import {
 
 import StudioLayout from '../components/StudioLayout';
 import ConfirmPopover from '../components/ConfirmPopover';
-import CatalogGrid from '../components/catalog/CatalogGrid';
+import DirectoryGrid from '../components/directory/DirectoryGrid';
 import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
 import { useOrg } from '../contexts/OrgContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
-    countUnpublishedCatalogFields,
-    getCatalogBlueprintFields,
-    normalizeCatalogEntry,
-} from '../utils/catalogUtils';
+    countUnpublishedDirectoryFields,
+    getDirectoryBlueprintFields,
+    normalizeDirectoryEntry,
+} from '../utils/directoryUtils';
+import {
+    PROJECT_WORKSPACE_TABS,
+    PROJECT_TAB_LABELS,
+    DATA_SECTION_LABELS,
+    resolveLegacyProjectTab,
+    type ProjectWorkspaceTab,
+    type ProjectDataSection,
+    type ProjectOpsSection,
+    type ProjectDesignSection,
+} from '../lib/vocabulary';
 import { analyticsAPI, formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
 
 type ProjectAccessRule = {
@@ -78,9 +88,9 @@ type WorkspaceForm = ResponsibilityFields & {
     status: string;
     version: number;
     updated_at: string;
-    kind?: 'standard' | 'catalog';
-    catalog_key_field_id?: string | null;
-    catalog_label_field_id?: string | null;
+    kind?: 'standard' | 'directory';
+    directory_key_field_id?: string | null;
+    directory_label_field_id?: string | null;
 };
 
 type ReviewQueueItem = {
@@ -124,11 +134,11 @@ type ProjectTask = {
     project_id: string;
     title: string;
     description?: string;
-    kind: 'general' | 'journey_visit';
+    kind: 'general' | 'field_visit';
     status: 'todo' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
     starts_at?: string;
     due_at?: string;
-    visit_date?: string;
+    scheduled_date?: string;
     source_submission_id?: string;
     context_json?: Record<string, unknown> | null;
     automation_rule_id?: string | null;
@@ -162,7 +172,7 @@ type ProjectAttendanceRecord = {
 
 type FormAutomationEvent = 'submission_created' | 'submission_reviewed' | 'submission_approved';
 
-type FormAutomationAction = 'create_task';
+type FormAutomationAction = 'create_task' | 'create_alert';
 
 type AutomationCondition = {
     field: string;
@@ -228,6 +238,17 @@ const automationEventOptions: Array<{ value: FormAutomationEvent; label: string 
     { value: 'submission_approved', label: 'Submission Approved' },
 ];
 
+const automationActionOptions: Array<{ value: FormAutomationAction; label: string }> = [
+    { value: 'create_task', label: 'Create task' },
+    { value: 'create_alert', label: 'Create alert (Needs Attention)' },
+];
+
+const automationSeverityOptions: Array<{ value: string; label: string }> = [
+    { value: 'info', label: 'Info' },
+    { value: 'warning', label: 'Warning' },
+    { value: 'critical', label: 'Critical' },
+];
+
 const automationOperatorOptions: Array<{ value: string; label: string }> = [
     { value: 'equal', label: 'equals' },
     { value: 'notEqual', label: 'does not equal' },
@@ -271,34 +292,48 @@ const businessRoleLabelBySlug: Record<string, string> = {
     'stakeholder-viewer': 'Viewer',
 };
 
-const TABS = [
-    { id: 'forms', label: 'Forms', icon: FileText },
-    { id: 'ops', label: 'Ops', icon: SquareCheckBig },
-    { id: 'data', label: 'Datasets', icon: Database },
-    { id: 'catalog', label: 'Catalog', icon: Tag },
-    { id: 'threads', label: 'Threads', icon: MessageSquare },
-    { id: 'reports', label: 'Reports', icon: FileBarChart2 },
-    { id: 'members', label: 'Members', icon: Users },
-] as const;
+const TABS = PROJECT_WORKSPACE_TABS.map((id) => ({
+    id,
+    label: PROJECT_TAB_LABELS[id],
+    icon: id === 'tasks' ? SquareCheckBig
+        : id === 'ops' ? CheckCircle2
+        : id === 'design' ? FileText
+        : id === 'messages' ? MessageSquare
+        : id === 'data' ? Database
+        : FileBarChart2,
+}));
 
-type OpsView = 'tasks' | 'review';
+type OpsView = ProjectOpsSection;
+type DesignView = ProjectDesignSection;
+type DataView = ProjectDataSection;
 
 const ProjectWorkspace: React.FC = () => {
     const navigate = useNavigate();
     const { projectId } = useParams<{ projectId: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
-    const rawTab = searchParams.get('tab') || 'forms';
-    const activeTab = rawTab === 'tasks' || rawTab === 'review' ? 'ops' : rawTab;
-    const opsView: OpsView = searchParams.get('view') === 'review' || rawTab === 'review' ? 'review' : 'tasks';
+    const legacyResolved = resolveLegacyProjectTab(
+        searchParams.get('tab'),
+        searchParams.get('view'),
+        searchParams.get('section'),
+    );
+    const activeTab: ProjectWorkspaceTab = legacyResolved.tab;
+    const dataSection: DataView = (legacyResolved.section as DataView) || 'datasets';
+    const designSection: DesignView = (legacyResolved.section as DesignView) || 'forms';
+    const opsView: OpsView = legacyResolved.section === 'review' || legacyResolved.view === 'review'
+        ? 'review'
+        : 'attendance';
 
-    const setActiveTab = (tab: string) => {
+    const setWorkspaceTab = (tab: ProjectWorkspaceTab, options?: { section?: string; view?: string }) => {
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             next.set('tab', tab);
-            if (tab === 'ops') {
-                if (!next.get('view') || (next.get('view') !== 'tasks' && next.get('view') !== 'review')) {
-                    next.set('view', 'tasks');
-                }
+            if (options?.section) {
+                next.set('section', options.section);
+            } else {
+                next.delete('section');
+            }
+            if (options?.view) {
+                next.set('view', options.view);
             } else {
                 next.delete('view');
             }
@@ -307,27 +342,41 @@ const ProjectWorkspace: React.FC = () => {
     };
 
     const setOpsView = (view: OpsView) => {
-        setSearchParams((prev) => {
-            const next = new URLSearchParams(prev);
-            next.set('tab', 'ops');
-            next.set('view', view);
-            return next;
-        });
+        setWorkspaceTab('ops', { section: view });
     };
 
-    // Legacy ?tab=tasks|review → ?tab=ops&view=...
+    const setDesignView = (view: DesignView) => {
+        setWorkspaceTab('design', { section: view });
+    };
+
+    const setDataView = (view: DataView) => {
+        setWorkspaceTab('data', { section: view });
+    };
+
+    // Legacy ?tab= redirects
     useEffect(() => {
-        if (rawTab !== 'tasks' && rawTab !== 'review') return;
-        setSearchParams(
-            (prev) => {
-                const next = new URLSearchParams(prev);
-                next.set('tab', 'ops');
-                next.set('view', rawTab === 'review' ? 'review' : 'tasks');
-                return next;
-            },
-            { replace: true },
+        const rawTab = searchParams.get('tab');
+        if (!rawTab) return;
+        const resolved = resolveLegacyProjectTab(
+            rawTab,
+            searchParams.get('view'),
+            searchParams.get('section'),
         );
-    }, [rawTab, setSearchParams]);
+        const canonicalTab = resolved.tab;
+        const needsRedirect = rawTab !== canonicalTab
+            || (rawTab === 'forms' || rawTab === 'catalog' || rawTab === 'threads' || rawTab === 'tasks' || rawTab === 'review')
+            || (rawTab === 'data' && !searchParams.get('section') && resolved.section);
+        if (!needsRedirect) return;
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', canonicalTab);
+            if (resolved.section) next.set('section', resolved.section);
+            else next.delete('section');
+            if (resolved.view) next.set('view', resolved.view);
+            else next.delete('view');
+            return next;
+        }, { replace: true });
+    }, [searchParams, setSearchParams]);
 
     const {
         currentOrg,
@@ -342,17 +391,17 @@ const ProjectWorkspace: React.FC = () => {
     const [forms, setForms] = useState<WorkspaceForm[]>([]);
     const [isCreateFormModalOpen, setIsCreateFormModalOpen] = useState(false);
     const [newFormTitle, setNewFormTitle] = useState('');
-    const [newFormKind, setNewFormKind] = useState<'standard' | 'catalog'>('standard');
-    const [selectedCatalogForm, setSelectedCatalogForm] = useState<WorkspaceForm | null>(null);
-    const [catalogEntries, setCatalogEntries] = useState<any[]>([]);
-    const [selectedCatalogFields, setSelectedCatalogFields] = useState<any[]>([]);
-    const [catalogUnpublishedFieldCount, setCatalogUnpublishedFieldCount] = useState(0);
-    const [catalogConfirmAction, setCatalogConfirmAction] = useState<{
+    const [newFormKind, setNewFormKind] = useState<'standard' | 'directory'>('standard');
+    const [selectedDirectoryForm, setSelectedDirectoryForm] = useState<WorkspaceForm | null>(null);
+    const [directoryEntries, setDirectoryEntries] = useState<any[]>([]);
+    const [selectedDirectoryFields, setSelectedDirectoryFields] = useState<any[]>([]);
+    const [directoryUnpublishedFieldCount, setDirectoryUnpublishedFieldCount] = useState(0);
+    const [directoryConfirmAction, setDirectoryConfirmAction] = useState<{
         type: 'hide' | 'delete';
         entry: any;
         anchorRect: DOMRect;
     } | null>(null);
-    const [catalogConfirmLoading, setCatalogConfirmLoading] = useState(false);
+    const [directoryConfirmLoading, setDirectoryConfirmLoading] = useState(false);
     const [entriesLoading, setEntriesLoading] = useState(false);
     const [reviewQueue, setReviewQueue] = useState<ReviewQueueItem[]>([]);
     const [tasks, setTasks] = useState<ProjectTask[]>([]);
@@ -369,14 +418,17 @@ const ProjectWorkspace: React.FC = () => {
         name: '',
         description: '',
         event_type: 'submission_approved' as FormAutomationEvent,
+        action_type: 'create_task' as FormAutomationAction,
         combinator: 'and' as 'and' | 'or',
         title_template: 'Follow up {{ submission.id }}',
         description_template: '',
+        detail_template: '',
+        severity: 'warning',
         assigned_accessor: '',
         context_mapping_json: '',
         starts_at_value: '',
         due_at_value: '',
-        visit_date_value: '',
+        scheduled_date_value: '',
         is_active: true,
     });
     const [loading, setLoading] = useState(true);
@@ -389,7 +441,7 @@ const ProjectWorkspace: React.FC = () => {
     const attendanceDay = useMemo(() => formatDateKey(new Date()), []);
 
     const [datasets, setDatasets] = useState<WorkspaceDataset[]>([]);
-    const [threads, setThreads] = useState<WorkspaceThread[]>([]);
+    const [messageChannels, setMessageChannels] = useState<WorkspaceThread[]>([]);
     const [assets] = useState<WorkspaceAsset[]>([
         {
             id: 'asset-brief',
@@ -430,7 +482,7 @@ const ProjectWorkspace: React.FC = () => {
                     teamAPI.list(currentOrg.id),
                     projectAPI.listRoleTemplates(currentOrg.id),
                     analyticsAPI.listSources(currentOrg.id).catch(() => []),
-                    projectAPI.listThreads(currentOrg.id, projectId).catch(() => []),
+                    projectAPI.listMessages(currentOrg.id, projectId).catch(() => []),
                 ]);
                 const pendingReviews = (
                     await Promise.all(
@@ -466,7 +518,7 @@ const ProjectWorkspace: React.FC = () => {
                 setAccessRules(projectAccess);
                 setTeams(orgTeams);
                 setRoleTemplates(templates);
-                setThreads(
+                setMessageChannels(
                     (Array.isArray(projectThreads) ? projectThreads : []).map((thread: any) => ({
                         id: thread.id,
                         title: thread.title,
@@ -629,7 +681,7 @@ const ProjectWorkspace: React.FC = () => {
                 return true;
             }
 
-            const taskDates = [task.starts_at, task.due_at, task.visit_date]
+            const taskDates = [task.starts_at, task.due_at, task.scheduled_date]
                 .map((value) => formatDateKey(value))
                 .filter(Boolean);
 
@@ -846,87 +898,87 @@ const ProjectWorkspace: React.FC = () => {
 
 
 
-    const loadCatalogData = async (catalogForm: WorkspaceForm) => {
+    const loadDirectoryData = async (directoryForm: WorkspaceForm) => {
         setEntriesLoading(true);
         try {
-            const entries = await formAPI.getCatalogEntries(catalogForm.id);
-            setCatalogEntries(Array.isArray(entries) ? entries.map(normalizeCatalogEntry) : []);
+            const entries = await formAPI.getDirectoryEntries(directoryForm.id);
+            setDirectoryEntries(Array.isArray(entries) ? entries.map(normalizeDirectoryEntry) : []);
 
-            const formDetail = await formAPI.get(catalogForm.id);
-            const uiFields = getCatalogBlueprintFields(formDetail);
-            setSelectedCatalogFields(uiFields);
-            setCatalogUnpublishedFieldCount(countUnpublishedCatalogFields(formDetail));
+            const formDetail = await formAPI.get(directoryForm.id);
+            const uiFields = getDirectoryBlueprintFields(formDetail);
+            setSelectedDirectoryFields(uiFields);
+            setDirectoryUnpublishedFieldCount(countUnpublishedDirectoryFields(formDetail));
         } catch (err: any) {
-            console.error('Failed to load catalog data', err);
-            showToast('Failed to load catalog', err?.response?.data?.detail || err?.message || 'Could not load catalog entries.', 'error');
+            console.error('Failed to load directory data', err);
+            showToast('Failed to load directory', err?.response?.data?.detail || err?.message || 'Could not load directory entries.', 'error');
         } finally {
             setEntriesLoading(false);
         }
     };
 
-    const handleCatalogSelect = (catalogForm: WorkspaceForm) => {
-        setSelectedCatalogForm(catalogForm);
-        loadCatalogData(catalogForm);
+    const handleDirectorySelect = (directoryForm: WorkspaceForm) => {
+        setSelectedDirectoryForm(directoryForm);
+        loadDirectoryData(directoryForm);
     };
 
-    const getCatalogEntryId = (entry: any) => entry.submission_id || entry.id;
+    const getDirectoryEntryId = (entry: any) => entry.submission_id || entry.id;
 
-    const getCatalogEntryDisplayName = (entry: any) => {
-        if (!selectedCatalogForm) return 'this record';
-        const keyVal = entry.key_value ?? entry.data?.[selectedCatalogForm.catalog_key_field_id || ''] ?? '';
-        const labelVal = entry.label_value ?? entry.data?.[selectedCatalogForm.catalog_label_field_id || ''] ?? '';
+    const getDirectoryEntryDisplayName = (entry: any) => {
+        if (!selectedDirectoryForm) return 'this record';
+        const keyVal = entry.key_value ?? entry.data?.[selectedDirectoryForm.directory_key_field_id || ''] ?? '';
+        const labelVal = entry.label_value ?? entry.data?.[selectedDirectoryForm.directory_label_field_id || ''] ?? '';
         return labelVal || keyVal || 'this record';
     };
 
-    const executeHideCatalogEntry = async (entry: any) => {
-        if (!selectedCatalogForm) return;
+    const executeHideDirectoryEntry = async (entry: any) => {
+        if (!selectedDirectoryForm) return;
 
-        const submissionId = getCatalogEntryId(entry);
-        await formAPI.setCatalogEntryActive(selectedCatalogForm.id, submissionId, false);
-        setCatalogEntries((prev) => prev.filter((item) => getCatalogEntryId(item) !== submissionId));
+        const submissionId = getDirectoryEntryId(entry);
+        await formAPI.setDirectoryEntryActive(selectedDirectoryForm.id, submissionId, false);
+        setDirectoryEntries((prev) => prev.filter((item) => getDirectoryEntryId(item) !== submissionId));
     };
 
-    const executeDeleteCatalogEntry = async (entry: any) => {
-        if (!selectedCatalogForm) return;
+    const executeDeleteDirectoryEntry = async (entry: any) => {
+        if (!selectedDirectoryForm) return;
 
-        const submissionId = getCatalogEntryId(entry);
-        await formAPI.deleteCatalogEntry(selectedCatalogForm.id, submissionId);
-        setCatalogEntries((prev) => prev.filter((item) => getCatalogEntryId(item) !== submissionId));
+        const submissionId = getDirectoryEntryId(entry);
+        await formAPI.deleteDirectoryEntry(selectedDirectoryForm.id, submissionId);
+        setDirectoryEntries((prev) => prev.filter((item) => getDirectoryEntryId(item) !== submissionId));
     };
 
-    const handleCatalogConfirm = async () => {
-        if (!catalogConfirmAction) return;
+    const handleDirectoryConfirm = async () => {
+        if (!directoryConfirmAction) return;
 
-        setCatalogConfirmLoading(true);
+        setDirectoryConfirmLoading(true);
         try {
-            if (catalogConfirmAction.type === 'hide') {
-                await executeHideCatalogEntry(catalogConfirmAction.entry);
+            if (directoryConfirmAction.type === 'hide') {
+                await executeHideDirectoryEntry(directoryConfirmAction.entry);
             } else {
-                await executeDeleteCatalogEntry(catalogConfirmAction.entry);
+                await executeDeleteDirectoryEntry(directoryConfirmAction.entry);
             }
-            setCatalogConfirmAction(null);
+            setDirectoryConfirmAction(null);
         } catch (err: any) {
-            console.error('Failed to update catalog entry', err);
-            showToast('Action failed', err?.response?.data?.detail || err?.message || 'Failed to update catalog entry.', 'error');
+            console.error('Failed to update directory entry', err);
+            showToast('Action failed', err?.response?.data?.detail || err?.message || 'Failed to update directory entry.', 'error');
         } finally {
-            setCatalogConfirmLoading(false);
+            setDirectoryConfirmLoading(false);
         }
     };
 
-    const openCatalogConfirm = (type: 'hide' | 'delete', entry: any, event: React.MouseEvent<HTMLButtonElement>) => {
-        setCatalogConfirmAction({
+    const openDirectoryConfirm = (type: 'hide' | 'delete', entry: any, event: React.MouseEvent<HTMLButtonElement>) => {
+        setDirectoryConfirmAction({
             type,
             entry,
             anchorRect: event.currentTarget.getBoundingClientRect(),
         });
     };
 
-    const handleCatalogSaveEntry = async (data: Record<string, string>) => {
-        if (!selectedCatalogForm) return;
+    const handleDirectorySaveEntry = async (data: Record<string, string>) => {
+        if (!selectedDirectoryForm) return;
 
-        await formAPI.upsertCatalogEntry(selectedCatalogForm.id, data);
-        const entries = await formAPI.getCatalogEntries(selectedCatalogForm.id);
-        setCatalogEntries(Array.isArray(entries) ? entries.map(normalizeCatalogEntry) : []);
+        await formAPI.upsertDirectoryEntry(selectedDirectoryForm.id, data);
+        const entries = await formAPI.getDirectoryEntries(selectedDirectoryForm.id);
+        setDirectoryEntries(Array.isArray(entries) ? entries.map(normalizeDirectoryEntry) : []);
     };
 
 
@@ -1012,14 +1064,17 @@ const ProjectWorkspace: React.FC = () => {
             name: '',
             description: '',
             event_type: 'submission_approved',
+            action_type: 'create_task',
             combinator: 'and',
             title_template: 'Follow up {{ submission.id }}',
             description_template: '',
+            detail_template: '',
+            severity: 'warning',
             assigned_accessor: '',
             context_mapping_json: '',
             starts_at_value: '',
             due_at_value: '',
-            visit_date_value: '',
+            scheduled_date_value: '',
             is_active: true,
         });
         setAutomationConditions([createEmptyAutomationCondition()]);
@@ -1037,6 +1092,12 @@ const ProjectWorkspace: React.FC = () => {
 
     const summariseAutomationAction = (rule: FormAutomationRule) => {
         const config = rule.action_config_json || {};
+        if (rule.action_type === 'create_alert') {
+            return [
+                `Alert: ${config.title_template || 'Alert for {{ submission.id }}'}`,
+                `Severity: ${config.severity || 'warning'}`,
+            ].join(' • ');
+        }
         const assigneeLabel = config.assigned_accessor_id && config.assigned_accessor_type
             ? resolveAccessorLabel(config.assigned_accessor_id, config.assigned_accessor_type)
             : 'Unassigned';
@@ -1047,7 +1108,7 @@ const ProjectWorkspace: React.FC = () => {
                 ? `Context: ${Object.keys(config.context_mapping_json).length} mapped field${Object.keys(config.context_mapping_json).length === 1 ? '' : 's'}`
                 : null,
             config.due_at_value ? `Due: ${config.due_at_value}` : null,
-            config.visit_date_value ? `Scheduled: ${config.visit_date_value}` : null,
+            config.scheduled_date_value ? `Scheduled: ${config.scheduled_date_value}` : null,
         ].filter(Boolean).join(' • ');
     };
 
@@ -1057,10 +1118,11 @@ const ProjectWorkspace: React.FC = () => {
             return;
         }
 
+        const isAlert = newAutomationRule.action_type === 'create_alert';
         const nextAccessor = parseAccessorValue(newAutomationRule.assigned_accessor);
         let contextMapping: Record<string, unknown> | undefined;
         const rawContextMapping = newAutomationRule.context_mapping_json.trim();
-        if (rawContextMapping) {
+        if (!isAlert && rawContextMapping) {
             try {
                 const parsed = JSON.parse(rawContextMapping);
                 if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -1088,7 +1150,7 @@ const ProjectWorkspace: React.FC = () => {
             name: newAutomationRule.name.trim(),
             description: newAutomationRule.description.trim() || undefined,
             event_type: newAutomationRule.event_type,
-            action_type: 'create_task' as FormAutomationAction,
+            action_type: newAutomationRule.action_type,
             is_active: newAutomationRule.is_active,
             conditions_json: cleanConditions.length > 0
                 ? {
@@ -1096,16 +1158,24 @@ const ProjectWorkspace: React.FC = () => {
                     rules: cleanConditions,
                 }
                 : null,
-            action_config_json: {
-                title_template: newAutomationRule.title_template.trim() || 'Follow up {{ submission.id }}',
-                description_template: newAutomationRule.description_template.trim() || undefined,
-                assigned_accessor_id: nextAccessor.accessor_id || undefined,
-                assigned_accessor_type: nextAccessor.accessor_type || undefined,
-                context_mapping_json: contextMapping,
-                starts_at_value: newAutomationRule.starts_at_value || undefined,
-                due_at_value: newAutomationRule.due_at_value || undefined,
-                visit_date_value: newAutomationRule.visit_date_value || undefined,
-            },
+            action_config_json: isAlert
+                ? {
+                    title_template: newAutomationRule.title_template.trim() || 'Alert for {{ submission.id }}',
+                    detail_template: newAutomationRule.detail_template.trim()
+                        || newAutomationRule.description_template.trim()
+                        || undefined,
+                    severity: newAutomationRule.severity || 'warning',
+                }
+                : {
+                    title_template: newAutomationRule.title_template.trim() || 'Follow up {{ submission.id }}',
+                    description_template: newAutomationRule.description_template.trim() || undefined,
+                    assigned_accessor_id: nextAccessor.accessor_id || undefined,
+                    assigned_accessor_type: nextAccessor.accessor_type || undefined,
+                    context_mapping_json: contextMapping,
+                    starts_at_value: newAutomationRule.starts_at_value || undefined,
+                    due_at_value: newAutomationRule.due_at_value || undefined,
+                    scheduled_date_value: newAutomationRule.scheduled_date_value || undefined,
+                },
         };
 
         try {
@@ -1140,9 +1210,9 @@ const ProjectWorkspace: React.FC = () => {
     const workspaceStats = [
         { label: 'Forms', value: forms.length },
         { label: 'Datasets', value: datasets.length },
-        { label: 'Assets', value: assets.length },
+        { label: 'Media', value: assets.length },
         { label: 'Tasks', value: tasks.length },
-        { label: 'Threads', value: threads.length },
+        { label: 'Messages', value: messageChannels.length },
         { label: 'Reports', value: reports.length },
         { label: 'Members', value: accessRules.length },
     ];
@@ -1186,21 +1256,21 @@ const ProjectWorkspace: React.FC = () => {
 
                         <div className="flex flex-wrap items-center gap-4">
                             {workspaceStats.map(stat => {
-                                const tabMap: Record<string, string> = {
-                                    Forms: 'forms',
+                                const tabMap: Record<string, ProjectWorkspaceTab> = {
+                                    Forms: 'design',
                                     Datasets: 'data',
-                                    Assets: 'data',
-                                    Tasks: 'ops',
-                                    Threads: 'threads',
+                                    Media: 'data',
+                                    Tasks: 'tasks',
+                                    Messages: 'messages',
                                     Reports: 'reports',
-                                    Members: 'members',
+                                    Members: 'design',
                                 };
                                 const targetTab = tabMap[stat.label];
                                 const isCurrentlyActive = activeTab === targetTab;
                                 return (
                                     <div
                                         key={stat.label}
-                                        onClick={() => targetTab && setActiveTab(targetTab)}
+                                        onClick={() => targetTab && setWorkspaceTab(targetTab, stat.label === 'Datasets' ? { section: 'datasets' } : stat.label === 'Media' ? { section: 'media' } : stat.label === 'Forms' ? { section: 'forms' } : undefined)}
                                         className={`flex flex-col border-l border-[hsl(var(--border))] pl-4 first:border-l-0 first:pl-0 cursor-pointer group select-none transition-all hover:scale-[1.02] ${
                                             isCurrentlyActive ? 'scale-105' : ''
                                         }`}
@@ -1229,7 +1299,7 @@ const ProjectWorkspace: React.FC = () => {
                             return (
                                 <button
                                     key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
+                                    onClick={() => setWorkspaceTab(tab.id as ProjectWorkspaceTab)}
                                     className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap outline-none ${
                                         isActive
                                             ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))] font-semibold'
@@ -1246,7 +1316,7 @@ const ProjectWorkspace: React.FC = () => {
                     {/* Tab Views */}
                     <div className="mt-6">
                         {/* 1. FORMS WORKSPACE */}
-                        {activeTab === 'forms' && (
+                        {activeTab === 'design' && designSection === 'forms' && (
                             <div className="grid gap-6 lg:grid-cols-12 items-start">
                                 {/* Left Column: Forms list (5/12) */}
                                 <div className="lg:col-span-5 space-y-6">
@@ -1272,9 +1342,9 @@ const ProjectWorkspace: React.FC = () => {
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{form.title}</h3>
-                                                                {form.kind === 'catalog' && (
+                                                                {form.kind === 'directory' && (
                                                                     <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600 border border-amber-500/20">
-                                                                        Catalog
+                                                                        Directory
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -1331,7 +1401,7 @@ const ProjectWorkspace: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Automation Rules</h2>
-                                                    <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Submission events that create project tasks</p>
+                                                    <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Submission events that create tasks or Needs Attention alerts</p>
                                                 </div>
                                             </div>
                                             <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
@@ -1380,6 +1450,46 @@ const ProjectWorkspace: React.FC = () => {
                                                                 ))}
                                                             </select>
                                                         </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                        <div>
+                                                            <label className="label">Action</label>
+                                                            <select
+                                                                value={newAutomationRule.action_type}
+                                                                onChange={(event) => {
+                                                                    const next = event.target.value as FormAutomationAction;
+                                                                    setNewAutomationRule((prev) => ({
+                                                                        ...prev,
+                                                                        action_type: next,
+                                                                        title_template: next === 'create_alert'
+                                                                            ? (prev.title_template.startsWith('Follow up') ? 'Alert for {{ submission.id }}' : prev.title_template)
+                                                                            : (prev.title_template.startsWith('Alert for') ? 'Follow up {{ submission.id }}' : prev.title_template),
+                                                                    }));
+                                                                }}
+                                                                className="input py-2"
+                                                            >
+                                                                {automationActionOptions.map((option) => (
+                                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        {newAutomationRule.action_type === 'create_alert' ? (
+                                                            <div>
+                                                                <label className="label">Severity</label>
+                                                                <select
+                                                                    value={newAutomationRule.severity}
+                                                                    onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, severity: event.target.value }))}
+                                                                    className="input py-2"
+                                                                >
+                                                                    {automationSeverityOptions.map((option) => (
+                                                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        ) : (
+                                                            <div />
+                                                        )}
                                                     </div>
 
                                                     <div>
@@ -1442,6 +1552,34 @@ const ProjectWorkspace: React.FC = () => {
                                                         </p>
                                                     </div>
 
+                                                    {newAutomationRule.action_type === 'create_alert' ? (
+                                                        <>
+                                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                                <div>
+                                                                    <label className="label">Alert Title Template</label>
+                                                                    <input
+                                                                        value={newAutomationRule.title_template}
+                                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, title_template: event.target.value }))}
+                                                                        className="input"
+                                                                        placeholder="Alert for {{ submission.id }}"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="label">Alert Detail Template</label>
+                                                                    <input
+                                                                        value={newAutomationRule.detail_template}
+                                                                        onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, detail_template: event.target.value }))}
+                                                                        className="input"
+                                                                        placeholder="Flagged {{ data.region }} needs follow-up"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
+                                                                Alerts appear in ProjectHub Needs Attention. Provenance shows the automation rule name. Deduped once per rule + submission.
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <>
                                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                                         <div>
                                                             <label className="label">Task Title Template</label>
@@ -1515,12 +1653,14 @@ const ProjectWorkspace: React.FC = () => {
                                                             <label className="label">Scheduled Date</label>
                                                             <input
                                                                 type="date"
-                                                                value={newAutomationRule.visit_date_value}
-                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, visit_date_value: event.target.value }))}
+                                                                value={newAutomationRule.scheduled_date_value}
+                                                                onChange={(event) => setNewAutomationRule((prev) => ({ ...prev, scheduled_date_value: event.target.value }))}
                                                                 className="input"
                                                             />
                                                         </div>
                                                     </div>
+                                                        </>
+                                                    )}
 
                                                     <label className="flex items-center gap-2 text-xs font-medium text-[hsl(var(--text-secondary))]">
                                                         <input
@@ -1565,7 +1705,11 @@ const ProjectWorkspace: React.FC = () => {
                                                                     {rule.is_active ? 'Active' : 'Paused'}
                                                                 </span>
                                                             </div>
-                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">{automationEventOptions.find((option) => option.value === rule.event_type)?.label || rule.event_type}</p>
+                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                                {automationEventOptions.find((option) => option.value === rule.event_type)?.label || rule.event_type}
+                                                                {' · '}
+                                                                {automationActionOptions.find((option) => option.value === rule.action_type)?.label || rule.action_type}
+                                                            </p>
                                                             {rule.description && (
                                                                 <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">{rule.description}</p>
                                                             )}
@@ -1598,7 +1742,7 @@ const ProjectWorkspace: React.FC = () => {
                                     <div className="flex flex-wrap gap-1.5">
                                         {(
                                             [
-                                                { id: 'tasks' as const, label: 'Tasks', count: tasks.length },
+                                                { id: 'attendance' as const, label: 'Attendance', count: attendanceRecords.length },
                                                 { id: 'review' as const, label: 'Review Queue', count: reviewQueue.length },
                                             ] as const
                                         ).map((item) => (
@@ -1621,6 +1765,37 @@ const ProjectWorkspace: React.FC = () => {
                                         Field tasks, attendance, and submission review
                                     </p>
                                 </div>
+
+                        {opsView === 'attendance' && (
+                            <div className="max-w-3xl mx-auto">
+                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
+                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                                                <MapPin className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Attendance</h2>
+                                                <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Operational check-in and check-out for {attendanceDay}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
+                                        {attendanceRecords.length === 0 ? (
+                                            <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No attendance activity recorded for this day.</p>
+                                        ) : attendanceRecords.map(record => (
+                                            <div key={record.id} className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+                                                <h3 className="text-sm font-semibold text-[hsl(var(--text-primary))]">{resolveAttendanceMemberLabel(record)}</h3>
+                                                <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">
+                                                    Checked in {new Date(record.check_in_at).toLocaleTimeString()}
+                                                    {record.check_out_at ? ` • Checked out ${new Date(record.check_out_at).toLocaleTimeString()}` : ''}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </section>
+                            </div>
+                        )}
 
                         {opsView === 'review' && (
                             <div className="max-w-4xl mx-auto space-y-6">
@@ -1680,7 +1855,7 @@ const ProjectWorkspace: React.FC = () => {
                             </div>
                         )}
 
-                        {opsView === 'tasks' && (
+                        {activeTab === 'tasks' && (
                             <div className="grid gap-6 lg:grid-cols-12 items-start">
                                 {/* Left Column: Tasks list (7/12) */}
                                 <div className="lg:col-span-7 space-y-6">
@@ -1785,7 +1960,7 @@ const ProjectWorkspace: React.FC = () => {
                                                                 <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isAutomatedTask(task) ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] border border-[hsl(var(--primary))]/20' : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))]'}`}>
                                                                     {isAutomatedTask(task) ? 'Automated' : 'Manual'}
                                                                 </span>
-                                                                {task.kind === 'journey_visit' && (
+                                                                {task.kind === 'field_visit' && (
                                                                     <span className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
                                                                         Scheduled Visit
                                                                     </span>
@@ -1806,9 +1981,9 @@ const ProjectWorkspace: React.FC = () => {
                                                                     Starts {new Date(task.starts_at).toLocaleDateString()}
                                                                 </p>
                                                             )}
-                                                            {task.visit_date && (
+                                                            {task.scheduled_date && (
                                                                 <p className="mt-1 text-[11px] text-[hsl(var(--text-secondary))]">
-                                                                    Scheduled {new Date(task.visit_date).toLocaleDateString()}
+                                                                    Scheduled {new Date(task.scheduled_date).toLocaleDateString()}
                                                                 </p>
                                                             )}
                                                             {getTaskContextSummary(task) && (
@@ -1908,9 +2083,33 @@ const ProjectWorkspace: React.FC = () => {
 
                         {/* 4. DATASETS WORKSPACE */}
                         {activeTab === 'data' && (
+                            <div className="mb-4 flex flex-wrap gap-2">
+                                {(['directory', 'datasets', 'analysis', 'media'] as const).map((section) => (
+                                    <button
+                                        key={section}
+                                        type="button"
+                                        onClick={() => setDataView(section)}
+                                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                            dataSection === section
+                                                ? 'bg-[hsl(var(--primary))] text-white'
+                                                : 'bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))] border border-[hsl(var(--border))]'
+                                        }`}
+                                    >
+                                        {DATA_SECTION_LABELS[section]}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {activeTab === 'data' && dataSection === 'analysis' && (
+                            <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
+                                Open Analysis from the org Data tab in the sidebar, or use the project hub for spatial insights.
+                            </div>
+                        )}
+
+                        {activeTab === 'data' && dataSection === 'datasets' && (
                             <div className="grid gap-6 lg:grid-cols-12 items-start">
-                                {/* Left Column: Datasets (6/12) */}
-                                <div className="lg:col-span-6 space-y-6">
+                                <div className="lg:col-span-12 space-y-6">
                                     <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                         <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                             <div className="flex items-center gap-3">
@@ -1919,7 +2118,7 @@ const ProjectWorkspace: React.FC = () => {
                                                 </div>
                                                 <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Datasets</h2>
                                             </div>
-                                            <button onClick={() => navigate('/dashboard?tab=datasets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                            <button onClick={() => navigate('/dashboard?tab=data&section=datasets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
                                                 <ChevronRight className="h-4 w-4" />
                                                 <span className="text-xs font-semibold">View all</span>
                                             </button>
@@ -1950,25 +2149,28 @@ const ProjectWorkspace: React.FC = () => {
                                         </div>
                                     </section>
                                 </div>
+                            </div>
+                        )}
 
-                                {/* Right Column: Assets (6/12) */}
-                                <div className="lg:col-span-6 space-y-6">
+                        {activeTab === 'data' && dataSection === 'media' && (
+                            <div className="grid gap-6 lg:grid-cols-12 items-start">
+                                <div className="lg:col-span-12 space-y-6">
                                     <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
                                         <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
                                             <div className="flex items-center gap-3">
                                                 <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
                                                     <Paperclip className="h-4 w-4" />
                                                 </div>
-                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Assets</h2>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Media</h2>
                                             </div>
-                                            <button onClick={() => navigate('/dashboard?tab=assets')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
+                                            <button onClick={() => navigate('/dashboard?tab=data&section=media')} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
                                                 <Plus className="h-4 w-4" />
                                                 <span className="text-xs font-semibold">New</span>
                                             </button>
                                         </div>
                                         <div className="flex flex-col gap-3 p-4 lg:p-5">
                                             {assets.length === 0 ? (
-                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No assets yet.</p>
+                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">No media yet.</p>
                                             ) : assets.map(asset => (
                                                 <div key={asset.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
                                                     <div className="flex items-start justify-between gap-3">
@@ -1992,36 +2194,36 @@ const ProjectWorkspace: React.FC = () => {
                             </div>
                         )}
 
-                        {/* 5. CATALOG WORKSPACE */}
-                        {activeTab === 'catalog' && (
+                        {/* 5. DIRECTORY WORKSPACE */}
+                        {activeTab === 'data' && dataSection === 'directory' && (
                             <div className="grid gap-6 lg:grid-cols-12 items-start min-h-[calc(100vh-12rem)]">
                                 <div className="lg:col-span-3">
                                     <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden sticky top-4">
                                         <div className="border-b border-[hsl(var(--border))] p-4 lg:p-5 flex items-center justify-between">
                                             <div>
-                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Catalog Sources</h2>
+                                                <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">Directory Sources</h2>
                                                 <p className="text-[11px] text-[hsl(var(--text-tertiary))]">Forms configured as reference databases</p>
                                             </div>
                                             <button
                                                 onClick={() => setIsCreateFormModalOpen(true)}
                                                 className="flex items-center gap-1 text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/5 transition-colors px-2 py-1 rounded-lg border border-[hsl(var(--primary))]/30 text-xs font-semibold"
                                             >
-                                                <Plus className="w-3.5 h-3.5" /> New Catalog
+                                                <Plus className="w-3.5 h-3.5" /> New Directory
                                             </button>
                                         </div>
                                         <div className="p-4 lg:p-5 flex flex-col gap-3">
-                                            {forms.filter(f => f.kind === 'catalog').length === 0 ? (
+                                            {forms.filter(f => f.kind === 'directory').length === 0 ? (
                                                 <div className="text-center py-6 bg-[hsl(var(--background))] rounded-xl border border-dashed border-[hsl(var(--border))] text-sm text-[hsl(var(--text-tertiary))]">
-                                                    No catalog forms created yet. Click New Catalog to begin.
+                                                    No directory forms created yet. Click New Directory to begin.
                                                 </div>
                                             ) : (
-                                                forms.filter(f => f.kind === 'catalog').map(catForm => {
-                                                    const isSelected = selectedCatalogForm?.id === catForm.id;
-                                                    const hasDesignations = catForm.catalog_key_field_id && catForm.catalog_label_field_id;
+                                                forms.filter(f => f.kind === 'directory').map(catForm => {
+                                                    const isSelected = selectedDirectoryForm?.id === catForm.id;
+                                                    const hasDesignations = catForm.directory_key_field_id && catForm.directory_label_field_id;
                                                     return (
                                                         <div
                                                             key={catForm.id}
-                                                            onClick={() => handleCatalogSelect(catForm)}
+                                                            onClick={() => handleDirectorySelect(catForm)}
                                                             className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
                                                                 isSelected
                                                                     ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/5 shadow-sm'
@@ -2038,10 +2240,10 @@ const ProjectWorkspace: React.FC = () => {
                                                                 {hasDesignations ? (
                                                                     <div className="flex flex-wrap gap-x-2 gap-y-1">
                                                                         <span className="bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium">
-                                                                            ⚿ Key: {catForm.catalog_key_field_id}
+                                                                            ⚿ Key: {catForm.directory_key_field_id}
                                                                         </span>
                                                                         <span className="bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded border border-blue-500/20 font-medium">
-                                                                            🏷 Label: {catForm.catalog_label_field_id}
+                                                                            🏷 Label: {catForm.directory_label_field_id}
                                                                         </span>
                                                                     </div>
                                                                 ) : (
@@ -2060,14 +2262,14 @@ const ProjectWorkspace: React.FC = () => {
 
                                 <div className="lg:col-span-9 flex flex-col min-h-0">
                                     <section className="flex flex-col flex-1 rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden min-h-[500px]">
-                                        {!selectedCatalogForm ? (
+                                        {!selectedDirectoryForm ? (
                                             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none">
                                                 <div className="w-14 h-14 rounded-full bg-[hsl(var(--surface-elevated))] border border-[hsl(var(--border))]/40 flex items-center justify-center text-[hsl(var(--text-tertiary))] mb-4 shadow-sm">
                                                     <Database className="w-6 h-6" />
                                                 </div>
-                                                <h3 className="text-sm font-bold text-[hsl(var(--text-primary))]">No Catalog Selected</h3>
+                                                <h3 className="text-sm font-bold text-[hsl(var(--text-primary))]">No Directory Selected</h3>
                                                 <p className="text-[11px] text-[hsl(var(--text-tertiary))] max-w-[280px] mt-1 leading-normal">
-                                                    Select a catalog on the left to view and edit records in the spreadsheet grid.
+                                                    Select a directory on the left to view and edit records in the spreadsheet grid.
                                                 </p>
                                             </div>
                                         ) : (
@@ -2078,27 +2280,27 @@ const ProjectWorkspace: React.FC = () => {
                                                             <Database className="h-4 w-4" />
                                                         </div>
                                                         <div>
-                                                            <h2 className="text-base font-semibold text-[hsl(var(--text-primary))]">{selectedCatalogForm.title}</h2>
+                                                            <h2 className="text-base font-semibold text-[hsl(var(--text-primary))]">{selectedDirectoryForm.title}</h2>
                                                             <p className="text-[10px] text-[hsl(var(--text-tertiary))]">Edit inline — suggestions come from values in each column</p>
                                                         </div>
                                                     </div>
                                                     <span className="inline-flex rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--surface-elevated))] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                                                        {catalogEntries.length} Records
+                                                        {directoryEntries.length} Records
                                                     </span>
                                                 </div>
-                                                <CatalogGrid
-                                                    formId={selectedCatalogForm.id}
-                                                    catalogTitle={selectedCatalogForm.title}
-                                                    catalogStatus={selectedCatalogForm.status}
-                                                    keyFieldId={selectedCatalogForm.catalog_key_field_id}
-                                                    labelFieldId={selectedCatalogForm.catalog_label_field_id}
-                                                    fields={selectedCatalogFields}
-                                                    entries={catalogEntries}
+                                                <DirectoryGrid
+                                                    formId={selectedDirectoryForm.id}
+                                                    directoryTitle={selectedDirectoryForm.title}
+                                                    directoryStatus={selectedDirectoryForm.status}
+                                                    keyFieldId={selectedDirectoryForm.directory_key_field_id}
+                                                    labelFieldId={selectedDirectoryForm.directory_label_field_id}
+                                                    fields={selectedDirectoryFields}
+                                                    entries={directoryEntries}
                                                     loading={entriesLoading}
-                                                    unpublishedFieldCount={catalogUnpublishedFieldCount}
-                                                    onSaveEntry={handleCatalogSaveEntry}
-                                                    onHideEntry={(entry, event) => openCatalogConfirm('hide', entry, event)}
-                                                    onDeleteEntry={(entry, event) => openCatalogConfirm('delete', entry, event)}
+                                                    unpublishedFieldCount={directoryUnpublishedFieldCount}
+                                                    onSaveEntry={handleDirectorySaveEntry}
+                                                    onHideEntry={(entry, event) => openDirectoryConfirm('hide', entry, event)}
+                                                    onDeleteEntry={(entry, event) => openDirectoryConfirm('delete', entry, event)}
                                                     onNotify={showToast}
                                                 />
                                             </>
@@ -2108,29 +2310,29 @@ const ProjectWorkspace: React.FC = () => {
                             </div>
                         )}
 
-                        {catalogConfirmAction && selectedCatalogForm && (
+                        {directoryConfirmAction && selectedDirectoryForm && (
                             <ConfirmPopover
                                 open
-                                anchorRect={catalogConfirmAction.anchorRect}
+                                anchorRect={directoryConfirmAction.anchorRect}
                                 title={
-                                    catalogConfirmAction.type === 'delete'
-                                        ? `Delete "${getCatalogEntryDisplayName(catalogConfirmAction.entry)}"?`
-                                        : `Hide "${getCatalogEntryDisplayName(catalogConfirmAction.entry)}"?`
+                                    directoryConfirmAction.type === 'delete'
+                                        ? `Delete "${getDirectoryEntryDisplayName(directoryConfirmAction.entry)}"?`
+                                        : `Hide "${getDirectoryEntryDisplayName(directoryConfirmAction.entry)}"?`
                                 }
                                 description={
-                                    catalogConfirmAction.type === 'delete'
+                                    directoryConfirmAction.type === 'delete'
                                         ? 'This permanently removes all versions of this record. This cannot be undone.'
                                         : 'This hides the record from lookups. You can restore it by adding the same key again.'
                                 }
-                                confirmLabel={catalogConfirmAction.type === 'delete' ? 'Delete' : 'Hide'}
-                                variant={catalogConfirmAction.type === 'delete' ? 'danger' : 'default'}
-                                loading={catalogConfirmLoading}
-                                onConfirm={handleCatalogConfirm}
-                                onCancel={() => setCatalogConfirmAction(null)}
+                                confirmLabel={directoryConfirmAction.type === 'delete' ? 'Delete' : 'Hide'}
+                                variant={directoryConfirmAction.type === 'delete' ? 'danger' : 'default'}
+                                loading={directoryConfirmLoading}
+                                onConfirm={handleDirectoryConfirm}
+                                onCancel={() => setDirectoryConfirmAction(null)}
                             />
                         )}
 
-                        {activeTab === 'threads' && currentOrg?.id && (
+                        {activeTab === 'messages' && currentOrg?.id && (
                             <div className="mx-auto max-w-5xl space-y-6">
                                 <ProjectThreadsPanel
                                     orgId={currentOrg.id}
@@ -2143,7 +2345,7 @@ const ProjectWorkspace: React.FC = () => {
                                                 rule.role === 'editor',
                                         ),
                                     )}
-                                    initialThreadId={searchParams.get('thread')}
+                                    initialThreadId={searchParams.get('channel') || searchParams.get('thread')}
                                 />
                             </div>
                         )}
@@ -2344,7 +2546,7 @@ const ProjectWorkspace: React.FC = () => {
                                 <input
                                     type="text"
                                     required
-                                    placeholder="e.g., Equipment Checklist or Material Catalog"
+                                    placeholder="e.g., Equipment Checklist or Material Directory"
                                     value={newFormTitle}
                                     onChange={(e) => setNewFormTitle(e.target.value)}
                                     className="w-full text-sm px-3 py-2 bg-[hsl(var(--background))] rounded-lg border border-[hsl(var(--border))]/60 outline-none text-[hsl(var(--text-primary))] placeholder-[hsl(var(--text-tertiary))]/70 focus:border-[hsl(var(--primary))]/60 focus:ring-2 focus:ring-[hsl(var(--primary))]/10 transition-all shadow-inner"
@@ -2380,15 +2582,15 @@ const ProjectWorkspace: React.FC = () => {
                                     </div>
 
                                     <div
-                                        onClick={() => setNewFormKind('catalog')}
+                                        onClick={() => setNewFormKind('directory')}
                                         className={`flex items-start gap-3.5 p-3.5 rounded-xl border cursor-pointer transition-all select-none ${
-                                            newFormKind === 'catalog'
+                                            newFormKind === 'directory'
                                                 ? 'border-amber-500 bg-amber-500/5 shadow-md shadow-amber-500/5'
                                                 : 'border-[hsl(var(--border))]/60 hover:bg-[hsl(var(--surface-elevated))]/30'
                                         }`}
                                     >
                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                            newFormKind === 'catalog'
+                                            newFormKind === 'directory'
                                                 ? 'bg-amber-500 text-white'
                                                 : 'bg-[hsl(var(--surface-elevated))] text-[hsl(var(--text-secondary))]'
                                         }`}>
@@ -2396,7 +2598,7 @@ const ProjectWorkspace: React.FC = () => {
                                         </div>
                                         <div>
                                             <p className="text-xs font-bold text-[hsl(var(--text-primary))] flex items-center gap-1.5">
-                                                Catalog Form
+                                                Directory Form
                                                 <span className="text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
                                                     Reference
                                                 </span>

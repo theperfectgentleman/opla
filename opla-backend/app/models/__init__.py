@@ -14,13 +14,13 @@ from app.models.form_dataset import FormDataset, FormDatasetSchemaVersion, FormD
 from app.models.submission import Submission
 from app.models.section_template import SectionTemplate
 from app.models.project_access import ProjectAccess
-from app.models.project_catalog_item import ProjectCatalogItem
+from app.models.project_directory_item import ProjectDirectoryItem
 from app.models.project_attendance import ProjectAttendanceRecord
 from app.models.project_task import ProjectTask
 from app.models.project_report import ProjectReport
 from app.models.project_asset import ProjectAsset
-from app.models.project_thread import ProjectThread
-from app.models.project_thread_message import ProjectThreadMessage, ProjectThreadNotification
+from app.models.project_message_channel import ProjectMessageChannel
+from app.models.project_message import ProjectMessage, ProjectMessageNotification
 from app.models.project_pinned_analytics import ProjectPinnedAnalytics
 from app.models.project_attention import ProjectAttentionHook, ProjectAttentionItem
 from app.models.form_submission_media import FormSubmissionMedia

@@ -58,7 +58,7 @@ flowchart LR
 | **3. Wire-in** | Replace mock data for that slice with real APIs where the phase says so. |
 | **4. Close** | Mark phase **Done** when acceptance criteria pass. Then start the next phase’s questions. |
 
-**Current phase pointer:** Phase 2 — clarifying next
+**Current phase pointer:** Phase 6 — Maps in Analysis (clarifying next)
 
 ---
 
@@ -403,23 +403,23 @@ Extend form automation so custom submission conditions can push into the Phase 2
 
 | # | Answer |
 |---|--------|
-| 1 | |
-| 2 | |
-| 3 | |
-| 4 | |
+| 1 | **Events:** all existing automation events — `submission_created`, `submission_reviewed`, `submission_approved`. No new triggers in v1. |
+| 2 | **Fields (templates):** `title_template`, `detail_template`, `severity` (`info` \| `warning` \| `critical`, default `warning`). Deep-link to submission/review surface in v1. |
+| 3 | **Dedupe:** once per **rule + submission** (`automation:{rule_id}:{submission_id}`). Re-fire updates/keeps a single open item. |
+| 4 | **Who configures:** same as today’s form automation UI (form/project editors). No new permission surface. |
 
 ### Deliverables
 - `create_alert` action + Studio automation UI option + feed integration.
 
 ### Wire-in checklist
-- [ ] Rule fires → attention item visible on ProjectHub  
-- [ ] Provenance shows automation rule  
+- [x] Rule fires → attention item visible on ProjectHub  
+- [x] Provenance shows automation rule  
 
 ### Acceptance criteria
 - Test rule on approve/create produces a Needs Attention item without creating a task unless also configured.
 
 ### Status
-**Not started**
+**Done**
 
 ---
 
@@ -510,7 +510,7 @@ When Phases 1–5 are Done (Phase 6 may still be in progress if Analysis-only), 
 | 2 | Needs Attention feed | Done |
 | 3 | Form media library | Done |
 | 4 | Proper threads | Done |
-| 5 | Automation `create_alert` | Not started |
+| 5 | Automation `create_alert` | Done |
 | 6 | Maps in Analysis | Not started |
 | Final | Cutover to live project home | Not started |
 

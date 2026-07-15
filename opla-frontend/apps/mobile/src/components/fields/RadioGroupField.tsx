@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { FormField } from '@opla/types';
-import { fieldUsesCatalogOptionResolver, resolveCatalogFormFieldOptions } from '@opla/types';
+import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -13,8 +13,8 @@ interface Props {
 
 export function RadioGroupField({ field, value, onChange, error, responses = {} }: Props) {
     const options = useMemo(() => {
-        if (fieldUsesCatalogOptionResolver(field)) {
-            return resolveCatalogFormFieldOptions(field, responses);
+        if (fieldUsesDirectoryOptionResolver(field)) {
+            return resolveDirectoryFormFieldOptions(field, responses);
         }
         return field.options || [];
     }, [field, responses]);

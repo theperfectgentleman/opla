@@ -39,13 +39,13 @@ function cn(...parts: Array<string | false | null | undefined>) {
 }
 
 type PageTab = 'overview' | 'workspace';
-type WorkspaceFilter = 'all' | 'forms' | 'catalogs' | 'datasets';
+type WorkspaceFilter = 'all' | 'forms' | 'directories' | 'datasets';
 
 type HubForm = {
     id: string;
     title: string;
     status: string;
-    kind?: 'standard' | 'catalog';
+    kind?: 'standard' | 'directory';
     updated_at?: string;
 };
 
@@ -71,13 +71,13 @@ type HubTeam = {
 
 const PAGE_TABS: Array<{ id: PageTab; label: string; hint: string }> = [
     { id: 'overview', label: 'Overview', hint: 'Informational command centre' },
-    { id: 'workspace', label: 'Forms · Catalogs · Datasets', hint: 'Things power users tinker with' },
+    { id: 'workspace', label: 'Forms · Directorys · Datasets', hint: 'Things power users tinker with' },
 ];
 
 const WORKSPACE_FILTERS: Array<{ id: WorkspaceFilter; label: string }> = [
     { id: 'all', label: 'All' },
     { id: 'forms', label: 'Forms' },
-    { id: 'catalogs', label: 'Catalogs' },
+    { id: 'directories', label: 'Directories' },
     { id: 'datasets', label: 'Datasets' },
 ];
 
@@ -97,7 +97,7 @@ function formatTimeLabel(value?: string | null) {
 
 function destinationLabel(kind: Exclude<WorkspaceFilter, 'all'>) {
     if (kind === 'forms') return 'Open form';
-    if (kind === 'catalogs') return 'Open catalog';
+    if (kind === 'directories') return 'Open directory';
     return 'Explore dataset';
 }
 
@@ -105,7 +105,7 @@ const ProjectHub: React.FC = () => {
     const navigate = useNavigate();
     const { projectId = '' } = useParams();
     const [searchParams] = useSearchParams();
-    const threadParam = searchParams.get('thread');
+    const channelParam = searchParams.get('channel') || searchParams.get('thread');
     const { currentOrg, refreshCurrentProject, setCurrentProject } = useOrg();
 
     const [pageTab, setPageTab] = useState<PageTab>('overview');
@@ -115,7 +115,7 @@ const ProjectHub: React.FC = () => {
 
     const [project, setProject] = useState<any>(null);
     const [forms, setForms] = useState<HubForm[]>([]);
-    const [catalogForms, setCatalogForms] = useState<HubForm[]>([]);
+    const [directoryForms, setDirectoryForms] = useState<HubForm[]>([]);
     const [datasets, setDatasets] = useState<HubDataset[]>([]);
     const [reports, setReports] = useState<HubReport[]>([]);
     const [teams, setTeams] = useState<HubTeam[]>([]);
@@ -150,7 +150,7 @@ const ProjectHub: React.FC = () => {
                 const [
                     projectData,
                     standardForms,
-                    catalogKindForms,
+                    directoryKindForms,
                     reportRows,
                     taskRows,
                     access,
@@ -163,7 +163,7 @@ const ProjectHub: React.FC = () => {
                 ] = await Promise.all([
                     refreshCurrentProject(currentOrg.id, projectId),
                     formAPI.list(projectId, 'standard').catch(() => formAPI.list(projectId)),
-                    formAPI.list(projectId, 'catalog').catch(() => []),
+                    formAPI.list(projectId, 'directory').catch(() => []),
                     reportAPI.list(currentOrg.id, projectId),
                     projectAPI.listTasks(currentOrg.id, projectId),
                     projectAPI.listAccess(currentOrg.id, projectId),
@@ -183,8 +183,8 @@ const ProjectHub: React.FC = () => {
                 ]);
 
                 const allForms: HubForm[] = Array.isArray(standardForms) ? standardForms : [];
-                const catalogs: HubForm[] = Array.isArray(catalogKindForms) ? catalogKindForms : [];
-                const formIds = [...allForms, ...catalogs].map((f) => f.id);
+                const directories: HubForm[] = Array.isArray(directoryKindForms) ? directoryKindForms : [];
+                const formIds = [...allForms, ...directories].map((f) => f.id);
 
                 const submissionBatches = await Promise.all(
                     formIds.map((formId) => submissionAPI.listForForm(formId).catch(() => [])),
@@ -220,8 +220,8 @@ const ProjectHub: React.FC = () => {
                 if (cancelled) return;
                 setProject(projectData);
                 setCurrentProject(projectData);
-                setForms(allForms.filter((f) => f.kind !== 'catalog'));
-                setCatalogForms(catalogs.length ? catalogs : allForms.filter((f) => f.kind === 'catalog'));
+                setForms(allForms.filter((f) => f.kind !== 'directory'));
+                setDirectoryForms(directories.length ? directories : allForms.filter((f) => f.kind === 'directory'));
                 setReports(reportRows || []);
                 setTasks(taskRows || []);
                 setAccessRules(access || []);
@@ -241,7 +241,7 @@ const ProjectHub: React.FC = () => {
                 setRecentMedia(mediaPayload?.items || []);
             } catch (err: any) {
                 if (!cancelled) {
-                    setError(err?.response?.data?.detail || err?.message || 'Failed to load ProjectHub');
+                    setError(err?.response?.data?.detail || err?.message || 'Failed to load Hub');
                 }
             } finally {
                 if (!cancelled) setLoading(false);
@@ -273,8 +273,8 @@ const ProjectHub: React.FC = () => {
         const done = tasks.filter((t) => t.status === 'done').length;
         const open = tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled').length;
         const todayVisits = tasks.filter((t) => {
-            if (t.kind !== 'journey_visit' || !t.visit_date) return false;
-            return t.visit_date === new Date().toISOString().slice(0, 10);
+            if (t.kind !== 'field_visit' || !t.scheduled_date) return false;
+            return t.scheduled_date === new Date().toISOString().slice(0, 10);
         });
         const visitsDone = todayVisits.filter((t) => t.status === 'done').length;
         return { done, open, total: tasks.length, visitsDone, visitsTotal: todayVisits.length };
@@ -332,7 +332,7 @@ const ProjectHub: React.FC = () => {
         {
             label: 'Visits today',
             value: `${taskStats.visitsDone}/${taskStats.visitsTotal || 0}`,
-            detail: 'journey visits',
+            detail: 'field visits',
             icon: CheckCircle2,
         },
         { label: 'New submissions', value: String(submissionStats.todayCount), detail: 'calendar day', icon: FileText },
@@ -376,14 +376,14 @@ const ProjectHub: React.FC = () => {
             meta: form.updated_at ? `Updated ${new Date(form.updated_at).toLocaleDateString()}` : undefined,
             onLaunch: () => navigate(`/forms/${form.id}`),
         }));
-        const catalogCards = catalogForms.map((form) => ({
+        const directoryCards = directoryForms.map((form) => ({
             id: form.id,
             title: form.title,
-            description: 'Catalog used by field forms',
-            kind: 'catalogs' as const,
+            description: 'Directory used by field forms',
+            kind: 'directories' as const,
             status: form.status,
             meta: form.updated_at ? `Updated ${new Date(form.updated_at).toLocaleDateString()}` : undefined,
-            onLaunch: () => navigate(`/projects/${projectId}?tab=catalog`),
+            onLaunch: () => navigate(`/projects/${projectId}?tab=data&section=directory`),
         }));
         const datasetCards = datasets.map((dataset) => ({
             id: dataset.id,
@@ -397,12 +397,12 @@ const ProjectHub: React.FC = () => {
                     : dataset.updated_at
                       ? `Updated ${new Date(dataset.updated_at).toLocaleDateString()}`
                       : undefined,
-            onLaunch: () => navigate('/dashboard?tab=datasets'),
+            onLaunch: () => navigate('/dashboard?tab=data&section=datasets'),
         }));
-        const all = [...formCards, ...catalogCards, ...datasetCards];
+        const all = [...formCards, ...directoryCards, ...datasetCards];
         if (workspaceFilter === 'all') return all;
         return all.filter((card) => card.kind === workspaceFilter);
-    }, [forms, catalogForms, datasets, workspaceFilter, navigate, projectId]);
+    }, [forms, directoryForms, datasets, workspaceFilter, navigate, projectId]);
 
     const collectionActiveNow = useMemo(() => {
         if (!project?.collection_time_start || !project?.collection_time_end) return null;
@@ -495,7 +495,7 @@ const ProjectHub: React.FC = () => {
             activeNav="projects"
             onSelectNav={(key) => {
                 if (key === 'ops' && projectId) {
-                    navigate(`/projects/${projectId}?tab=ops&view=tasks`);
+                    navigate(`/projects/${projectId}?tab=tasks`);
                     return;
                 }
                 navigate(`/dashboard?tab=${key}`);
@@ -510,10 +510,10 @@ const ProjectHub: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">
-                                ProjectHub — Phase 4 (live)
+                                Hub — Phase 4 (live)
                             </p>
                             <p className="text-xs text-[hsl(var(--text-secondary))]">
-                                Threads are live (General + team channels). Maps stay hidden until a later phase.
+                                Messages are live (General + team channels). Maps stay hidden until a later phase.
                             </p>
                         </div>
                     </div>
@@ -538,13 +538,13 @@ const ProjectHub: React.FC = () => {
                 {loading ? (
                     <div className="flex h-48 items-center justify-center gap-2 text-[hsl(var(--text-secondary))]">
                         <Loader2 className="h-5 w-5 animate-spin" />
-                        Loading ProjectHub…
+                        Loading Hub…
                     </div>
                 ) : error ? (
                     <div className="rounded-2xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 p-6">
                         <div className="mb-2 flex items-center gap-2 text-[hsl(var(--error))]">
                             <AlertCircle className="h-5 w-5" />
-                            <h2 className="font-semibold">ProjectHub unavailable</h2>
+                            <h2 className="font-semibold">Hub unavailable</h2>
                         </div>
                         <p className="text-sm text-[hsl(var(--text-secondary))]">{error}</p>
                     </div>
@@ -757,9 +757,9 @@ const ProjectHub: React.FC = () => {
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                const first = forms[0] || catalogForms[0];
+                                                const first = forms[0] || directoryForms[0];
                                                 if (first) navigate(`/forms/${first.id}`);
-                                                else navigate(`/projects/${projectId}?tab=forms`);
+                                                else navigate(`/projects/${projectId}?tab=design`);
                                             }}
                                             className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
                                         >
@@ -779,7 +779,7 @@ const ProjectHub: React.FC = () => {
                                         orgId={currentOrg.id}
                                         projectId={projectId}
                                         canEditProject={canEditPins || canDismissAttention}
-                                        initialThreadId={threadParam}
+                                        initialThreadId={channelParam}
                                     />
                                 )}
 
@@ -888,7 +888,7 @@ const ProjectHub: React.FC = () => {
                                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3">
                                     <div className="flex items-center gap-2 text-sm text-[hsl(var(--text-secondary))]">
                                         <Wrench className="h-4 w-4 text-[hsl(var(--primary))]" />
-                                        <span>Open a form, catalog, or dataset destination.</span>
+                                        <span>Open a form, directory, or dataset destination.</span>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {WORKSPACE_FILTERS.map((filter) => (
@@ -919,7 +919,7 @@ const ProjectHub: React.FC = () => {
                                             const Icon =
                                                 card.kind === 'forms'
                                                     ? FileText
-                                                    : card.kind === 'catalogs'
+                                                    : card.kind === 'directories'
                                                       ? Tag
                                                       : Database;
                                             return (

@@ -241,7 +241,7 @@ const ProjectsPortfolio = <TProject extends PortfolioProject = PortfolioProject>
                                         type="button"
                                         onClick={() => onOpenWorkspace(project)}
                                         className="rounded-md p-1 text-[hsl(var(--text-tertiary))] transition-colors hover:bg-[hsl(var(--surface-elevated))] hover:text-[hsl(var(--text-primary))]"
-                                        title="Open workspace"
+                                        title="Open Design"
                                     >
                                         <Settings className="h-4 w-4" />
                                     </button>
@@ -249,7 +249,7 @@ const ProjectsPortfolio = <TProject extends PortfolioProject = PortfolioProject>
 
                                 <div className="flex flex-col gap-3 px-3.5 py-3">
                                     <p className="line-clamp-2 overflow-hidden text-sm leading-snug text-[hsl(var(--text-secondary))]">
-                                        {project.description?.trim() || 'No description yet — add context for your field team in workspace settings.'}
+                                        {project.description?.trim() || 'No description yet — add context for your field team in project settings.'}
                                     </p>
 
                                     <div className="grid grid-cols-3 gap-3 py-1">

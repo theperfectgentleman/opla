@@ -32,7 +32,7 @@ import SubmissionMediaGrid, {
 import PinnedAnalyticsCard from '../components/hub/PinnedAnalyticsCard';
 import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
 import { useOrg } from '../contexts/OrgContext';
-import { analyticsAPI, formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
+import { analyticsAPI, formAPI, projectAPI, submissionAPI, teamAPI } from '../lib/api';
 import type { SavedQuestion } from '../components/analytics/types';
 
 function cn(...parts: Array<string | false | null | undefined>) {
@@ -55,13 +55,6 @@ type HubDataset = {
     name: string;
     records_count?: number;
     updated_at?: string;
-};
-
-type HubReport = {
-    id: string;
-    title: string;
-    status: string;
-    updated_at: string;
 };
 
 type HubTeam = {
@@ -118,7 +111,6 @@ const ProjectHub: React.FC = () => {
     const [forms, setForms] = useState<HubForm[]>([]);
     const [directoryForms, setDirectoryForms] = useState<HubForm[]>([]);
     const [datasets, setDatasets] = useState<HubDataset[]>([]);
-    const [reports, setReports] = useState<HubReport[]>([]);
     const [teams, setTeams] = useState<HubTeam[]>([]);
     const [tasks, setTasks] = useState<any[]>([]);
     const [submissions, setSubmissions] = useState<any[]>([]);
@@ -152,7 +144,6 @@ const ProjectHub: React.FC = () => {
                     projectData,
                     standardForms,
                     directoryKindForms,
-                    reportRows,
                     taskRows,
                     access,
                     orgTeams,
@@ -165,7 +156,6 @@ const ProjectHub: React.FC = () => {
                     refreshCurrentProject(currentOrg.id, projectId),
                     formAPI.list(projectId, 'standard').catch(() => formAPI.list(projectId)),
                     formAPI.list(projectId, 'directory').catch(() => []),
-                    reportAPI.list(currentOrg.id, projectId),
                     projectAPI.listTasks(currentOrg.id, projectId),
                     projectAPI.listAccess(currentOrg.id, projectId),
                     teamAPI.list(currentOrg.id),
@@ -223,7 +213,6 @@ const ProjectHub: React.FC = () => {
                 setCurrentProject(projectData);
                 setForms(allForms.filter((f) => f.kind !== 'directory'));
                 setDirectoryForms(directories.length ? directories : allForms.filter((f) => f.kind === 'directory'));
-                setReports(reportRows || []);
                 setTasks(taskRows || []);
                 setAccessRules(access || []);
                 setTeams(hubTeams);
@@ -282,7 +271,6 @@ const ProjectHub: React.FC = () => {
     }, [tasks]);
 
     const checkedInToday = attendanceToday.filter((r) => r.status === 'checked_in' || r.status === 'checked_out').length;
-    const publishedReports = reports.filter((r) => r.status === 'published').length;
 
     const expectedTotal = project?.expected_total_count ?? null;
     const expectedWeekly = project?.expected_weekly_count ?? null;
@@ -359,10 +347,10 @@ const ProjectHub: React.FC = () => {
             color: 'bg-sky-500',
         },
         {
-            label: 'Reports published',
-            value: publishedReports,
-            total: Math.max(reports.length, 1),
-            display: `${publishedReports}/${reports.length}`,
+            label: 'Open tasks',
+            value: taskStats.open,
+            total: Math.max(taskStats.total || taskStats.open || 1, 1),
+            display: String(taskStats.open),
             color: 'bg-violet-500',
         },
     ];
@@ -535,10 +523,10 @@ const ProjectHub: React.FC = () => {
                     <div className="flex flex-wrap gap-2">
                         <button
                             type="button"
-                            onClick={() => navigate(`/projects/${projectId}`)}
+                            onClick={() => navigate(`/projects/${projectId}?tab=design&section=forms`)}
                             className="btn btn-secondary text-xs"
                         >
-                            Open workspace
+                            Open Design
                         </button>
                         <button
                             type="button"
@@ -865,36 +853,20 @@ const ProjectHub: React.FC = () => {
                                     <div className="mb-4 flex items-center gap-2">
                                         <FileBarChart2 className="h-4 w-4 text-violet-600" />
                                         <h2 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--text-primary))]">
-                                            Report Links
+                                            Org Reports
                                         </h2>
                                     </div>
-                                    {reports.length === 0 ? (
-                                        <p className="text-sm text-[hsl(var(--text-tertiary))]">No reports yet.</p>
-                                    ) : (
-                                        <ul className="space-y-2">
-                                            {reports.slice(0, 6).map((report) => (
-                                                <li key={report.id}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            navigate(`/projects/${projectId}/reports/${report.id}`)
-                                                        }
-                                                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-left transition hover:border-[hsl(var(--primary))]/40"
-                                                    >
-                                                        <div className="min-w-0">
-                                                            <p className="truncate text-sm font-semibold text-[hsl(var(--text-primary))]">
-                                                                {report.title}
-                                                            </p>
-                                                            <p className="text-xs capitalize text-[hsl(var(--text-tertiary))]">
-                                                                {report.status}
-                                                            </p>
-                                                        </div>
-                                                        <ExternalLink className="h-4 w-4 shrink-0 text-[hsl(var(--text-tertiary))]" />
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
+                                    <p className="text-sm text-[hsl(var(--text-secondary))]">
+                                        Stakeholder boards live at org level so seniors can watch without field Ops access.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/dashboard?tab=reports')}
+                                        className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-3 text-sm font-semibold text-[hsl(var(--text-primary))] transition hover:border-[hsl(var(--primary))]/40"
+                                    >
+                                        Open Reports
+                                        <ExternalLink className="h-4 w-4 text-[hsl(var(--text-tertiary))]" />
+                                    </button>
                                 </section>
                                 </div>
                             </div>

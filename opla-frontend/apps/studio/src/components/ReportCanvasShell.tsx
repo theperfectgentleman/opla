@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     AtSign,
     BadgeCheck,
+    BarChart3,
     CalendarClock,
     CircleX,
     Database,
@@ -10,37 +11,37 @@ import {
     Image,
     Lightbulb,
     Link2,
+    Loader2,
     MessageSquare,
     Paperclip,
     PenSquare,
     Plus,
     Quote,
     Sparkles,
+    Wand2,
 } from 'lucide-react';
 
+import PinnedAnalyticsCard from './hub/PinnedAnalyticsCard';
+import { analyticsAPI } from '../lib/api';
+import type { SavedQuestion } from './analytics/types';
+import AiCatalogView from './reports/AiCatalogView';
+import {
+    type AddableBlockType,
+    type ReportBlock,
+    type ReportCanvasBlock,
+    blockTone,
+    blockTypeDescription,
+    createDefaultBlocks,
+    createEmptyBlock,
+    normalizeBlocks,
+    stubGenerateAiCatalog,
+} from './reports/reportBlocks';
+
+export type { ReportCanvasBlock, ReportBlock };
+export type { ReportCanvasReferenceSuggestion } from './reports/reportCanvasTypes';
+import type { ReportCanvasReferenceSuggestion } from './reports/reportCanvasTypes';
+
 type CanvasMode = 'write' | 'read';
-type CanvasBlockType = 'narrative' | 'callout' | 'artifact';
-
-export type ReportCanvasBlock = {
-    id: string;
-    type: CanvasBlockType;
-    label: string;
-    content: string;
-    reference?: string;
-};
-
-type ReferenceKind = 'asset' | 'dataset' | 'thread' | 'team' | 'user' | 'report';
-
-export type ReportCanvasReferenceSuggestion = {
-    token: string;
-    label: string;
-    kind: ReferenceKind;
-    title: string;
-    summary: string;
-    detail: string;
-    icon: React.ReactNode;
-};
-
 type ReferenceFilter = '#' | '@';
 
 type InlineCompletion = {
@@ -53,22 +54,18 @@ type InlineCompletion = {
 
 type ReportCanvasShellProps = {
     reportTitle: string;
-    content?: ReportCanvasBlock[];
-    onContentChange?: (blocks: ReportCanvasBlock[]) => void;
+    content?: ReportBlock[] | unknown[];
+    onContentChange?: (blocks: ReportBlock[]) => void;
     suggestions?: ReportCanvasReferenceSuggestion[];
-};
-
-const makeBlockId = () => `block-${Math.random().toString(36).slice(2, 10)}`;
-
-const blockTone: Record<CanvasBlockType, string> = {
-    narrative: 'border-[hsl(var(--border))] bg-[hsl(var(--surface))]',
-    callout: 'border-amber-500/20 bg-amber-500/5',
-    artifact: 'border-sky-500/20 bg-sky-500/5',
+    orgId?: string;
+    projectId?: string;
+    /** When set (org boards), list questions across these projects. */
+    sourceProjectIds?: string[];
 };
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const referenceTone: Record<ReferenceKind, string> = {
+const referenceTone: Record<ReportCanvasReferenceSuggestion['kind'], string> = {
     asset: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20',
     dataset: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
     thread: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20',
@@ -190,48 +187,112 @@ const CanvasEditableSurface: React.FC<CanvasEditableSurfaceProps> = ({
     );
 };
 
-const createDefaultBlocks = (reportTitle: string): ReportCanvasBlock[] => ([
-    {
-        id: 'summary',
-        type: 'narrative',
-        label: 'Executive Summary',
-        content: `Use this opening section to explain what ${reportTitle || 'this report'} is answering, why it matters, and what action a reader should take next.`,
-    },
-    {
-        id: 'signal',
-        type: 'callout',
-        label: 'Key Signal',
-        content: 'Call out the one trend, risk, or field observation the reader should not miss.',
-    },
-    {
-        id: 'evidence',
-        type: 'artifact',
-        label: 'Linked Evidence',
-        content: 'Attach a linked dataset, asset, or thread so the reader can inspect source context without leaving the report.',
-        reference: '#Field briefing deck',
-    },
-]);
+const isTextualBlock = (
+    block: ReportBlock,
+): block is Extract<ReportBlock, { type: 'narrative' | 'callout' | 'artifact' }> =>
+    block.type === 'narrative' || block.type === 'callout' || block.type === 'artifact';
 
-const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, content, onContentChange, suggestions: liveSuggestions }) => {
+const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({
+    reportTitle,
+    content,
+    onContentChange,
+    suggestions: liveSuggestions,
+    orgId,
+    projectId,
+    sourceProjectIds,
+}) => {
     const [mode, setMode] = useState<CanvasMode>('write');
     const [selectedBlockId, setSelectedBlockId] = useState<string>('summary');
     const [referenceFilter, setReferenceFilter] = useState<ReferenceFilter>('#');
     const [activePreviewToken, setActivePreviewToken] = useState<string | null>(null);
     const [activeCompletion, setActiveCompletion] = useState<InlineCompletion | null>(null);
-    const [blocks, setBlocks] = useState<ReportCanvasBlock[]>(() => (content && content.length > 0 ? content : createDefaultBlocks(reportTitle)));
+    const [blocks, setBlocks] = useState<ReportBlock[]>(() => {
+        const normalized = normalizeBlocks(content);
+        return normalized.length > 0 ? normalized : createDefaultBlocks(reportTitle);
+    });
     const editableRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const [questions, setQuestions] = useState<SavedQuestion[]>([]);
+    const [questionsLoading, setQuestionsLoading] = useState(false);
+    const skipNextEmit = useRef(false);
+    const lastEmittedJson = useRef('');
+    const hasEmittedOnce = useRef(false);
 
     useEffect(() => {
-        if (content && content.length > 0) {
-            setBlocks(content);
+        const normalized = normalizeBlocks(content);
+        if (normalized.length === 0) {
+            return;
         }
+        const nextJson = JSON.stringify(normalized);
+        if (nextJson === lastEmittedJson.current) {
+            return;
+        }
+        skipNextEmit.current = true;
+        lastEmittedJson.current = nextJson;
+        setBlocks(normalized);
     }, [content]);
 
     useEffect(() => {
+        const json = JSON.stringify(blocks);
+        if (skipNextEmit.current) {
+            skipNextEmit.current = false;
+            lastEmittedJson.current = json;
+            hasEmittedOnce.current = true;
+            return;
+        }
+        if (hasEmittedOnce.current && json === lastEmittedJson.current) {
+            return;
+        }
+        hasEmittedOnce.current = true;
+        lastEmittedJson.current = json;
         onContentChange?.(blocks);
     }, [blocks, onContentChange]);
 
-    const selectedBlock = blocks.find(block => block.id === selectedBlockId) || blocks[0] || null;
+    useEffect(() => {
+        if (!orgId) {
+            setQuestions([]);
+            return;
+        }
+
+        let cancelled = false;
+        const load = async () => {
+            setQuestionsLoading(true);
+            try {
+                const ids =
+                    sourceProjectIds && sourceProjectIds.length > 0
+                        ? sourceProjectIds
+                        : projectId
+                          ? [projectId]
+                          : [undefined];
+
+                const batches = await Promise.all(
+                    ids.map((pid) => analyticsAPI.listQuestions(orgId, pid).catch(() => [])),
+                );
+                if (cancelled) return;
+
+                const byId = new Map<string, SavedQuestion>();
+                for (const batch of batches) {
+                    const rows = Array.isArray(batch) ? batch : [];
+                    for (const q of rows as SavedQuestion[]) {
+                        if (q?.id && !q.is_archived) {
+                            byId.set(q.id, q);
+                        }
+                    }
+                }
+                setQuestions(Array.from(byId.values()).sort((a, b) => a.title.localeCompare(b.title)));
+            } catch {
+                if (!cancelled) setQuestions([]);
+            } finally {
+                if (!cancelled) setQuestionsLoading(false);
+            }
+        };
+
+        void load();
+        return () => {
+            cancelled = true;
+        };
+    }, [orgId, projectId, sourceProjectIds?.join(',')]);
+
+    const selectedBlock = blocks.find((block) => block.id === selectedBlockId) || blocks[0] || null;
 
     const fallbackSuggestions = useMemo<ReportCanvasReferenceSuggestion[]>(
         () => [
@@ -290,7 +351,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                 icon: <AtSign className="h-4 w-4" />,
             },
         ],
-        []
+        [],
     );
 
     const suggestions = useMemo<ReportCanvasReferenceSuggestion[]>(() => {
@@ -298,40 +359,44 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
             return fallbackSuggestions;
         }
 
-        const liveTokenSet = new Set(liveSuggestions.map(suggestion => suggestion.token));
-        return [...liveSuggestions, ...fallbackSuggestions.filter(suggestion => !liveTokenSet.has(suggestion.token))];
+        const liveTokenSet = new Set(liveSuggestions.map((suggestion) => suggestion.token));
+        return [
+            ...liveSuggestions,
+            ...fallbackSuggestions.filter((suggestion) => !liveTokenSet.has(suggestion.token)),
+        ];
     }, [fallbackSuggestions, liveSuggestions]);
 
-    const filteredSuggestions = suggestions.filter(suggestion => suggestion.token.startsWith(referenceFilter));
+    const filteredSuggestions = suggestions.filter((suggestion) =>
+        suggestion.token.startsWith(referenceFilter),
+    );
     const inlineSuggestions = activeCompletion
-        ? suggestions.filter(suggestion => {
-            if (!suggestion.token.startsWith(activeCompletion.trigger)) {
-                return false;
-            }
+        ? suggestions.filter((suggestion) => {
+              if (!suggestion.token.startsWith(activeCompletion.trigger)) {
+                  return false;
+              }
 
-            if (!activeCompletion.query.trim()) {
-                return true;
-            }
+              if (!activeCompletion.query.trim()) {
+                  return true;
+              }
 
-            const normalizedQuery = activeCompletion.query.toLowerCase();
-            return suggestion.token.slice(1).toLowerCase().includes(normalizedQuery)
-                || suggestion.title.toLowerCase().includes(normalizedQuery)
-                || suggestion.label.toLowerCase().includes(normalizedQuery);
-        })
+              const normalizedQuery = activeCompletion.query.toLowerCase();
+              return (
+                  suggestion.token.slice(1).toLowerCase().includes(normalizedQuery) ||
+                  suggestion.title.toLowerCase().includes(normalizedQuery) ||
+                  suggestion.label.toLowerCase().includes(normalizedQuery)
+              );
+          })
         : [];
-    const previewItem = suggestions.find(suggestion => suggestion.token === activePreviewToken) || null;
+    const previewItem = suggestions.find((suggestion) => suggestion.token === activePreviewToken) || null;
     const tokenMatcher = useMemo(() => {
-        const pattern = suggestions.map(suggestion => escapeRegExp(suggestion.token)).join('|');
+        const pattern = suggestions.map((suggestion) => escapeRegExp(suggestion.token)).join('|');
         return pattern ? new RegExp(`(${pattern})`, 'g') : null;
     }, [suggestions]);
 
-    const updateBlock = (blockId: string, patch: Partial<ReportCanvasBlock>) => {
-        setBlocks(prev => prev.map(block => block.id === blockId ? { ...block, ...patch } : block));
-    };
-
-    const handleEditableUpdate = (blockId: string, value: string, cursor: number | null) => {
-        updateBlock(blockId, { content: value });
-        updateInlineCompletion(blockId, value, cursor);
+    const patchBlock = (blockId: string, patch: Record<string, unknown>) => {
+        setBlocks((prev) =>
+            prev.map((block) => (block.id === blockId ? ({ ...block, ...patch } as ReportBlock) : block)),
+        );
     };
 
     const updateInlineCompletion = (blockId: string, value: string, cursorPosition: number | null) => {
@@ -344,7 +409,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
         const match = beforeCursor.match(/(^|\s)([#@][^\s#@]*)$/);
 
         if (!match || !match[2]) {
-            setActiveCompletion(current => current?.blockId === blockId ? null : current);
+            setActiveCompletion((current) => (current?.blockId === blockId ? null : current));
             return;
         }
 
@@ -362,27 +427,23 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
         });
     };
 
-    const addBlock = (type: CanvasBlockType) => {
-        const nextBlock: ReportCanvasBlock = {
-            id: makeBlockId(),
-            type,
-            label: type === 'narrative' ? 'New Section' : type === 'callout' ? 'Insight Callout' : 'Artifact Embed',
-            content: type === 'artifact'
-                ? 'Summarize what this linked artifact adds to the report.'
-                : 'Start writing here. Use # to link artifacts and @ to mention teams or users.',
-            reference: type === 'artifact' ? '#Reference me' : undefined,
-        };
+    const handleEditableUpdate = (blockId: string, value: string, cursor: number | null) => {
+        patchBlock(blockId, { content: value });
+        updateInlineCompletion(blockId, value, cursor);
+    };
 
-        setBlocks(prev => [...prev, nextBlock]);
+    const addBlock = (type: AddableBlockType) => {
+        const nextBlock = createEmptyBlock(type);
+        setBlocks((prev) => [...prev, nextBlock]);
         setSelectedBlockId(nextBlock.id);
     };
 
     const injectToken = (token: string) => {
-        if (!selectedBlock) return;
+        if (!selectedBlock || !isTextualBlock(selectedBlock)) return;
 
         if (activeCompletion && activeCompletion.blockId === selectedBlock.id) {
             const nextContent = `${selectedBlock.content.slice(0, activeCompletion.start)}${token} ${selectedBlock.content.slice(activeCompletion.end)}`;
-            updateBlock(selectedBlock.id, { content: nextContent });
+            patchBlock(selectedBlock.id, { content: nextContent });
             setActiveCompletion(null);
 
             window.requestAnimationFrame(() => {
@@ -397,25 +458,39 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
         }
 
         if (selectedBlock.type === 'artifact' && !selectedBlock.reference) {
-            updateBlock(selectedBlock.id, { reference: token });
+            patchBlock(selectedBlock.id, { reference: token });
             return;
         }
 
         const nextContent = selectedBlock.content.trim()
             ? `${selectedBlock.content.trim()} ${token}`
             : token;
-        updateBlock(selectedBlock.id, { content: nextContent });
+        patchBlock(selectedBlock.id, { content: nextContent });
     };
 
-    const renderInteractiveContent = (content: string) => {
+    const runAiStub = (block: Extract<ReportBlock, { type: 'ai' }>) => {
+        const inputs = blocks.filter((b) => block.inputBlockIds.includes(b.id));
+        const fallbackInputs = blocks.filter((b) => b.id !== block.id);
+        const prompt = block.prompt;
+        patchBlock(block.id, { status: 'generating' });
+        window.setTimeout(() => {
+            const output = stubGenerateAiCatalog(
+                prompt,
+                inputs.length > 0 ? inputs : fallbackInputs,
+            );
+            patchBlock(block.id, { output, status: 'ready' });
+        }, 450);
+    };
+
+    const renderInteractiveContent = (text: string) => {
         if (!tokenMatcher) {
-            return content;
+            return text;
         }
 
-        const parts = content.split(tokenMatcher);
+        const parts = text.split(tokenMatcher);
 
         return parts.map((part, index) => {
-            const match = suggestions.find(suggestion => suggestion.token === part);
+            const match = suggestions.find((suggestion) => suggestion.token === part);
 
             if (!match) {
                 return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
@@ -435,8 +510,324 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
         });
     };
 
+    const renderDataBlock = (block: Extract<ReportBlock, { type: 'data' }>, isSelected: boolean) => {
+        const question = questions.find((q) => q.id === block.questionId) || null;
+
+        return (
+            <div className="mt-4 space-y-3">
+                {mode === 'write' ? (
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                            Saved question
+                        </label>
+                        {!orgId ? (
+                            <p className="text-sm text-[hsl(var(--text-tertiary))]">
+                                Open this report from an organization context to bind live data.
+                            </p>
+                        ) : questionsLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-[hsl(var(--text-tertiary))]">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading questions…
+                            </div>
+                        ) : (
+                            <select
+                                value={block.questionId}
+                                onChange={(event) => {
+                                    const nextId = event.target.value;
+                                    const matched = questions.find((q) => q.id === nextId);
+                                    patchBlock(block.id, {
+                                        questionId: nextId,
+                                        projectId: matched?.project_id || projectId || undefined,
+                                        label: matched?.title || block.label,
+                                    });
+                                }}
+                                onClick={(event) => event.stopPropagation()}
+                                className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
+                            >
+                                <option value="">Select a saved question…</option>
+                                {questions.map((q) => (
+                                    <option key={q.id} value={q.id}>
+                                        {q.title} ({q.viz_type})
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                        {questions.length === 0 && orgId && !questionsLoading ? (
+                            <p className="text-xs text-[hsl(var(--text-tertiary))]">
+                                No saved questions yet — create one in Analytics Lab, then return here.
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {question && orgId ? (
+                    <PinnedAnalyticsCard orgId={orgId} question={question} />
+                ) : (
+                    <div className="flex min-h-[120px] items-center justify-center rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 text-sm text-[hsl(var(--text-tertiary))]">
+                        {mode === 'read'
+                            ? 'No live data bound to this block.'
+                            : isSelected
+                              ? 'Pick a saved question to embed a live chart or KPI.'
+                              : 'Empty data block'}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderAiBlock = (block: Extract<ReportBlock, { type: 'ai' }>) => {
+        const selectable = blocks.filter((b) => b.id !== block.id);
+
+        return (
+            <div className="mt-4 space-y-4">
+                {mode === 'write' ? (
+                    <>
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                Prompt
+                            </label>
+                            <textarea
+                                value={block.prompt}
+                                onChange={(event) => patchBlock(block.id, { prompt: event.target.value })}
+                                onClick={(event) => event.stopPropagation()}
+                                rows={3}
+                                className="mt-2 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm leading-6"
+                                placeholder="Describe what to generate from the linked sections…"
+                            />
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                Input sections
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {selectable.length === 0 ? (
+                                    <p className="text-xs text-[hsl(var(--text-tertiary))]">Add other blocks to use as inputs.</p>
+                                ) : (
+                                    selectable.map((b) => {
+                                        const checked = block.inputBlockIds.includes(b.id);
+                                        return (
+                                            <label
+                                                key={b.id}
+                                                className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                                                    checked
+                                                        ? 'border-violet-500/40 bg-violet-500/10 text-violet-800 dark:text-violet-200'
+                                                        : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))]'
+                                                }`}
+                                                onClick={(event) => event.stopPropagation()}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only"
+                                                    checked={checked}
+                                                    onChange={() => {
+                                                        const next = checked
+                                                            ? block.inputBlockIds.filter((id) => id !== b.id)
+                                                            : [...block.inputBlockIds, b.id];
+                                                        patchBlock(block.id, { inputBlockIds: next });
+                                                    }}
+                                                />
+                                                {b.label}
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                runAiStub(block);
+                            }}
+                            disabled={block.status === 'generating'}
+                            className="inline-flex items-center gap-2 rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                        >
+                            {block.status === 'generating' ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Wand2 className="h-4 w-4" />
+                            )}
+                            {block.status === 'generating' ? 'Generating…' : 'Generate (stub)'}
+                        </button>
+                    </>
+                ) : null}
+
+                <div className="rounded-md border border-violet-500/15 bg-[hsl(var(--background))] p-4">
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-violet-700/80 dark:text-violet-300/80">
+                        Catalog output
+                    </p>
+                    {block.status === 'generating' ? (
+                        <div className="flex items-center gap-2 text-sm text-[hsl(var(--text-tertiary))]">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Building constrained UI…
+                        </div>
+                    ) : (
+                        <AiCatalogView nodes={block.output || []} />
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderMediaBlock = (block: Extract<ReportBlock, { type: 'media' }>) => (
+        <div className="mt-4 space-y-3">
+            {mode === 'write' ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                            Image URL
+                        </label>
+                        <input
+                            value={block.url}
+                            onChange={(event) => patchBlock(block.id, { url: event.target.value })}
+                            onClick={(event) => event.stopPropagation()}
+                            className="mt-2 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
+                            placeholder="https://…"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                            Caption
+                        </label>
+                        <input
+                            value={block.caption || ''}
+                            onChange={(event) => patchBlock(block.id, { caption: event.target.value })}
+                            onClick={(event) => event.stopPropagation()}
+                            className="mt-2 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
+                            placeholder="Optional caption"
+                        />
+                    </div>
+                </div>
+            ) : null}
+            {block.url ? (
+                <figure className="overflow-hidden rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))]">
+                    <img src={block.url} alt={block.caption || block.label} className="max-h-80 w-full object-contain" />
+                    {(block.caption || mode === 'read') && (
+                        <figcaption className="border-t border-[hsl(var(--border))] px-3 py-2 text-xs text-[hsl(var(--text-secondary))]">
+                            {block.caption || block.label}
+                        </figcaption>
+                    )}
+                </figure>
+            ) : (
+                <div className="flex min-h-[100px] items-center justify-center rounded-md border border-dashed border-[hsl(var(--border))] text-sm text-[hsl(var(--text-tertiary))]">
+                    {mode === 'write' ? 'Paste an image URL to preview media here.' : 'No media attached.'}
+                </div>
+            )}
+        </div>
+    );
+
+    const renderTextualBody = (block: Extract<ReportBlock, { type: 'narrative' | 'callout' | 'artifact' }>) => (
+        <>
+            <div className="mt-4">
+                {mode === 'write' ? (
+                    <CanvasEditableSurface
+                        blockId={block.id}
+                        value={block.content}
+                        placeholder="Write your report section here. Use # to link artifacts and @ to mention teams or users."
+                        onUpdate={handleEditableUpdate}
+                        onRegister={(currentBlockId, node) => {
+                            editableRefs.current[currentBlockId] = node;
+                        }}
+                        onBlur={() =>
+                            setActiveCompletion((current) =>
+                                current?.blockId === block.id ? null : current,
+                            )
+                        }
+                    />
+                ) : (
+                    <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm leading-7 text-[hsl(var(--text-secondary))] whitespace-pre-wrap">
+                        {renderInteractiveContent(block.content)}
+                    </div>
+                )}
+            </div>
+
+            {mode === 'write' && activeCompletion?.blockId === block.id && inlineSuggestions.length > 0 ? (
+                <div className="mt-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 shadow-lg">
+                    <div className="mb-2 px-2 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                        {activeCompletion.trigger === '#' ? 'Insert linked artifact' : 'Insert mention'}
+                    </div>
+                    <div className="space-y-1">
+                        {inlineSuggestions.slice(0, 5).map((suggestion) => (
+                            <button
+                                key={`${block.id}-${suggestion.token}`}
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => injectToken(suggestion.token)}
+                                className="flex w-full items-center justify-between rounded-md border border-transparent px-3 py-2 text-left hover:border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-elevated))]"
+                            >
+                                <span className="flex min-w-0 items-center gap-3 text-sm font-semibold text-[hsl(var(--text-primary))]">
+                                    <span className="text-[hsl(var(--primary))]">{suggestion.icon}</span>
+                                    <span className="truncate">{suggestion.token}</span>
+                                </span>
+                                <span className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                    {suggestion.label}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+
+            {mode === 'write' && selectedBlockId === block.id ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setReferenceFilter('#')}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${referenceFilter === '#' ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))]'}`}
+                    >
+                        <Hash className="h-3.5 w-3.5" />
+                        Insert link
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setReferenceFilter('@')}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${referenceFilter === '@' ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))]'}`}
+                    >
+                        <AtSign className="h-3.5 w-3.5" />
+                        Insert mention
+                    </button>
+                </div>
+            ) : null}
+
+            {block.type === 'artifact' && (
+                <div className="mt-4 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-4">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
+                            <Paperclip className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            {mode === 'write' ? (
+                                <input
+                                    value={block.reference || ''}
+                                    onChange={(event) =>
+                                        patchBlock(block.id, { reference: event.target.value })
+                                    }
+                                    className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-semibold"
+                                    placeholder="#Link an artifact"
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        block.reference ? setActivePreviewToken(block.reference) : undefined
+                                    }
+                                    className="text-sm font-semibold text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))]"
+                                >
+                                    {block.reference || 'Artifact preview slot'}
+                                </button>
+                            )}
+                            <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">
+                                Legacy evidence block — prefer Data or Media for new embeds.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+
     return (
-        <section className="relative rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] shadow-sm overflow-hidden">
+        <section className="relative overflow-hidden rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] shadow-sm">
             <div className="border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-6 py-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div>
@@ -444,8 +835,10 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                             <Sparkles className="h-4 w-4 text-[hsl(var(--primary))]" />
                             Report Canvas
                         </div>
-                        <h2 className="mt-2 text-xl font-semibold">Narrative Editor Host</h2>
-                        <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">Compose reports as blocks, attach linked evidence with <span className="font-semibold text-[hsl(var(--text-primary))]">#</span>, and mention teams or users with <span className="font-semibold text-[hsl(var(--text-primary))]">@</span>.</p>
+                        <h2 className="mt-2 text-xl font-semibold">Typed block canvas</h2>
+                        <p className="mt-1 text-sm text-[hsl(var(--text-secondary))]">
+                            Mix narrative, live data, media, and AI catalog sections on one vertical canvas.
+                        </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -470,7 +863,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                         <button
                             type="button"
                             onClick={() => addBlock('narrative')}
-                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                         >
                             <Plus className="h-4 w-4" />
                             Section
@@ -478,18 +871,34 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                         <button
                             type="button"
                             onClick={() => addBlock('callout')}
-                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                         >
                             <Lightbulb className="h-4 w-4" />
                             Insight
                         </button>
                         <button
                             type="button"
-                            onClick={() => addBlock('artifact')}
-                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                            onClick={() => addBlock('data')}
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
                         >
-                            <Paperclip className="h-4 w-4" />
-                            Embed
+                            <BarChart3 className="h-4 w-4" />
+                            Data
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => addBlock('ai')}
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                        >
+                            <Wand2 className="h-4 w-4" />
+                            AI
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => addBlock('media')}
+                            className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-2 text-sm font-semibold hover:bg-[hsl(var(--surface-elevated))]"
+                        >
+                            <Image className="h-4 w-4" />
+                            Media
                         </button>
                     </div>
                 </div>
@@ -497,7 +906,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
 
             <div className="grid gap-0 xl:grid-cols-[minmax(0,1.6fr)_340px]">
                 <div className="space-y-4 p-6">
-                    {blocks.map(block => {
+                    {blocks.map((block) => {
                         const isSelected = selectedBlockId === block.id;
 
                         return (
@@ -508,11 +917,15 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">{block.type}</p>
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                            {block.type}
+                                        </p>
                                         {mode === 'write' ? (
                                             <input
                                                 value={block.label}
-                                                onChange={(event) => updateBlock(block.id, { label: event.target.value })}
+                                                onChange={(event) =>
+                                                    patchBlock(block.id, { label: event.target.value })
+                                                }
                                                 className="mt-2 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-lg font-semibold"
                                             />
                                         ) : (
@@ -520,7 +933,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                         )}
                                     </div>
 
-                                    {block.reference ? (
+                                    {block.type === 'artifact' && block.reference ? (
                                         <span className="inline-flex items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-1 text-xs font-semibold text-[hsl(var(--text-secondary))]">
                                             <Hash className="h-3.5 w-3.5 text-[hsl(var(--primary))]" />
                                             {block.reference}
@@ -528,99 +941,10 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                     ) : null}
                                 </div>
 
-                                <div className="mt-4">
-                                    {mode === 'write' ? (
-                                        <CanvasEditableSurface
-                                            blockId={block.id}
-                                            value={block.content}
-                                            placeholder="Write your report section here. Use # to link artifacts and @ to mention teams or users."
-                                            onUpdate={handleEditableUpdate}
-                                            onRegister={(currentBlockId, node) => {
-                                                editableRefs.current[currentBlockId] = node;
-                                            }}
-                                            onBlur={() => setActiveCompletion(current => current?.blockId === block.id ? null : current)}
-                                        />
-                                    ) : (
-                                        <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-4 text-sm leading-7 text-[hsl(var(--text-secondary))] whitespace-pre-wrap">
-                                            {renderInteractiveContent(block.content)}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {mode === 'write' && activeCompletion?.blockId === block.id && inlineSuggestions.length > 0 ? (
-                                    <div className="mt-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-2 shadow-lg">
-                                        <div className="mb-2 px-2 pt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
-                                            {activeCompletion.trigger === '#' ? 'Insert linked artifact' : 'Insert mention'}
-                                        </div>
-                                        <div className="space-y-1">
-                                            {inlineSuggestions.slice(0, 5).map(suggestion => (
-                                                <button
-                                                    key={`${block.id}-${suggestion.token}`}
-                                                    type="button"
-                                                    onMouseDown={(event) => event.preventDefault()}
-                                                    onClick={() => injectToken(suggestion.token)}
-                                                    className="flex w-full items-center justify-between rounded-md border border-transparent px-3 py-2 text-left hover:border-[hsl(var(--border))] hover:bg-[hsl(var(--surface-elevated))]"
-                                                >
-                                                    <span className="flex min-w-0 items-center gap-3 text-sm font-semibold text-[hsl(var(--text-primary))]">
-                                                        <span className="text-[hsl(var(--primary))]">{suggestion.icon}</span>
-                                                        <span className="truncate">{suggestion.token}</span>
-                                                    </span>
-                                                    <span className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">{suggestion.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : null}
-
-                                {mode === 'write' && isSelected ? (
-                                    <div className="mt-4 flex flex-wrap gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setReferenceFilter('#')}
-                                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${referenceFilter === '#' ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))]'}`}
-                                        >
-                                            <Hash className="h-3.5 w-3.5" />
-                                            Insert link
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setReferenceFilter('@')}
-                                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${referenceFilter === '@' ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]' : 'border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-[hsl(var(--text-secondary))]'}`}
-                                        >
-                                            <AtSign className="h-3.5 w-3.5" />
-                                            Insert mention
-                                        </button>
-                                    </div>
-                                ) : null}
-
-                                {block.type === 'artifact' && (
-                                    <div className="mt-4 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                <Paperclip className="h-5 w-5" />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                {mode === 'write' ? (
-                                                    <input
-                                                        value={block.reference || ''}
-                                                        onChange={(event) => updateBlock(block.id, { reference: event.target.value })}
-                                                        className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm font-semibold"
-                                                        placeholder="#Link an artifact"
-                                                    />
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => block.reference ? setActivePreviewToken(block.reference) : undefined}
-                                                        className="text-sm font-semibold text-[hsl(var(--text-primary))] hover:text-[hsl(var(--primary))]"
-                                                    >
-                                                        {block.reference || 'Artifact preview slot'}
-                                                    </button>
-                                                )}
-                                                <p className="mt-1 text-xs text-[hsl(var(--text-secondary))]">Read mode will eventually render the linked item in a popup preview instead of navigating away.</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                                {isTextualBlock(block) ? renderTextualBody(block) : null}
+                                {block.type === 'data' ? renderDataBlock(block, isSelected) : null}
+                                {block.type === 'ai' ? renderAiBlock(block) : null}
+                                {block.type === 'media' ? renderMediaBlock(block) : null}
                             </article>
                         );
                     })}
@@ -628,15 +952,19 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
 
                 <aside className="border-t border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-6 xl:border-l xl:border-t-0">
                     <div className="rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5">
-                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Current block</h3>
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                            Current block
+                        </h3>
                         {selectedBlock ? (
                             <div className="mt-4 space-y-3">
                                 <div>
                                     <p className="text-lg font-semibold">{selectedBlock.label}</p>
-                                    <p className="text-sm text-[hsl(var(--text-secondary))]">{selectedBlock.type === 'narrative' ? 'Long-form writing area' : selectedBlock.type === 'callout' ? 'Highlight or recommendation block' : 'Embedded source context block'}</p>
+                                    <p className="text-sm text-[hsl(var(--text-secondary))]">
+                                        {blockTypeDescription(selectedBlock.type)}
+                                    </p>
                                 </div>
                                 <div className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-xs text-[hsl(var(--text-secondary))]">
-                                    Canvas state now follows the report payload. A later pass can add autosave, collaboration, and cursor-aware suggestions.
+                                    Canvas content is part of the report payload and autosaves with the editor.
                                 </div>
                             </div>
                         ) : null}
@@ -644,7 +972,9 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
 
                     <div className="mt-6 rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5">
                         <div className="flex items-center justify-between gap-3">
-                            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Reference helpers</h3>
+                            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                Reference helpers
+                            </h3>
                             <div className="inline-flex rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-1">
                                 <button
                                     type="button"
@@ -663,7 +993,7 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                             </div>
                         </div>
                         <div className="mt-4 space-y-2">
-                            {filteredSuggestions.map(suggestion => (
+                            {filteredSuggestions.map((suggestion) => (
                                 <button
                                     key={suggestion.token}
                                     type="button"
@@ -674,26 +1004,30 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                         <span className="text-[hsl(var(--primary))]">{suggestion.icon}</span>
                                         {suggestion.token}
                                     </span>
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">{suggestion.label}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                                        {suggestion.label}
+                                    </span>
                                 </button>
                             ))}
                         </div>
                     </div>
 
                     <div className="mt-6 rounded-[24px] border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5">
-                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">Reading behavior</h3>
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-[hsl(var(--text-tertiary))]">
+                            Reading behavior
+                        </h3>
                         <div className="mt-4 space-y-3 text-sm text-[hsl(var(--text-secondary))]">
                             <div className="flex items-start gap-3">
                                 <Quote className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
                                 <span>Readers stay in context while linked artifacts open in a local popup renderer.</span>
                             </div>
                             <div className="flex items-start gap-3">
-                                <MessageSquare className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
-                                <span>Threads can be cited as evidence and previewed inline for operational history.</span>
+                                <BarChart3 className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                <span>Data blocks run live queries from saved analytics questions.</span>
                             </div>
                             <div className="flex items-start gap-3">
-                                <AtSign className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
-                                <span>Mentions will later resolve to teams and users with role-aware presence.</span>
+                                <Wand2 className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                <span>AI panels emit a constrained catalog (Metric, Table, Chart, Callout, Narrative).</span>
                             </div>
                         </div>
                     </div>
@@ -705,7 +1039,9 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                     <div className="w-full max-w-sm rounded-[28px] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 shadow-2xl">
                         <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0">
-                                <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${referenceTone[previewItem.kind]}`}>
+                                <div
+                                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${referenceTone[previewItem.kind]}`}
+                                >
                                     {previewItem.icon}
                                     {previewItem.label}
                                 </div>
@@ -743,13 +1079,28 @@ const ReportCanvasShell: React.FC<ReportCanvasShellProps> = ({ reportTitle, cont
                                     <span>Readers can inspect this linked item without leaving the report canvas.</span>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    {previewItem.kind === 'asset' ? <Image className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" /> : null}
-                                    {previewItem.kind === 'dataset' ? <Link2 className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" /> : null}
-                                    {previewItem.kind === 'thread' ? <MessageSquare className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" /> : null}
-                                    {previewItem.kind === 'team' ? <BadgeCheck className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" /> : null}
-                                    {previewItem.kind === 'user' ? <AtSign className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" /> : null}
-                                    {previewItem.kind === 'report' ? <Quote className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" /> : null}
-                                    <span>This popup stands in for the future artifact renderer that will be backed by real API data.</span>
+                                    {previewItem.kind === 'asset' ? (
+                                        <Image className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                    ) : null}
+                                    {previewItem.kind === 'dataset' ? (
+                                        <Link2 className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                    ) : null}
+                                    {previewItem.kind === 'thread' ? (
+                                        <MessageSquare className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                    ) : null}
+                                    {previewItem.kind === 'team' ? (
+                                        <BadgeCheck className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                    ) : null}
+                                    {previewItem.kind === 'user' ? (
+                                        <AtSign className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                    ) : null}
+                                    {previewItem.kind === 'report' ? (
+                                        <Quote className="mt-0.5 h-4 w-4 text-[hsl(var(--primary))]" />
+                                    ) : null}
+                                    <span>
+                                        This popup stands in for the future artifact renderer that will be backed by
+                                        real API data.
+                                    </span>
                                 </div>
                             </div>
                         </div>

@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileBarChart2, Save, Trash2 } from 'lucide-react';
 
-import ReportCanvasShell, { type ReportCanvasBlock, type ReportCanvasReferenceSuggestion } from '../components/ReportCanvasShell';
+import ReportCanvasShell, { type ReportCanvasReferenceSuggestion } from '../components/ReportCanvasShell';
+import type { ReportBlock } from '../components/reports/reportBlocks';
+import { normalizeBlocks } from '../components/reports/reportBlocks';
 import StudioLayout from '../components/StudioLayout';
 import { useOrg } from '../contexts/OrgContext';
 import { useToast } from '../contexts/ToastContext';
@@ -14,7 +16,7 @@ type ReportArtifact = {
     project_id: string;
     title: string;
     description?: string;
-    content: ReportCanvasBlock[];
+    content: ReportBlock[];
     status: 'draft' | 'published' | 'archived';
     lead_accessor_id?: string | null;
     lead_accessor_type?: 'user' | 'team' | null;
@@ -79,8 +81,12 @@ const ReportDetail: React.FC = () => {
                     teamAPI.list(currentOrg.id),
                     reportAPI.list(currentOrg.id, projectId),
                 ]);
-                setReport(loadedReport);
-                setPersistedEditorSnapshot(serializeEditorFields(loadedReport));
+                const normalizedReport = {
+                    ...loadedReport,
+                    content: normalizeBlocks(loadedReport.content),
+                };
+                setReport(normalizedReport);
+                setPersistedEditorSnapshot(serializeEditorFields(normalizedReport));
                 setLastSavedAt(loadedReport.updated_at);
                 setEditorSaveState('idle');
                 setTeams(loadedTeams);
@@ -427,6 +433,8 @@ const ReportDetail: React.FC = () => {
                                     reportTitle={report.title}
                                     content={report.content}
                                     suggestions={canvasSuggestions}
+                                    orgId={currentOrg?.id}
+                                    projectId={projectId}
                                     onContentChange={(content) => setReport(prev => prev ? { ...prev, content } : prev)}
                                 />
                             </div>

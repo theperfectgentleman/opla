@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft,
@@ -9,7 +9,8 @@ import {
     Users,
 } from 'lucide-react';
 import StudioLayout from '../components/StudioLayout';
-import ReportCanvasMock from '../components/reports/ReportCanvasMock';
+import ReportCanvasShell from '../components/ReportCanvasShell';
+import type { ReportBlock } from '../components/reports/reportBlocks';
 import { useOrg } from '../contexts/OrgContext';
 import { teamAPI } from '../lib/api';
 import {
@@ -62,6 +63,22 @@ const ReportBoard: React.FC = () => {
             (id) => projects.find((p) => p.id === id)?.name || 'Unknown project',
         );
     }, [bucket, projects]);
+
+    const handleCanvasChange = useCallback(
+        (content: ReportBlock[]) => {
+            if (!currentOrg || !bucket) return;
+            setBucket((prev) => (prev ? { ...prev, content } : prev));
+        },
+        [bucket?.id, currentOrg?.id],
+    );
+
+    useEffect(() => {
+        if (!currentOrg || !bucket) return;
+        const timeoutId = window.setTimeout(() => {
+            updateReportBucket(currentOrg.id, bucket.id, { content: bucket.content });
+        }, 800);
+        return () => window.clearTimeout(timeoutId);
+    }, [bucket?.content, bucket?.id, currentOrg?.id]);
 
     const postComment = (event: React.FormEvent) => {
         event.preventDefault();
@@ -189,14 +206,14 @@ const ReportBoard: React.FC = () => {
                         })}
                     </div>
 
-                    {activePanel === 'canvas' ? (
-                        <ReportCanvasMock
-                            boardTitle={bucket.title}
-                            sourceLabels={sourceNames}
-                            comments={bucket.comments}
-                            commentDraft={comment}
-                            onCommentDraftChange={setComment}
-                            onPostComment={postComment}
+                    {activePanel === 'canvas' && currentOrg ? (
+                        <ReportCanvasShell
+                            reportTitle={bucket.title}
+                            content={bucket.content}
+                            orgId={currentOrg.id}
+                            projectId={bucket.sourceProjectIds[0]}
+                            sourceProjectIds={bucket.sourceProjectIds}
+                            onContentChange={handleCanvasChange}
                         />
                     ) : null}
 
@@ -244,6 +261,7 @@ const ReportBoard: React.FC = () => {
                                     >
                                         <BarChart3 className="h-4 w-4 text-[hsl(var(--primary))]" />
                                         <p className="mt-2 text-sm font-semibold">{card.title}</p>
+                                        <p className="mt-1 text-2xl font-bold tracking-tight">{card.value}</p>
                                         <p className="mt-1 text-xs text-[hsl(var(--text-tertiary))]">{card.hint}</p>
                                     </button>
                                 ))}

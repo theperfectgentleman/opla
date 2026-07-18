@@ -5,7 +5,6 @@ import {
     ChevronRight,
     FileBarChart2,
     FileText,
-    Image as ImageIcon,
     Paperclip,
     Play,
     Plus,
@@ -18,6 +17,7 @@ import {
 import StudioLayout from '../components/StudioLayout';
 import ConfirmPopover from '../components/ConfirmPopover';
 import DirectoryGrid from '../components/directory/DirectoryGrid';
+import FormsDesignPanel from '../components/forms/FormsDesignPanel';
 import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
 import OpsAttendanceMock from '../components/ops/OpsAttendanceMock';
 import OpsReviewMock from '../components/ops/OpsReviewMock';
@@ -1202,16 +1202,6 @@ const ProjectWorkspace: React.FC = () => {
         }
     };
 
-    const workspaceStats = [
-        { label: 'Forms', value: forms.length },
-        { label: 'Datasets', value: datasets.length },
-        { label: 'Media', value: assets.length },
-        { label: 'Tasks', value: tasks.length },
-        { label: 'Messages', value: messageChannels.length },
-        { label: 'Reports', value: reports.length },
-        { label: 'Members', value: accessRules.length },
-    ];
-
     return (
         <StudioLayout
             navMode="project"
@@ -1248,140 +1238,41 @@ const ProjectWorkspace: React.FC = () => {
             ) : currentProject ? (
                 <div className="mx-auto max-w-[1600px] space-y-6">
                     {/* Header Section */}
-                    <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between px-2">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-3">
-                                <h1 className="text-3xl font-bold tracking-tight text-[hsl(var(--text-primary))]">
-                                    {currentProject.name}
-                                </h1>
-                                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusTone[currentProject.status] || statusTone.planning}`}>
-                                    {currentProject.status}
-                                </span>
-                            </div>
-                            <p className="text-sm text-[hsl(var(--text-secondary))] max-w-2xl">
-                                {currentProject.description || 'Manage forms, tasks, reports, and team access.'}
-                            </p>
+                    <div className="space-y-1 px-2">
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-3xl font-bold tracking-tight text-[hsl(var(--text-primary))]">
+                                {currentProject.name}
+                            </h1>
+                            <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusTone[currentProject.status] || statusTone.planning}`}>
+                                {currentProject.status}
+                            </span>
                         </div>
-
-                        <div className="flex flex-wrap items-center gap-4">
-                            {workspaceStats.map(stat => {
-                                const tabMap: Record<string, ProjectWorkspaceTab> = {
-                                    Forms: 'design',
-                                    Datasets: 'data',
-                                    Media: 'data',
-                                    Tasks: 'tasks',
-                                    Messages: 'messages',
-                                    Reports: 'reports',
-                                    Members: 'design',
-                                };
-                                const targetTab = tabMap[stat.label];
-                                const isCurrentlyActive = activeTab === targetTab;
-                                return (
-                                    <div
-                                        key={stat.label}
-                                        onClick={() => targetTab && setWorkspaceTab(targetTab, stat.label === 'Datasets' ? { section: 'datasets' } : stat.label === 'Media' ? { section: 'media' } : stat.label === 'Forms' ? { section: 'forms' } : undefined)}
-                                        className={`flex flex-col border-l border-[hsl(var(--border))] pl-4 first:border-l-0 first:pl-0 cursor-pointer group select-none transition-all hover:scale-[1.02] ${
-                                            isCurrentlyActive ? 'scale-105' : ''
-                                        }`}
-                                    >
-                                        <span className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                                            isCurrentlyActive ? 'text-[hsl(var(--primary))] font-semibold' : 'text-[hsl(var(--text-tertiary))] group-hover:text-[hsl(var(--text-secondary))]'
-                                        }`}>
-                                            {stat.label}
-                                        </span>
-                                        <span className={`text-xl font-semibold transition-colors ${
-                                            isCurrentlyActive ? 'text-[hsl(var(--primary))] font-bold' : 'text-[hsl(var(--text-primary))] group-hover:text-[hsl(var(--primary))]'
-                                        }`}>
-                                            {stat.value}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        <p className="text-sm text-[hsl(var(--text-secondary))] max-w-2xl">
+                            {currentProject.description || 'Manage forms, tasks, data, and team access.'}
+                        </p>
                     </div>
 
                     {/* Tab Views — destinations owned by project sidebar */}
                     <div className="mt-2">
                         {/* 1. DESIGN — Forms */}
                         {activeTab === 'design' && designSection === 'forms' && (
-                            <div className="space-y-6">
-                                <section className="flex flex-col rounded-[24px] bg-[hsl(var(--surface))] border border-[hsl(var(--border))] shadow-sm overflow-hidden">
-                                    <div className="flex items-center justify-between border-b border-[hsl(var(--border))] p-4 lg:p-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))]">
-                                                <FileText className="h-4 w-4" />
-                                            </div>
-                                            <h2 className="text-lg font-semibold text-[hsl(var(--text-primary))]">
-                                                Forms
-                                            </h2>
-                                        </div>
-                                        <button onClick={() => { setNewFormKind('standard'); setIsCreateFormModalOpen(true); }} className="flex items-center gap-1 text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--primary))] transition-colors px-2 py-1 rounded-lg hover:bg-[hsl(var(--surface-elevated))]">
-                                            <Plus className="h-4 w-4" />
-                                            <span className="text-xs font-semibold">New</span>
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-col gap-3 p-4 lg:p-5">
-                                            {(() => {
-                                                const designForms = forms.filter((form) => form.kind !== 'directory');
-                                                return designForms.length === 0 ? (
-                                                <p className="text-sm text-[hsl(var(--text-tertiary))] text-center py-4 bg-[hsl(var(--background))] rounded-md border border-dashed border-[hsl(var(--border))]">
-                                                    No forms yet.
-                                                </p>
-                                            ) : designForms.map(form => (
-                                                <div key={form.id} className="group relative rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 transition-shadow hover:shadow-md">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <h3 className="text-sm font-semibold leading-tight text-[hsl(var(--text-primary))]">{form.title}</h3>
-                                                                {form.kind === 'directory' && (
-                                                                    <span className="inline-flex items-center rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-600 border border-amber-500/20">
-                                                                        Directory
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <p className="mt-1 text-[11px] text-[hsl(var(--text-tertiary))]">v{form.version} • {new Date(form.updated_at).toLocaleDateString()}</p>
-                                                        </div>
-                                                        <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${formStatusTone[form.status] || formStatusTone.draft}`}>
-                                                            {form.status}
-                                                        </span>
-                                                    </div>
-                                                    <div className="mt-3 flex items-center justify-between pt-3 border-t border-[hsl(var(--border))]/50">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0" title={resolveAccessorLabel(form.lead_accessor_id, form.lead_accessor_type)}>
-                                                                {resolveAccessorLabel(form.lead_accessor_id, form.lead_accessor_type).charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <select
-                                                                value={getAccessorValue(form.assigned_accessor_id, form.assigned_accessor_type)}
-                                                                onChange={(e) => handleFormResponsibilityChange(form, 'assigned', e.target.value)}
-                                                                className="text-xs bg-transparent text-[hsl(var(--text-secondary))] hover:text-[hsl(var(--text-primary))] cursor-pointer outline-none w-24 truncate"
-                                                            >
-                                                                <option value="">Unassigned</option>
-                                                                {assignmentOptions.map(opt => <option key={`form-assign-${form.id}-${opt.type}-${opt.id}`} value={`${opt.type}:${opt.id}`}>{opt.label}</option>)}
-                                                            </select>
-                                                        </div>
-                                                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 flex-wrap justify-end">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openFormMedia(form.id)}
-                                                                className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block"
-                                                                title="Form media"
-                                                            >
-                                                                <ImageIcon className="h-3.5 w-3.5" />
-                                                            </button>
-                                                            <button onClick={() => navigate(`/simulator/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block">
-                                                                <Play className="h-3.5 w-3.5 fill-current" />
-                                                            </button>
-                                                            <button onClick={() => navigate(`/forms/${form.id}`)} className="p-1 px-1.5 text-[hsl(var(--text-tertiary))] hover:text-[hsl(var(--primary))] rounded hover:bg-[hsl(var(--primary))]/10 block" title="Open form">
-                                                                <ChevronRight className="h-4 w-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ));
-                                            })()}
-                                    </div>
-                                </section>
-                            </div>
+                            <FormsDesignPanel
+                                forms={forms}
+                                teamsWithAccess={
+                                    new Set(
+                                        accessRules
+                                            .filter((rule) => rule.accessor_type === 'team')
+                                            .map((rule) => rule.accessor_id),
+                                    ).size
+                                }
+                                onCreate={() => {
+                                    setNewFormKind('standard');
+                                    setIsCreateFormModalOpen(true);
+                                }}
+                                onOpen={(formId) => navigate(`/forms/${formId}`)}
+                                onSimulate={(formId) => navigate(`/simulator/${formId}`)}
+                                onOpenMedia={openFormMedia}
+                            />
                         )}
 
                         {/* 1b. DESIGN — Automations */}

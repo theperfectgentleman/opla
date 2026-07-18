@@ -1,5 +1,8 @@
 /** Org-level report buckets (mock store until org report APIs exist). */
 
+import type { ReportBlock } from '../components/reports/reportBlocks';
+import { createDefaultBlocks, normalizeBlocks } from '../components/reports/reportBlocks';
+
 export type ReportGrantRole = 'viewer' | 'commenter' | 'explorer' | 'owner';
 
 export type ReportTeamGrant = {
@@ -25,6 +28,8 @@ export type ReportBucket = {
     sourceProjectIds: string[];
     teamGrants: ReportTeamGrant[];
     comments: ReportComment[];
+    /** Typed canvas blocks (same shape as project report content). */
+    content: ReportBlock[];
     /** Optional link to a legacy project-scoped report artifact */
     legacyProjectId?: string;
     legacyReportId?: string;
@@ -34,12 +39,36 @@ export type ReportBucket = {
 
 const storageKey = (orgId: string) => `opla_report_buckets_v1_${orgId}`;
 
+function hydrateBucket(row: Partial<ReportBucket> & { id: string; orgId: string; title: string }): ReportBucket {
+    const title = row.title || 'Untitled report';
+    const content =
+        Array.isArray(row.content) && row.content.length > 0
+            ? normalizeBlocks(row.content)
+            : createDefaultBlocks(title);
+    return {
+        id: row.id,
+        orgId: row.orgId,
+        title,
+        description: row.description || '',
+        status: row.status || 'draft',
+        sourceProjectIds: row.sourceProjectIds || [],
+        teamGrants: row.teamGrants || [],
+        comments: row.comments || [],
+        content,
+        legacyProjectId: row.legacyProjectId,
+        legacyReportId: row.legacyReportId,
+        updatedAt: row.updatedAt || new Date().toISOString(),
+        createdAt: row.createdAt || new Date().toISOString(),
+    };
+}
+
 function readAll(orgId: string): ReportBucket[] {
     try {
         const raw = localStorage.getItem(storageKey(orgId));
         if (!raw) return [];
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((row) => hydrateBucket(row));
     } catch {
         return [];
     }
@@ -78,10 +107,11 @@ export function createReportBucket(
     },
 ): ReportBucket {
     const now = new Date().toISOString();
+    const title = input.title.trim() || 'Untitled report';
     const bucket: ReportBucket = {
         id: `rb_${crypto.randomUUID()}`,
         orgId,
-        title: input.title.trim() || 'Untitled report',
+        title,
         description: input.description?.trim() || '',
         status: 'draft',
         sourceProjectIds: input.sourceProjectIds || [],
@@ -94,6 +124,7 @@ export function createReportBucket(
                 createdAt: now,
             },
         ],
+        content: createDefaultBlocks(title),
         legacyProjectId: input.legacyProjectId,
         legacyReportId: input.legacyReportId,
         updatedAt: now,
@@ -107,7 +138,12 @@ export function createReportBucket(
 export function updateReportBucket(
     orgId: string,
     bucketId: string,
-    patch: Partial<Pick<ReportBucket, 'title' | 'description' | 'status' | 'sourceProjectIds' | 'teamGrants' | 'comments'>>,
+    patch: Partial<
+        Pick<
+            ReportBucket,
+            'title' | 'description' | 'status' | 'sourceProjectIds' | 'teamGrants' | 'comments' | 'content'
+        >
+    >,
 ): ReportBucket | null {
     const all = readAll(orgId);
     const index = all.findIndex((row) => row.id === bucketId);
@@ -138,11 +174,12 @@ export function ensureDemoReportBucket(
     const existing = readAll(orgId);
     if (existing.length > 0) return existing[0];
     const now = new Date().toISOString();
+    const title = 'Demo programme board';
     const bucket: ReportBucket = {
         id: `rb_demo_${orgId.slice(0, 8)}`,
         orgId,
-        title: 'Demo programme board',
-        description: 'Mock stakeholder canvas — open to explore widgets we will wire later.',
+        title,
+        description: 'Stakeholder canvas — narrative, live data, and AI sections on one board.',
         status: 'published',
         sourceProjectIds: sourceProjectIds.slice(0, 2),
         teamGrants: [],
@@ -160,6 +197,7 @@ export function ensureDemoReportBucket(
                 createdAt: now,
             },
         ],
+        content: createDefaultBlocks(title),
         updatedAt: now,
         createdAt: now,
     };

@@ -1,0 +1,16 @@
+{
+  "name": "@opla/analytics-domain",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "tsx --test test/parse.test.ts test/question.test.ts test/purity.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.3.3"
+  }
+}

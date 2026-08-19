@@ -1,0 +1,20 @@
+{
+  "id": "11111111-1111-4111-8111-111111111111",
+  "project_id": "22222222-2222-4222-8222-222222222222",
+  "title": "Visits by district",
+  "source_config": {
+    "dataset_id": "33333333-3333-4333-8333-333333333333"
+  },
+  "query_config": {
+    "group_by": ["district"],
+    "aggregates": [{ "field": "district", "fn": "count", "alias": "count" }],
+    "select_fields": ["district"],
+    "limit": 500
+  },
+  "viz_type": "chart",
+  "viz_config": {
+    "chart_type": "bar",
+    "category_field": "district",
+    "agg": "count"
+  }
+}

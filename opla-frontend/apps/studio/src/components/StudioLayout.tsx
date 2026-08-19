@@ -29,7 +29,7 @@ import type { StudioShellNavKey } from '../lib/vocabulary';
 export type StudioNavKey = StudioShellNavKey;
 
 type AnalyticsNavTool = 'lab' | 'prep' | 'dashboard' | 'spatial';
-type DataNavSection = 'directory' | 'datasets' | 'media';
+type DataNavSection = 'directory' | 'datasets' | 'media' | 'analysis';
 type DesignNavSection = 'forms' | 'automations';
 type OpsNavSection = 'attendance' | 'review';
 
@@ -91,6 +91,7 @@ const projectNavItems: NavItem[] = [
 const dataSectionSubItems: Array<{ key: DataNavSection; label: string }> = [
     { key: 'directory', label: 'Directory' },
     { key: 'datasets', label: 'Datasets' },
+    { key: 'analysis', label: 'Analysis' },
     { key: 'media', label: 'Media' },
 ];
 
@@ -105,10 +106,10 @@ const projectOpsSectionSubItems: Array<{ key: OpsNavSection; label: string }> = 
 ];
 
 const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
-    { key: 'lab', label: 'Analysis Lab' },
-    { key: 'prep', label: 'Data Prep' },
-    { key: 'dashboard', label: 'Dashboards' },
-    { key: 'spatial', label: 'Map Analysis' },
+    { key: 'prep', label: 'Table' },
+    { key: 'lab', label: 'Chart' },
+    { key: 'spatial', label: 'Map' },
+    { key: 'dashboard', label: 'Boards' },
 ];
 
 const StudioLayout: React.FC<StudioLayoutProps> = ({
@@ -320,7 +321,7 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                         <div className="ml-4 border-l border-[hsl(var(--border))] pl-3 space-y-0.5">
                                             {onSelectDataSection
                                                 ? dataSectionSubItems.map(subItem => {
-                                                    const isSubItemActive = activeDataSection === subItem.key && !activeAnalyticsTool;
+                                                    const isSubItemActive = activeDataSection === subItem.key;
                                                     return (
                                                         <button
                                                             key={subItem.key}
@@ -333,7 +334,7 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                                     );
                                                 })
                                                 : null}
-                                            {onSelectAnalyticsTool
+                                            {onSelectAnalyticsTool && activeDataSection === 'analysis'
                                                 ? analyticsSubItems.map(subItem => {
                                                     const isSubItemActive = activeAnalyticsTool === subItem.key;
 

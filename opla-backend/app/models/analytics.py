@@ -52,6 +52,26 @@ class AnalyticsDashboard(Base):
     cards = relationship("DashboardCard", back_populates="dashboard", cascade="all, delete-orphan")
 
 
+class OrgReport(Base):
+    __tablename__ = "org_reports"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="draft")
+    source_project_ids = Column(JSONB, nullable=False, default=list)
+    team_grants = Column(JSONB, nullable=False, default=list)
+    comments = Column(JSONB, nullable=False, default=list)
+    content = Column(JSONB, nullable=False, default=list)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    organization = relationship("Organization", backref=backref("org_reports", lazy="dynamic"))
+
+
+
 class DashboardCard(Base):
     __tablename__ = "dashboard_cards"
 

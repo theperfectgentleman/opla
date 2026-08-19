@@ -786,30 +786,37 @@ export const sectionTemplateAPI = {
 };
 
 export const analyticsAPI = {
-    listSources: async (orgId: string) => {
-        const response = await apiClient.get(`/organizations/${orgId}/analytics/sources`);
+    listSources: async (orgId: string, projectId?: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/analytics/sources`, {
+            params: projectId ? { project_id: projectId } : undefined,
+        });
         return response.data;
     },
-    runQuery: async (
-        orgId: string,
-        data: {
-            dataset_id: string;
-            select_fields?: string[];
-            filters?: unknown;
-            group_by?: string[];
-            aggregates?: Array<{ field: string; fn: string; alias?: string }>;
-            order_by?: Array<{ field: string; direction?: 'asc' | 'desc' }>;
-            limit?: number;
-            offset?: number;
-        },
-    ) => {
+    runQuery: async (orgId: string, data: Record<string, unknown>) => {
         const response = await apiClient.post(`/organizations/${orgId}/analytics/query`, data);
         return response.data;
     },
-    walkerCompute: async (orgId: string, datasetId: string, payload: any) => {
-        const response = await apiClient.post(`/analytics/walker/${datasetId}/compute`, payload, {
-            params: { org_id: orgId }
-        });
+    walkerCompute: async (orgId: string, datasetId: string, payload: unknown) => {
+        const response = await apiClient.post(
+            `/organizations/${orgId}/analytics/walker/${datasetId}/compute`,
+            payload,
+        );
+        return response.data;
+    },
+    listOrgReports: async (orgId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/analytics/reports`);
+        return response.data;
+    },
+    getOrgReport: async (orgId: string, reportId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/analytics/reports/${reportId}`);
+        return response.data;
+    },
+    createOrgReport: async (orgId: string, data: Record<string, unknown>) => {
+        const response = await apiClient.post(`/organizations/${orgId}/analytics/reports`, data);
+        return response.data;
+    },
+    updateOrgReport: async (orgId: string, reportId: string, data: Record<string, unknown>) => {
+        const response = await apiClient.patch(`/organizations/${orgId}/analytics/reports/${reportId}`, data);
         return response.data;
     },
     listQuestions: async (orgId: string, projectId?: string) => {
@@ -866,7 +873,7 @@ export const analyticsAPI = {
         orgId: string,
         data: {
             name: string;
-            mode: 'snapshot' | 'linked';
+            mode: 'linked';
             parent_dataset_id: string;
             project_id?: string | null;
             columns: Array<{

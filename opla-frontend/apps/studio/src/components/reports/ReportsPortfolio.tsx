@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronRight, FileBarChart2, Plus, Users } from 'lucide-react';
 import {
     createReportBucket,
-    ensureDemoReportBucket,
     listReportBuckets,
     REPORT_GRANT_ROLE_LABELS,
     type ReportBucket,
@@ -38,7 +37,8 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
     legacyReports,
     onOpenBucket,
 }) => {
-    const [tick, setTick] = useState(0);
+    const [buckets, setBuckets] = useState<ReportBucket[]>([]);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [showCreate, setShowCreate] = useState(false);
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -48,17 +48,23 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
     const [pendingGrants, setPendingGrants] = useState<ReportTeamGrant[]>([]);
 
     useEffect(() => {
-        ensureDemoReportBucket(
-            orgId,
-            projects.map((p) => p.id),
-        );
-        setTick((n) => n + 1);
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const rows = await listReportBuckets(orgId);
+                if (!cancelled) {
+                    setBuckets(rows);
+                    setLoadError(null);
+                }
+            } catch {
+                if (!cancelled) setLoadError('Could not load reports.');
+            }
+        };
+        void load();
+        return () => {
+            cancelled = true;
+        };
     }, [orgId]);
-
-    const buckets = useMemo(() => {
-        void tick;
-        return listReportBuckets(orgId);
-    }, [orgId, tick, legacyReports.length]);
 
     const projectName = (id: string) => projects.find((p) => p.id === id)?.name || 'Unknown project';
 
@@ -79,10 +85,10 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
         setGrantTeamId('');
     };
 
-    const handleCreate = (event: React.FormEvent) => {
+    const handleCreate = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!title.trim()) return;
-        const created = createReportBucket(orgId, {
+        const created = await createReportBucket(orgId, {
             title: title.trim(),
             description: description.trim(),
             sourceProjectIds: sourceIds,
@@ -93,7 +99,7 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
         setSourceIds([]);
         setPendingGrants([]);
         setShowCreate(false);
-        setTick((n) => n + 1);
+        setBuckets((prev) => [created, ...prev.filter((row) => row.id !== created.id)]);
         onOpenBucket(created.id);
     };
 
@@ -175,7 +181,7 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
 
                     <div>
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--text-tertiary))]">
-                            Team access (mock)
+                            Team access
                         </p>
                         <div className="flex flex-wrap items-end gap-2">
                             <div className="min-w-[160px]">
@@ -238,7 +244,16 @@ const ReportsPortfolio: React.FC<ReportsPortfolioProps> = ({
                 </form>
             ) : null}
 
+            {loadError ? (
+                <p className="text-sm text-rose-700">{loadError}</p>
+            ) : null}
+
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {buckets.length === 0 && !loadError ? (
+                    <div className="col-span-full rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
+                        No report boards yet. Create one so teammates can open it from Reports.
+                    </div>
+                ) : null}
                 {buckets.map((bucket) => (
                     <BucketCard
                         key={bucket.id}

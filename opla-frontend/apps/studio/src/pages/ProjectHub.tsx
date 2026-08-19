@@ -421,7 +421,7 @@ const ProjectHub: React.FC = () => {
             const byId = new Map<string, SavedQuestion>();
             for (const q of merged) {
                 if (!q?.id || q.is_archived) continue;
-                if (!['chart', 'kpi', 'goal', 'table'].includes(q.viz_type)) continue;
+                if (!['chart', 'kpi', 'table', 'map'].includes(q.viz_type)) continue;
                 if (q.project_id && q.project_id !== projectId) continue;
                 byId.set(q.id, q);
             }

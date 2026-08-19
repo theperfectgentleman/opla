@@ -2,32 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Filter, X, ArrowLeft, Download, Table2, Loader2 } from 'lucide-react';
 import { analyticsAPI } from '../../lib/api';
 import type { AnalyticsDashboard, DashboardCard, SavedQuestion, QueryResult } from './types';
+import { extractChartData, extractKPIValue, queryPayloadFromQuestion, dimensionFieldFromQuery } from './queryUtils';
 import KPICard from './cards/KPICard';
-import GoalCard from './cards/GoalCard';
-import RichTextCard from './cards/RichTextCard';
 import EChartCard from './cards/EChartCard';
 
 interface DashboardViewerProps {
 	dashboard: AnalyticsDashboard;
 	onClose: () => void;
 	orgId: string;
-}
-
-function extractChartData(question: SavedQuestion, result: QueryResult) {
-	const cfg = question.query_config as Record<string, any> | undefined;
-	const groupField = cfg?.group_by?.[0];
-	const aggField = cfg?.aggregates?.[0];
-	if (!result.rows.length) return [];
-	const key = typeof groupField === 'object' ? groupField.field : (groupField || result.columns[0]?.key);
-	const valKey = aggField?.alias || result.columns.find(c => c.type === 'number')?.key || result.columns[1]?.key;
-	return result.rows.map(r => ({ category: String(r[key] || ''), metric: Number(r[valKey]) || 0 }));
-}
-
-function extractKPIValue(question: SavedQuestion, result: QueryResult): number {
-	const cfg = question.query_config as Record<string, any> | undefined;
-	const aggField = cfg?.aggregates?.[0];
-	const valKey = aggField?.alias || result.columns[0]?.key;
-	return result.rows.length > 0 ? Number(result.rows[0]?.[valKey]) || 0 : 0;
 }
 
 export default function DashboardViewer({ dashboard, onClose, orgId }: DashboardViewerProps) {
@@ -51,39 +33,20 @@ export default function DashboardViewer({ dashboard, onClose, orgId }: Dashboard
 		setCardLoading(prev => ({ ...prev, [cardId]: true }));
 
 		try {
-			const cfg = question.query_config as Record<string, any> || {};
-			const src = question.source_config as Record<string, any> || {};
-			const existingFilters = cfg.filters as Record<string, any> | undefined;
-			const filters = { ...(existingFilters || {}) } as Record<string, any>;
-			const rules: any[] = filters.rules || [];
-
-			if (crossFilter) {
-				rules.push({ field: crossFilter.field, operator: '=', value: crossFilter.value });
-			}
-
-			const queryPayload: any = {
-				dataset_id: src.dataset_id,
-				select_fields: cfg.select_fields,
-				filters: rules.length > 0 ? { combinator: 'and', rules } : undefined,
-				group_by: cfg.group_by,
-				aggregates: cfg.aggregates,
-				order_by: cfg.order_by,
-				limit: cfg.limit || 500,
-			};
-
+			const queryPayload = queryPayloadFromQuestion(question);
+			if (!queryPayload) return;
 			const result = await analyticsAPI.runQuery(orgId, queryPayload);
 			setCardData(prev => ({ ...prev, [cardId]: result }));
 		} catch {
-			// Silently handle errors per card
+			// Keep the card empty when the server query fails.
 		} finally {
 			setCardLoading(prev => ({ ...prev, [cardId]: false }));
 		}
-	}, [orgId, crossFilter]);
+	}, [orgId]);
 
 	useEffect(() => {
 		dashboard.cards.forEach(card => {
-			const vizType = card.question?.viz_type;
-			if (card.question && vizType !== 'markdown' && vizType !== 'walker') {
+			if (card.question) {
 				fetchCardData(card);
 			}
 		});
@@ -91,17 +54,20 @@ export default function DashboardViewer({ dashboard, onClose, orgId }: Dashboard
 
 	const handleDrillThrough = async (question: SavedQuestion, category: string) => {
 		try {
-			const cfg = question.query_config as Record<string, any> || {};
-			const src = question.source_config as Record<string, any> || {};
+			const queryPayload = queryPayloadFromQuestion(question);
+			const table =
+				(typeof queryPayload?.table === 'string' && queryPayload.table) ||
+				(typeof queryPayload?.dataset_id === 'string' && queryPayload.dataset_id) ||
+				'';
+			const cfg = typeof question.query_config === 'object' && question.query_config !== null
+				? question.query_config
+				: {};
+			const field = dimensionFieldFromQuery(cfg);
 			const result = await analyticsAPI.runQuery(orgId, {
-				dataset_id: src.dataset_id,
-				select_fields: (cfg.select_fields as string[]) || [],
-				filters: {
-					combinator: 'and',
-					rules: cfg.group_by?.[0]
-						? [{ field: typeof cfg.group_by[0] === 'object' ? cfg.group_by[0].field : cfg.group_by[0], operator: '=', value: category }]
-						: [],
-				},
+				dataset_id: table,
+				filters: field
+					? { combinator: 'and', rules: [{ field, operator: '=', value: category }] }
+					: undefined,
 				limit: 100,
 			});
 			setDrillThrough({ category, cardId: question.id, question, rows: result.rows });
@@ -143,12 +109,6 @@ export default function DashboardViewer({ dashboard, onClose, orgId }: Dashboard
 				{!isLoading && question.viz_type === 'kpi' && (
 					<KPICard question={question} currentValue={kpiValue} />
 				)}
-				{!isLoading && question.viz_type === 'goal' && (
-					<GoalCard question={question} currentValue={kpiValue} targetValue={(question.viz_config as any)?.target || 1000} />
-				)}
-				{!isLoading && question.viz_type === 'markdown' && (
-					<RichTextCard question={question} content={(question.viz_config as any)?.content || ''} editable={false} />
-				)}
 				{!isLoading && (question.viz_type === 'chart' || question.viz_type === 'table') && (
 					<EChartCard 
 						question={question} 
@@ -160,15 +120,13 @@ export default function DashboardViewer({ dashboard, onClose, orgId }: Dashboard
 						}}
 					/>
 				)}
-				{!isLoading && question.viz_type === 'walker' && (
+				{!isLoading && question.viz_type === 'map' && result && (
 					<div className="flex h-full flex-col justify-center rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
 						<p className="text-sm font-semibold text-slate-800">{question.title}</p>
-						<p className="mt-2 text-sm text-slate-500">
-							Walker analyses open in Analysis Lab. Dashboard rendering for Walker cards comes next.
-						</p>
+						<p className="mt-2 text-sm text-slate-500">{result.total_count.toLocaleString()} rows on this map question.</p>
 					</div>
 				)}
-				{!isLoading && !result && question.viz_type !== 'markdown' && question.viz_type !== 'walker' && (
+				{!isLoading && !result && (
 					<div className="flex h-full items-center justify-center rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-200 text-sm text-slate-400">
 						No data
 					</div>

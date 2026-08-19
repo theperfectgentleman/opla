@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, FlaskConical, Hash, Loader2, PanelsTopLeft, Plus, Table2, Target, Type } from 'lucide-react';
+import { BarChart3, Hash, Loader2, Map, PanelsTopLeft, Plus, Table2 } from 'lucide-react';
 
 import { analyticsAPI } from '../../lib/api';
 import { defaultSource } from './queryUtils';
@@ -12,10 +12,8 @@ import PinnedAnalyticsCard from '../hub/PinnedAnalyticsCard';
 const vizMeta: Record<SavedQuestion['viz_type'], { label: string; icon: ReactNode }> = {
 	table: { label: 'Table', icon: <Table2 className="h-4 w-4" /> },
 	chart: { label: 'Chart', icon: <BarChart3 className="h-4 w-4" /> },
-	walker: { label: 'Walker Analysis', icon: <FlaskConical className="h-4 w-4" /> },
 	kpi: { label: 'KPI', icon: <Hash className="h-4 w-4" /> },
-	goal: { label: 'Goal', icon: <Target className="h-4 w-4" /> },
-	markdown: { label: 'Rich Text', icon: <Type className="h-4 w-4" /> },
+	map: { label: 'Map', icon: <Map className="h-4 w-4" /> },
 };
 
 function formatDate(dateString: string) {
@@ -32,11 +30,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [reloadToken, setReloadToken] = useState(0);
-	const [composerMode, setComposerMode] = useState<'question' | 'dashboard' | null>(null);
-	const [questionTitle, setQuestionTitle] = useState('');
-	const [questionDescription, setQuestionDescription] = useState('');
-	const [questionVizType, setQuestionVizType] = useState<SavedQuestion['viz_type']>('table');
-	const [questionSourceId, setQuestionSourceId] = useState('');
+	const [composerMode, setComposerMode] = useState<'dashboard' | null>(null);
 	const [dashboardTitle, setDashboardTitle] = useState('');
 	const [dashboardDescription, setDashboardDescription] = useState('');
 	const [submitLoading, setSubmitLoading] = useState(false);
@@ -74,12 +68,6 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 	const defaultAnalyticsSource = useMemo(() => defaultSource(sources, undefined), [sources]);
 
 	useEffect(() => {
-		if (!questionSourceId && defaultAnalyticsSource) {
-			setQuestionSourceId(defaultAnalyticsSource.dataset_id);
-		}
-	}, [defaultAnalyticsSource, questionSourceId]);
-
-	useEffect(() => {
 		let cancelled = false;
 
 		const loadWorkspace = async () => {
@@ -112,57 +100,6 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 		};
 	}, [orgId, projectId, reloadToken]);
 
-	const selectedSource = useMemo(
-		() => sources.find(source => source.dataset_id === questionSourceId) ?? defaultAnalyticsSource ?? null,
-		[defaultAnalyticsSource, questionSourceId, sources],
-	);
-
-	async function handleCreateQuestion() {
-		if (!selectedSource || !questionTitle.trim()) {
-			setSubmitMessage('Choose a dataset and enter a question title before saving.');
-			return;
-		}
-
-		setSubmitLoading(true);
-		setSubmitMessage(null);
-		try {
-			const selectFields = selectedSource.fields.slice(0, 6).map(field => field.field_key);
-			const payload = {
-				title: questionTitle.trim(),
-				description: questionDescription.trim() || null,
-				project_id: selectedSource.project_id ?? projectId ?? null,
-				source_config: {
-					dataset_id: selectedSource.dataset_id,
-					dataset_slug: selectedSource.dataset_slug,
-					form_id: selectedSource.form_id,
-					form_title: selectedSource.form_title,
-				},
-				query_config: {
-					select_fields: selectFields,
-					filters: null,
-					group_by: [],
-					aggregates: [],
-					order_by: [],
-					limit: 50,
-					offset: 0,
-				},
-				viz_type: questionVizType,
-				viz_config: questionVizType === 'chart' ? { chart_type: 'bar' } : null,
-			};
-
-			await analyticsAPI.createQuestion(orgId, payload);
-			setQuestionTitle('');
-			setQuestionDescription('');
-			setQuestionVizType('table');
-			setComposerMode(null);
-			setReloadToken(current => current + 1);
-		} catch (submitError: any) {
-			setSubmitMessage(submitError?.response?.data?.detail || submitError?.message || 'Could not create saved question.');
-		} finally {
-			setSubmitLoading(false);
-		}
-	}
-
 	async function handleCreateDashboard() {
 		if (!dashboardTitle.trim()) {
 			setSubmitMessage('Enter a dashboard title before saving.');
@@ -175,7 +112,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 			await analyticsAPI.createDashboard(orgId, {
 				title: dashboardTitle.trim(),
 				description: dashboardDescription.trim() || null,
-				project_id: projectId ?? selectedSource?.project_id ?? null,
+				project_id: projectId ?? defaultAnalyticsSource?.project_id ?? null,
 				layout_config: [],
 				cards: [],
 			});
@@ -221,21 +158,17 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 						Back
 					</button>
 				</div>
-				{['chart', 'kpi', 'goal', 'table'].includes(viewingQuestion.viz_type) ? (
+				{['chart', 'kpi', 'table', 'map'].includes(viewingQuestion.viz_type) ? (
 					<div className="min-h-[280px]">
 						<PinnedAnalyticsCard orgId={orgId} question={viewingQuestion} />
 					</div>
 				) : (
 					<div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
-						This question type ({viewingQuestion.viz_type}) doesn’t have an Overview-style preview yet.
-						{viewingQuestion.viz_type === 'walker'
-							? ' Open it from Analysis Lab → Explore after we wire reopen.'
-							: ''}
+						This question type ({viewingQuestion.viz_type}) cannot preview here.
 					</div>
 				)}
 				<p className="mt-4 text-xs text-slate-500">
-					Tip: build controllable charts in <span className="font-semibold">Analysis Lab → Charts</span>, then Save.
-					The “New Question” form only creates a stub without chart controls.
+					Save charts from Chart, then pin them here.
 				</p>
 			</div>
 		);
@@ -254,66 +187,15 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 			<div className={analyticsPanelClass}>
 				<AnalyticsPageHeader
 					eyebrow="Saved Assets"
-					title="No Dashboards Or Saved Questions Yet"
-					description="Create a reusable question or an empty dashboard from here to start building out saved analytics assets."
+					title="No boards or saved questions yet"
+					description="Save a chart from Chart, then create a board and attach it."
 					actions={
-						<>
-							<button type="button" className={analyticsGhostButtonClass} onClick={() => { setComposerMode('question'); setSubmitMessage(null); }}>
-								<Plus className="h-4 w-4" />
-								New Question
-							</button>
-							<button type="button" className={analyticsGhostButtonClass} onClick={() => { setComposerMode('dashboard'); setSubmitMessage(null); }}>
-								<Plus className="h-4 w-4" />
-								New Dashboard
-							</button>
-						</>
+						<button type="button" className={analyticsGhostButtonClass} onClick={() => { setComposerMode('dashboard'); setSubmitMessage(null); }}>
+							<Plus className="h-4 w-4" />
+							New board
+						</button>
 					}
 				/>
-
-				{composerMode === 'question' ? (
-					<div className={`${analyticsInsetClass} mt-4 p-4`}>
-						<div className="grid gap-4 md:grid-cols-2">
-							<div>
-								<label className={analyticsLabelClass}>Question title</label>
-								<input value={questionTitle} onChange={event => setQuestionTitle(event.target.value)} className={analyticsInputClass} placeholder="Submission table snapshot" />
-							</div>
-							<div>
-								<label className={analyticsLabelClass}>View type</label>
-								<select value={questionVizType} onChange={event => setQuestionVizType(event.target.value as SavedQuestion['viz_type'])} className={analyticsInputClass}>
-									<option value="walker">Walker Analysis</option>
-									<option value="chart">Chart</option>
-									<option value="table">Table</option>
-									<option value="kpi">KPI Tracker</option>
-									<option value="goal">Goal Progress</option>
-									<option value="markdown">Rich Text</option>
-								</select>
-							</div>
-						</div>
-						<div className="mt-4 grid gap-4 md:grid-cols-2">
-							<div>
-								<label className={analyticsLabelClass}>Description</label>
-								<input value={questionDescription} onChange={event => setQuestionDescription(event.target.value)} className={analyticsInputClass} placeholder="Reusable starting point for analytics teams" />
-							</div>
-							<div>
-								<label className={analyticsLabelClass}>Dataset</label>
-								<select value={questionSourceId} onChange={event => setQuestionSourceId(event.target.value)} className={analyticsInputClass} disabled={sources.length === 0}>
-									{sources.map(source => (
-										<option key={source.dataset_id} value={source.dataset_id}>{source.form_title}</option>
-									))}
-								</select>
-							</div>
-						</div>
-						<div className="mt-4 flex flex-wrap gap-2">
-							<button type="button" disabled={submitLoading || sources.length === 0} onClick={() => void handleCreateQuestion()} className={analyticsButtonClass}>
-								{submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Table2 className="h-4 w-4" />}
-								{submitLoading ? 'Saving...' : 'Create question'}
-							</button>
-							<button type="button" className={analyticsGhostButtonClass} onClick={() => setComposerMode(null)}>Cancel</button>
-						</div>
-						{sources.length === 0 ? <p className="mt-3 text-sm text-slate-500">Publish a dataset before creating a saved question.</p> : null}
-						{submitMessage ? <p className="mt-3 text-sm text-rose-600">{submitMessage}</p> : null}
-					</div>
-				) : null}
 
 				{composerMode === 'dashboard' ? (
 					<div className={`${analyticsInsetClass} mt-4 p-4`}>
@@ -417,7 +299,9 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 								<div className={`${analyticsInsetClass} mt-3 grid gap-3 p-3 md:grid-cols-2`}>
 									{dashboard.cards.slice(0, 4).map(card => {
 										const question = card.question;
-										const meta = vizMeta[(question?.viz_type as SavedQuestion['viz_type']) ?? 'table'] ?? vizMeta.table;
+										const meta = question && question.viz_type in vizMeta
+											? vizMeta[question.viz_type]
+											: vizMeta.table;
 										return (
 											<div key={card.id} className="rounded-md border border-slate-200 bg-white p-3">
 												<div className="flex items-center gap-2 text-emerald-700">
@@ -444,56 +328,8 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 				<AnalyticsPageHeader
 					eyebrow="Saved Assets"
 					title="Reusable Questions"
-					description={`${questions.length} saved question${questions.length === 1 ? '' : 's'} available for reuse.`}
-					actions={
-						<button type="button" className={analyticsGhostButtonClass} onClick={() => { setComposerMode('question'); setSubmitMessage(null); }}>
-							<Plus className="h-4 w-4" />
-							New Question
-						</button>
-					}
+					description={`${questions.length} saved question${questions.length === 1 ? '' : 's'} from Chart.`}
 				/>
-
-				{composerMode === 'question' ? (
-					<div className={`${analyticsInsetClass} mt-4 p-4`}>
-						<div className="space-y-4">
-							<div>
-								<label className={analyticsLabelClass}>Question title</label>
-								<input value={questionTitle} onChange={event => setQuestionTitle(event.target.value)} className={analyticsInputClass} placeholder="Submission table snapshot" />
-							</div>
-							<div>
-								<label className={analyticsLabelClass}>Description</label>
-								<input value={questionDescription} onChange={event => setQuestionDescription(event.target.value)} className={analyticsInputClass} placeholder="Reusable starting point for analytics teams" />
-							</div>
-							<div>
-								<label className={analyticsLabelClass}>Dataset</label>
-								<select value={questionSourceId} onChange={event => setQuestionSourceId(event.target.value)} className={analyticsInputClass}>
-									{sources.map(source => (
-										<option key={source.dataset_id} value={source.dataset_id}>{source.form_title}</option>
-									))}
-								</select>
-							</div>
-							<div>
-								<label className={analyticsLabelClass}>View type</label>
-								<select value={questionVizType} onChange={event => setQuestionVizType(event.target.value as SavedQuestion['viz_type'])} className={analyticsInputClass}>
-									<option value="walker">Walker Analysis</option>
-									<option value="chart">Chart</option>
-									<option value="table">Table</option>
-									<option value="kpi">KPI Tracker</option>
-									<option value="goal">Goal Progress</option>
-									<option value="markdown">Rich Text</option>
-								</select>
-							</div>
-						</div>
-						<div className="mt-4 flex flex-wrap gap-2">
-							<button type="button" disabled={submitLoading} onClick={() => void handleCreateQuestion()} className={analyticsButtonClass}>
-								{submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Table2 className="h-4 w-4" />}
-								{submitLoading ? 'Saving...' : 'Create question'}
-							</button>
-							<button type="button" className={analyticsGhostButtonClass} onClick={() => setComposerMode(null)}>Cancel</button>
-						</div>
-						{submitMessage ? <p className="mt-3 text-sm text-rose-600">{submitMessage}</p> : null}
-					</div>
-				) : null}
 
 				<div className="mt-4 space-y-3">
 					{questions.length > 0 ? (
@@ -538,7 +374,7 @@ export default function DashboardCanvas({ orgId, projectId, sources }: Analytics
 						})
 					) : (
 						<div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-sm text-slate-500">
-							No saved questions yet. Prefer Analysis Lab → Charts → Save for pinnable charts.
+							No saved questions yet. Save a chart from Chart, then attach it to a board.
 						</div>
 					)}
 				</div>

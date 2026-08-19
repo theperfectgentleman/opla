@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { IMutField } from '@kanaries/graphic-walker';
+import { analyticsAPI } from '../../lib/api';
 
 type ChartKind = 'bar' | 'stacked' | 'grouped' | 'hline' | 'pie' | 'line' | 'scatter';
 type AggFn = 'count' | 'sum' | 'avg' | 'min' | 'max';
@@ -120,10 +121,14 @@ export type QuickChartSaveConfig = {
 export default function QuickChart({
 	rows,
 	fields,
+	orgId,
+	datasetId,
 	onConfigChange,
 }: {
 	rows: Array<Record<string, unknown>>;
 	fields: IMutField[];
+	orgId?: string;
+	datasetId?: string;
 	onConfigChange?: (config: QuickChartSaveConfig | null) => void;
 }) {
 	const chartableFields = useMemo(
@@ -170,7 +175,7 @@ export default function QuickChart({
 	const seriesField = chartableFields.find(field => field.fid === seriesKey);
 	const scatterYField = chartableFields.find(field => field.fid === scatterYKey);
 
-	const points = useMemo(() => {
+	const clientPoints = useMemo(() => {
 		if (!categoryKey || rows.length === 0) return [] as Point[];
 
 		if (chartKind === 'scatter') {
@@ -187,6 +192,49 @@ export default function QuickChart({
 			agg: metricMode === 'count' ? 'count' : agg,
 		}).slice(0, chartKind === 'pie' ? 20 : 60);
 	}, [agg, categoryKey, chartKind, measures, metricMode, rows, scatterYKey, seriesKey]);
+
+	const [serverPoints, setServerPoints] = useState<Point[] | null>(null);
+
+	useEffect(() => {
+		if (!orgId || !datasetId || !categoryKey || chartKind === 'scatter') {
+			setServerPoints(null);
+			return;
+		}
+		const groupBy = seriesKey && chartKind !== 'pie' ? [categoryKey, seriesKey] : [categoryKey];
+		const aggregates =
+			metricMode === 'count'
+				? [{ field: categoryKey, fn: 'count', alias: 'count' }]
+				: [{ field: metricMode, fn: agg, alias: `${agg}_${metricMode}` }];
+		const alias = aggregates[0]?.alias;
+		let cancelled = false;
+		const handle = window.setTimeout(() => {
+			void analyticsAPI
+				.runQuery(orgId, {
+					dataset_id: datasetId,
+					group_by: groupBy,
+					aggregates,
+					limit: 500,
+				})
+				.then((result) => {
+					if (cancelled || !alias || !Array.isArray(result?.rows)) return;
+					const next: Point[] = result.rows.map((row: Record<string, unknown>) => ({
+						category: coerceLabel(row[categoryKey]),
+						series: seriesKey ? coerceLabel(row[seriesKey]) : 'Value',
+						metric: Number(row[alias]) || 0,
+					}));
+					setServerPoints(next.slice(0, chartKind === 'pie' ? 20 : 60));
+				})
+				.catch(() => {
+					if (!cancelled) setServerPoints(null);
+				});
+		}, 250);
+		return () => {
+			cancelled = true;
+			window.clearTimeout(handle);
+		};
+	}, [agg, categoryKey, chartKind, datasetId, metricMode, orgId, seriesKey]);
+
+	const points = serverPoints ?? clientPoints;
 
 	const categories = useMemo(() => {
 		const ordered = new Map<string, number>();

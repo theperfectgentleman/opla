@@ -23,6 +23,7 @@ from app.api.schemas.analytics import (
 )
 from app.models.user import User
 from app.services.analytics_service import AnalyticsService
+from app.services.org_report_service import OrgReportService
 
 
 router = APIRouter(prefix="/organizations/{org_id}/analytics", tags=["analytics"])
@@ -31,11 +32,12 @@ router = APIRouter(prefix="/organizations/{org_id}/analytics", tags=["analytics"
 @router.get("/sources", response_model=list[AnalyticsSource])
 def list_analytics_sources(
     org_id: uuid.UUID,
+    project_id: Optional[uuid.UUID] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     membership=Depends(get_user_org_role),
 ):
-    return AnalyticsService.list_sources(db, org_id)
+    return AnalyticsService.list_sources(db, org_id, project_id)
 
 
 @router.post("/derived-datasets", response_model=DerivedDatasetOut, status_code=status.HTTP_201_CREATED)
@@ -66,7 +68,7 @@ def create_derived_dataset(
             "PROJECT_NOT_ACTIVE": (409, "Project is not active"),
             "INVALID_MODE": (400, "Mode must be snapshot or linked"),
             "COLUMNS_REQUIRED": (400, "At least one column is required"),
-            "ROWS_REQUIRED_FOR_SNAPSHOT": (400, "Snapshot mode requires row data"),
+            "SNAPSHOT_REFUSED": (400, "A freeze is a file export. Save a live view instead."),
         }
         if detail in status_map:
             code, message = status_map[detail]
@@ -177,6 +179,11 @@ def run_analytics_query(
     membership=Depends(get_user_org_role),
 ):
     try:
+        payload = body.model_dump(mode="json")
+        if payload.get("version") == 2:
+            return AnalyticsService.execute_plan(db, org_id, payload)
+        if body.dataset_id is None:
+            raise HTTPException(status_code=400, detail="dataset_id is required")
         group_by = [
             item.model_dump() if isinstance(item, GroupBySpec) else item
             for item in body.group_by
@@ -202,6 +209,8 @@ def run_analytics_query(
             raise HTTPException(status_code=400, detail=f"Field not allowed: {detail.split(':', 1)[1]}") from exc
         if detail.startswith("AGG_NOT_ALLOWED:"):
             raise HTTPException(status_code=400, detail=f"Aggregate not allowed: {detail.split(':', 1)[1]}") from exc
+        if detail.startswith("QUERY_"):
+            raise HTTPException(status_code=400, detail=detail) from exc
         raise HTTPException(status_code=400, detail=detail) from exc
 
 
@@ -236,7 +245,20 @@ def create_saved_question(
     current_user: User = Depends(get_current_user),
     membership=Depends(get_user_org_role),
 ):
-    return AnalyticsService.create_question(db, org_id, current_user.id, body.model_dump())
+    try:
+        return AnalyticsService.create_question(db, org_id, current_user.id, body.model_dump(mode="json"))
+    except ValueError as exc:
+        detail = str(exc)
+        messages = {
+            "WALKER_NOT_SUPPORTED": "Walker is a scratchpad. Save a chart, table, or map instead.",
+            "MARKDOWN_NOT_A_QUESTION": "Markdown is a board tile, not a question.",
+            "MISSING_PROJECT": "Saved questions need a project.",
+        }
+        if detail in messages:
+            raise HTTPException(status_code=400, detail=messages[detail]) from exc
+        if detail.startswith("QUERY_"):
+            raise HTTPException(status_code=400, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 @router.get("/questions", response_model=list[SavedQuestionOut])
@@ -356,3 +378,55 @@ def delete_dashboard(
     if not dashboard or dashboard.org_id != org_id:
         raise HTTPException(status_code=404, detail="Dashboard not found")
     AnalyticsService.delete_dashboard(db, dashboard)
+
+
+@router.get("/reports")
+def list_org_reports(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    membership=Depends(get_user_org_role),
+):
+    return [OrgReportService.serialize(row) for row in OrgReportService.list_reports(db, org_id)]
+
+
+@router.post("/reports", status_code=status.HTTP_201_CREATED)
+def create_org_report(
+    org_id: uuid.UUID,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    membership=Depends(get_user_org_role),
+):
+    report = OrgReportService.create_report(db, org_id, current_user.id, body)
+    return OrgReportService.serialize(report)
+
+
+@router.get("/reports/{report_id}")
+def get_org_report(
+    org_id: uuid.UUID,
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    membership=Depends(get_user_org_role),
+):
+    report = OrgReportService.get_report(db, org_id, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return OrgReportService.serialize(report)
+
+
+@router.patch("/reports/{report_id}")
+def update_org_report(
+    org_id: uuid.UUID,
+    report_id: uuid.UUID,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    membership=Depends(get_user_org_role),
+):
+    report = OrgReportService.get_report(db, org_id, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    updated = OrgReportService.update_report(db, report, body)
+    return OrgReportService.serialize(updated)

@@ -22,7 +22,7 @@ class FormDataset(Base):
     __tablename__ = "form_datasets"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    form_id = Column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False, unique=True, index=True)
+    form_id = Column(UUID(as_uuid=True), ForeignKey("forms.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     slug = Column(String, nullable=False, index=True)
     status = Column(
@@ -42,7 +42,7 @@ class FormDataset(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    form = relationship("Form", backref=backref("dataset", uselist=False))
+    form = relationship("Form", backref=backref("form_datasets", lazy="dynamic"))
 
 
 class FormDatasetSchemaVersion(Base):

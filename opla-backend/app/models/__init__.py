@@ -24,7 +24,7 @@ from app.models.project_message import ProjectMessage, ProjectMessageNotificatio
 from app.models.project_pinned_analytics import ProjectPinnedAnalytics
 from app.models.project_attention import ProjectAttentionHook, ProjectAttentionItem
 from app.models.form_submission_media import FormSubmissionMedia
-from app.models.analytics import SavedQuestion, AnalyticsDashboard, DashboardCard
+from app.models.analytics import SavedQuestion, AnalyticsDashboard, DashboardCard, OrgReport
 
 # OrgRole and OrgRoleAssignment are defined in role_template.py according to service imports
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType

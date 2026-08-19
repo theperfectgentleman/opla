@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import type { SavedQuestion } from '../types';
+import { chartMark } from '../queryUtils';
 
 interface EChartCardProps {
 	question: SavedQuestion;
@@ -11,7 +12,7 @@ interface EChartCardProps {
 
 export default function EChartCard({ question, data, theme = 'light', onChartClick }: EChartCardProps) {
 	const option = useMemo(() => {
-		const chartType = (question.viz_config?.chart_type as string) || 'bar';
+		const chartType = chartMark(question.viz_config);
 		
 		// Sleek HSL-based palette
 		const colors = [

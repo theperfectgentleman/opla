@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import { Columns3, FlaskConical, Link2, Loader2, Plus, Save, Search, Table2, Trash2, Unlink, X } from 'lucide-react';
+import { Columns3, FlaskConical, Link2, Loader2, Plus, Save, Search, Table2, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { analyticsAPI } from '../../lib/api';
@@ -225,7 +225,6 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 
 	const [showSave, setShowSave] = useState(false);
 	const [saveName, setSaveName] = useState('');
-	const [saveMode, setSaveMode] = useState<'snapshot' | 'linked'>('snapshot');
 	const [saveSelectedKeys, setSaveSelectedKeys] = useState<string[]>([]);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -516,13 +515,17 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 			displayMode,
 			createdAt: new Date().toISOString(),
 		});
-		navigate('/dashboard?tab=analysis&tool=lab&from=prep');
+		const target = projectId || selectedSource.project_id;
+		if (target) {
+			navigate(`/projects/${target}?tab=data&section=analysis&tool=lab`);
+			return;
+		}
+		navigate('/dashboard?tab=data&section=analysis');
 	}
 
 	function openSaveModal() {
 		const base = selectedSource ? sourceLabel(selectedSource).replace(/ \((snapshot|linked)\)$/, '') : 'Prepared table';
 		setSaveName(`${base} prepared`);
-		setSaveMode('snapshot');
 		setSaveSelectedKeys(columns.map(column => column.key));
 		setSaveError(null);
 		setShowSave(true);
@@ -559,20 +562,9 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 		setSaving(true);
 		setSaveError(null);
 		try {
-			const projectedRows =
-				saveMode === 'snapshot'
-					? rows.map(row => {
-							const next: Record<string, unknown> = {};
-							for (const column of selectedColumns) {
-								next[column.key] = row[column.key];
-							}
-							return next;
-						})
-					: [];
-
 			const result = await analyticsAPI.saveDerivedDataset(orgId, {
 				name,
-				mode: saveMode,
+				mode: 'linked',
 				parent_dataset_id: selectedSource.derived?.parent_dataset_id || selectedSource.dataset_id,
 				project_id: targetProjectId,
 				columns: selectedColumns.map(column => ({
@@ -582,7 +574,6 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 					calculated: Boolean(column.calculated),
 					formula: column.formula || null,
 				})),
-				rows: projectedRows,
 			});
 			await onSourcesChanged?.();
 			setShowSave(false);
@@ -623,8 +614,7 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 
 				<span className="hidden text-xs text-slate-500 sm:inline">
 					{loading ? 'Loading…' : `${rows.length.toLocaleString()} rows · ${columns.length} cols`}
-					{selectedSource?.derived?.mode === 'linked' ? ' · live-linked' : null}
-					{selectedSource?.derived?.mode === 'snapshot' ? ' · snapshot' : null}
+					{selectedSource?.derived?.mode === 'linked' ? ' · live view' : null}
 				</span>
 
 				<div className="ml-auto flex items-center gap-1.5">
@@ -771,7 +761,7 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 					<div className="mb-3">
 						<h3 className="text-sm font-bold text-slate-800">Save prepared table</h3>
 						<p className="mt-1 text-xs text-slate-500">
-							Choose whether to freeze today’s rows, or keep a live link so new source submissions appear here too.
+							Saves a live view on this form. New submissions show up here. A freeze is a file export.
 						</p>
 					</div>
 
@@ -785,41 +775,14 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 						/>
 					</label>
 
-					<div className="mt-3 grid gap-2 sm:grid-cols-2">
-						<button
-							type="button"
-							onClick={() => setSaveMode('snapshot')}
-							className={`rounded-lg border p-3 text-left transition ${
-								saveMode === 'snapshot'
-									? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-200'
-									: 'border-slate-200 bg-white hover:bg-slate-50'
-							}`}
-						>
-							<div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-								<Unlink className="h-4 w-4 text-emerald-700" />
-								Detached snapshot
-							</div>
-							<p className="mt-1 text-xs leading-relaxed text-slate-500">
-								Copies the current {rows.length.toLocaleString()} rows as they are now. Won’t change when the live survey grows.
-							</p>
-						</button>
-						<button
-							type="button"
-							onClick={() => setSaveMode('linked')}
-							className={`rounded-lg border p-3 text-left transition ${
-								saveMode === 'linked'
-									? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-200'
-									: 'border-slate-200 bg-white hover:bg-slate-50'
-							}`}
-						>
-							<div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-								<Link2 className="h-4 w-4 text-emerald-700" />
-								Linked to live
-							</div>
-							<p className="mt-1 text-xs leading-relaxed text-slate-500">
-								Keeps your columns and formulas, and always reads from the live source — new responses show up automatically.
-							</p>
-						</button>
+					<div className="mt-3 rounded-lg border border-emerald-600 bg-emerald-50 p-3">
+						<div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+							<Link2 className="h-4 w-4 text-emerald-700" />
+							Live view
+						</div>
+						<p className="mt-1 text-xs leading-relaxed text-slate-500">
+							Keeps your columns and formulas, and always reads from the live source.
+						</p>
 					</div>
 
 					<div className="mt-4">
@@ -865,7 +828,7 @@ export default function PrepTable({ orgId, projectId, sources, initialSource, on
 									Saving…
 								</>
 							) : (
-								<>Save as {saveMode === 'snapshot' ? 'snapshot' : 'linked table'}</>
+								<>Save live view</>
 							)}
 						</button>
 					</div>

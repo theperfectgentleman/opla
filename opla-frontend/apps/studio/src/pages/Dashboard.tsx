@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrg } from '../contexts/OrgContext';
 import { useToast } from '../contexts/ToastContext';
@@ -18,8 +18,6 @@ import {
 } from 'lucide-react';
 import FontProfileSelector from '../components/FontProfileSelector';
 import { resolveLegacyDashboardTab, resolveDataSection, resolveDesignSection, buildDashboardSearchParams, type DashboardNavKey as VocabularyDashboardNavKey, type ProjectDataSection, type ProjectDesignSection } from '../lib/vocabulary';
-
-const AnalyticsHub = lazy(() => import('../components/analytics/AnalyticsHub'));
 
 type DashboardTask = {
     id: string;
@@ -78,18 +76,6 @@ const taskTone: Record<DashboardTask['status'], string> = {
     blocked: 'bg-rose-500/10 text-rose-300 border border-rose-500/20',
     cancelled: 'bg-orange-500/10 text-orange-300 border border-orange-500/20',
 };
-
-function AnalyticsTabFallback() {
-    return (
-        <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
-                Loading analytics workspace...
-            </div>
-            <AnalyticsHubSkeleton />
-        </div>
-    );
-}
 
 const Dashboard: React.FC = () => {
     const { currentOrg, organizations, projects, members, createProject, isLoading, setCurrentProject } = useOrg();
@@ -1574,9 +1560,33 @@ const Dashboard: React.FC = () => {
                 )}
 
                 {activeTab === 'data' && dataSection === 'analysis' && currentOrg && (
-                    <Suspense fallback={<AnalyticsTabFallback />}>
-                        <AnalyticsHub orgId={currentOrg.id} projectId={undefined} forms={forms} activeTool={activeAnalyticsTool} />
-                    </Suspense>
+                    <div className="space-y-6">
+                        <div>
+                            <h2 className="text-3xl font-bold mb-2">Analysis</h2>
+                            <p className="text-[hsl(var(--text-secondary))] max-w-2xl">
+                                Open a project to work the table, charts, and map on its live data.
+                            </p>
+                        </div>
+                        {projects.length === 0 ? (
+                            <div className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
+                                Create a project first, then open Data → Analysis from that project.
+                            </div>
+                        ) : (
+                            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                {projects.map((project) => (
+                                    <button
+                                        key={project.id}
+                                        type="button"
+                                        onClick={() => navigate(`/projects/${project.id}?tab=data&section=analysis`)}
+                                        className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-5 text-left shadow-sm transition hover:border-[hsl(var(--primary))]/40"
+                                    >
+                                        <p className="text-base font-semibold text-[hsl(var(--text-primary))]">{project.name}</p>
+                                        <p className="mt-2 text-sm text-[hsl(var(--text-secondary))]">Open Analysis</p>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {activeTab === 'data' && (dataSection === 'datasets' || dataSection === 'directory') && (

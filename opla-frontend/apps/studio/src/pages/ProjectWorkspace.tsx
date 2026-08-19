@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
     AlertCircle,
@@ -42,6 +42,9 @@ import {
     type ProjectShellNavKey,
 } from '../lib/vocabulary';
 import { analyticsAPI, formAPI, projectAPI, reportAPI, submissionAPI, teamAPI } from '../lib/api';
+
+const AnalyticsHub = lazy(() => import('../components/analytics/AnalyticsHub'));
+type AnalyticsToolKey = 'lab' | 'prep' | 'dashboard' | 'spatial';
 
 type ProjectAccessRule = {
     id: string;
@@ -306,13 +309,18 @@ const ProjectWorkspace: React.FC = () => {
     );
     const activeTab: ProjectWorkspaceTab = legacyResolved.tab;
     const dataSection: DataView = (legacyResolved.section as DataView) || 'datasets';
+    const analyticsTool: AnalyticsToolKey = (
+        ['lab', 'prep', 'dashboard', 'spatial'].includes(searchParams.get('tool') || '')
+            ? (searchParams.get('tool') as AnalyticsToolKey)
+            : 'prep'
+    );
     const designSection: DesignView = resolveDesignSection(legacyResolved.section || null);
     const opsView: OpsView = resolveOpsSection(
         legacyResolved.section || null,
         legacyResolved.view || searchParams.get('view'),
     );
 
-    const setWorkspaceTab = (tab: ProjectWorkspaceTab, options?: { section?: string; view?: string }) => {
+    const setWorkspaceTab = (tab: ProjectWorkspaceTab, options?: { section?: string; view?: string; tool?: string }) => {
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
             next.set('tab', tab);
@@ -325,6 +333,11 @@ const ProjectWorkspace: React.FC = () => {
                 next.set('view', options.view);
             } else {
                 next.delete('view');
+            }
+            if (options?.tool) {
+                next.set('tool', options.tool);
+            } else if (options?.section !== 'analysis') {
+                next.delete('tool');
             }
             return next;
         });
@@ -477,7 +490,7 @@ const ProjectWorkspace: React.FC = () => {
                     projectAPI.listAccess(currentOrg.id, projectId),
                     teamAPI.list(currentOrg.id),
                     projectAPI.listRoleTemplates(currentOrg.id),
-                    analyticsAPI.listSources(currentOrg.id).catch(() => []),
+                    analyticsAPI.listSources(currentOrg.id, projectId).catch(() => []),
                     projectAPI.listMessages(currentOrg.id, projectId).catch(() => []),
                 ]);
                 const pendingReviews = (
@@ -1214,12 +1227,10 @@ const ProjectWorkspace: React.FC = () => {
             onSelectOpsSection={(section) => {
                 setWorkspaceTab('ops', { section });
             }}
-            activeDataSection={
-                activeTab === 'data' && dataSection !== 'analysis'
-                    ? (dataSection as 'directory' | 'datasets' | 'media')
-                    : null
-            }
-            onSelectDataSection={(section) => setWorkspaceTab('data', { section })}
+            activeDataSection={activeTab === 'data' ? dataSection : null}
+            onSelectDataSection={(section) => setWorkspaceTab('data', { section, tool: section === 'analysis' ? analyticsTool : undefined })}
+            activeAnalyticsTool={activeTab === 'data' && dataSection === 'analysis' ? analyticsTool : undefined}
+            onSelectAnalyticsTool={(tool) => setWorkspaceTab('data', { section: 'analysis', tool })}
             counts={{ tasks: tasks.length, forms: forms.length, data: datasets.length }}
             contentClassName="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-[hsl(var(--background))] md:bg-[#f9fafb] dark:md:bg-[hsl(var(--background))]"
         >
@@ -1796,10 +1807,15 @@ const ProjectWorkspace: React.FC = () => {
                         )}
 
                         {/* 4. DATA — section chosen from sidebar */}
-                        {activeTab === 'data' && dataSection === 'analysis' && (
-                            <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
-                                Open Analysis from the org Data tab in the sidebar, or use the project hub for spatial insights.
-                            </div>
+                        {activeTab === 'data' && dataSection === 'analysis' && currentOrg && projectId && (
+                            <Suspense fallback={<div className="py-12 text-sm text-[hsl(var(--text-secondary))]">Loading Analysis…</div>}>
+                                <AnalyticsHub
+                                    orgId={currentOrg.id}
+                                    projectId={projectId}
+                                    forms={forms}
+                                    activeTool={analyticsTool}
+                                />
+                            </Suspense>
                         )}
 
                         {activeTab === 'data' && dataSection === 'datasets' && (

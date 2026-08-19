@@ -19,6 +19,7 @@ from app.models.form_dataset import (
 )
 from app.models.project import Project, ProjectStatus
 from app.models.submission import Submission
+from app.analytics_domain.parse import parse_legacy_question, parse_query, query_to_engine_args
 from app.services.form_service import slugify
 
 
@@ -149,7 +150,7 @@ def _blueprint_option_maps(blueprint: Any) -> dict[str, list[dict[str, str]]]:
 
 class AnalyticsService:
     @staticmethod
-    def list_sources(db: Session, org_id: uuid.UUID) -> list[dict]:
+    def list_sources(db: Session, org_id: uuid.UUID, project_id: uuid.UUID | None = None) -> list[dict]:
         datasets = (
             db.query(FormDataset)
             .options(
@@ -161,6 +162,7 @@ class AnalyticsService:
             .filter(
                 Project.org_id == org_id,
                 FormDataset.status == FormDatasetStatus.ACTIVE,
+                *([Project.id == project_id] if project_id else []),
             )
             .order_by(FormDataset.updated_at.desc())
             .all()
@@ -277,6 +279,8 @@ class AnalyticsService:
     ) -> dict:
         if mode not in ("snapshot", "linked"):
             raise ValueError("INVALID_MODE")
+        if mode == "snapshot":
+            raise ValueError("SNAPSHOT_REFUSED")
 
         parent = (
             db.query(FormDataset)
@@ -307,9 +311,6 @@ class AnalyticsService:
         if not columns:
             raise ValueError("COLUMNS_REQUIRED")
 
-        if mode == "snapshot" and not rows:
-            raise ValueError("ROWS_REQUIRED_FOR_SNAPSHOT")
-
         clean_columns = []
         seen_keys: set[str] = set()
         for col in columns:
@@ -330,11 +331,12 @@ class AnalyticsService:
         if not clean_columns:
             raise ValueError("COLUMNS_REQUIRED")
 
-        base_slug = slugify(name) or "prep-table"
-        form_slug = f"prep-{base_slug}"
+        parent_form = parent.form
+        base_slug = slugify(name) or "analysis-view"
+        view_slug = f"view-{base_slug}"
         counter = 1
-        while db.query(Form).filter(Form.slug == form_slug).first():
-            form_slug = f"prep-{base_slug}-{counter}"
+        while db.query(FormDataset).filter(FormDataset.slug == view_slug).first():
+            view_slug = f"view-{base_slug}-{counter}"
             counter += 1
 
         schema_fields = [
@@ -347,43 +349,29 @@ class AnalyticsService:
             for c in clean_columns
         ]
         blueprint = {
-            "meta": {"title": name, "source": "prep_derived"},
+            "meta": {"title": name, "source": "analysis_view"},
             "schema": schema_fields,
             "ui": [],
             "rules": [],
         }
 
-        form = Form(
-            project_id=project.id,
-            title=name,
-            slug=form_slug,
-            blueprint_draft=blueprint,
-            blueprint_live=blueprint,
-            version=1,
-            status=FormStatus.LIVE,
-            published_version=1,
-            published_at=datetime.utcnow(),
-        )
-        db.add(form)
-        db.flush()
-
         metadata = {
             "kind": "derived",
-            "mode": mode,
+            "mode": "linked",
             "parent_dataset_id": str(parent_dataset_id),
             "columns": clean_columns,
-            "created_from": "prep",
+            "created_from": "analysis",
             "created_by": str(user_id) if user_id else None,
             "created_at": datetime.utcnow().isoformat() + "Z",
         }
 
         dataset = FormDataset(
-            form_id=form.id,
+            form_id=parent_form.id,
             name=name,
-            slug=form_slug,
+            slug=view_slug,
             status=FormDatasetStatus.ACTIVE,
             current_schema_version_number=1,
-            last_form_version_number=1,
+            last_form_version_number=parent_form.published_version or 1,
             metadata_json=metadata,
         )
         db.add(dataset)
@@ -395,7 +383,7 @@ class AnalyticsService:
             version_number=1,
             schema_snapshot=schema_fields,
             blueprint_snapshot=blueprint,
-            change_summary_json={"source": "prep_derived", "mode": mode},
+            change_summary_json={"source": "analysis_view", "mode": "linked"},
             published_at=datetime.utcnow(),
         )
         db.add(schema_version)
@@ -405,7 +393,7 @@ class AnalyticsService:
             db.add(
                 FormDatasetField(
                     dataset_id=dataset.id,
-                    field_identifier=f"prep_{col['key']}",
+                    field_identifier=f"view_{col['key']}",
                     field_key=col["key"],
                     label=col["label"],
                     field_type=col["field_type"] or "string",
@@ -418,53 +406,30 @@ class AnalyticsService:
                 )
             )
 
-        row_count = 0
-        if mode == "snapshot":
-            for raw in rows or []:
-                data: dict[str, Any] = {}
-                for col in clean_columns:
-                    if col["key"] in raw:
-                        data[col["key"]] = raw[col["key"]]
-                db.add(
-                    Submission(
-                        form_id=form.id,
-                        user_id=user_id,
-                        dataset_id=dataset.id,
-                        dataset_schema_version_id=schema_version.id,
-                        data=data,
-                        metadata_json={"source": "prep_snapshot"},
-                        form_version_number=1,
-                    )
-                )
-                row_count += 1
-
         db.commit()
         db.refresh(dataset)
 
-        # Linked tables report parent live count
-        record_count = row_count
-        if mode == "linked":
+        record_count = (
+            db.query(func.count(Submission.id))
+            .filter(Submission.dataset_id == parent_dataset_id)
+            .scalar()
+            or 0
+        )
+        if record_count == 0:
             record_count = (
                 db.query(func.count(Submission.id))
-                .filter(Submission.dataset_id == parent_dataset_id)
+                .filter(Submission.form_id == parent.form_id)
                 .scalar()
                 or 0
             )
-            if record_count == 0:
-                record_count = (
-                    db.query(func.count(Submission.id))
-                    .filter(Submission.form_id == parent.form_id)
-                    .scalar()
-                    or 0
-                )
 
         return {
             "dataset_id": dataset.id,
-            "form_id": form.id,
+            "form_id": parent.form_id,
             "name": name,
-            "mode": mode,
+            "mode": "linked",
             "parent_dataset_id": parent_dataset_id,
-            "row_count": row_count,
+            "row_count": 0,
             "record_count": record_count,
         }
 
@@ -726,6 +691,29 @@ class AnalyticsService:
         return payload
 
     @staticmethod
+    def execute_plan(db: Session, org_id: uuid.UUID, query: dict[str, Any]) -> dict:
+        parsed = parse_query(
+            AnalyticsService._json_ready(query),
+            str(query.get("table") or query.get("dataset_id") or ""),
+        )
+        if not parsed.ok:
+            raise ValueError(f"QUERY_{parsed.code.upper()}")
+        args = query_to_engine_args(parsed.value)
+        payload = AnalyticsService.execute_query(db=db, org_id=org_id, **args)
+        payload["query"] = parsed.value
+        return payload
+
+    @staticmethod
+    def _json_ready(value: Any) -> Any:
+        if isinstance(value, uuid.UUID):
+            return str(value)
+        if isinstance(value, dict):
+            return {key: AnalyticsService._json_ready(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [AnalyticsService._json_ready(item) for item in value]
+        return value
+
+    @staticmethod
     def _build_columns_meta(allowed_fields: dict[str, FormDatasetField], meta_columns: dict, select_fields: list[str], group_by: list[str], aggregates: list[dict]) -> list[dict]:
         if aggregates:
             meta = []
@@ -849,7 +837,41 @@ class AnalyticsService:
 
     @staticmethod
     def create_question(db: Session, org_id: uuid.UUID, user_id: uuid.UUID, data: dict) -> SavedQuestion:
-        question = SavedQuestion(org_id=org_id, created_by=user_id, **data)
+        viz_type = data.get("viz_type")
+        if viz_type == "walker":
+            raise ValueError("WALKER_NOT_SUPPORTED")
+        if viz_type == "markdown":
+            raise ValueError("MARKDOWN_NOT_A_QUESTION")
+        project_id = data.get("project_id")
+        if not project_id:
+            raise ValueError("MISSING_PROJECT")
+        source = data.get("source_config") or {}
+        table_id = source.get("dataset_id") or source.get("table")
+        parsed_query = parse_query(data.get("query_config") or {}, str(table_id) if table_id else None)
+        if not parsed_query.ok:
+            raise ValueError(f"QUERY_{parsed_query.code.upper()}")
+        question_id = uuid.uuid4()
+        envelope = {
+            "id": str(question_id),
+            "project_id": str(project_id),
+            "title": data.get("title"),
+            "source_config": {"dataset_id": parsed_query.value["table"]},
+            "query_config": data.get("query_config") or {},
+            "viz_type": viz_type,
+            "viz_config": data.get("viz_config"),
+        }
+        parsed = parse_legacy_question(envelope)
+        if not parsed.ok:
+            raise ValueError(f"QUERY_{parsed.code.upper()}")
+        stored = {
+            **data,
+            "id": question_id,
+            "query_config": parsed.value["query"],
+            "viz_type": parsed.value["viz"]["kind"],
+            "viz_config": parsed.value["viz"],
+            "source_config": {"dataset_id": parsed.value["query"]["table"]},
+        }
+        question = SavedQuestion(org_id=org_id, created_by=user_id, **stored)
         db.add(question)
         db.commit()
         db.refresh(question)

@@ -50,7 +50,7 @@ class PrepColumnSpec(BaseModel):
 
 class DerivedDatasetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    mode: str = Field(..., pattern="^(snapshot|linked)$")
+    mode: str = Field(..., pattern="^linked$")
     parent_dataset_id: UUID
     project_id: UUID | None = None
     columns: list[PrepColumnSpec] = Field(..., min_length=1)
@@ -85,7 +85,11 @@ class GroupBySpec(BaseModel):
 
 
 class AnalyticsQueryRequest(BaseModel):
-    dataset_id: UUID
+    model_config = ConfigDict(extra="allow")
+    version: int | None = None
+    kind: str | None = None
+    table: UUID | None = None
+    dataset_id: UUID | None = None
     select_fields: list[str] = Field(default_factory=list)
     filters: dict[str, Any] | None = None
     group_by: list[str | GroupBySpec] = Field(default_factory=list)
@@ -102,6 +106,7 @@ class AnalyticsQueryResponse(BaseModel):
     total_count: int
     truncated: bool = False
     derived: AnalyticsSourceDerived | None = None
+    query: dict[str, Any] | None = None
 
 
 class SavedQuestionCreate(BaseModel):
@@ -110,7 +115,7 @@ class SavedQuestionCreate(BaseModel):
     project_id: UUID | None = None
     source_config: dict[str, Any]
     query_config: dict[str, Any]
-    viz_type: str = Field("table", pattern="^(table|chart|walker|kpi|goal|markdown)$")
+    viz_type: str = Field("table", pattern="^(table|chart|kpi|map)$")
     viz_config: dict[str, Any] | None = None
     cache_ttl_seconds: int | None = None
 
@@ -120,7 +125,7 @@ class SavedQuestionUpdate(BaseModel):
     description: str | None = None
     source_config: dict[str, Any] | None = None
     query_config: dict[str, Any] | None = None
-    viz_type: str | None = Field(None, pattern="^(table|chart|walker|kpi|goal|markdown)$")
+    viz_type: str | None = Field(None, pattern="^(table|chart|kpi|map)$")
     viz_config: dict[str, Any] | None = None
     cache_ttl_seconds: int | None = None
     is_archived: bool | None = None

@@ -280,51 +280,35 @@ export default function WalkerAnalysisLab({
 			return;
 		}
 
+		if (labMode !== 'quick') {
+			setError('Explore is a scratchpad. Switch to Charts to save a question.');
+			setIsSaving(false);
+			return;
+		}
+
 		setIsSaving(true);
 		setError(null);
 		try {
 			let payload: Record<string, unknown>;
 
-			if (labMode === 'quick') {
-				const chartConfig = quickChartConfigRef.current;
-				if (!chartConfig) {
-					setError('Configure the chart (break down by / show) before saving.');
-					setIsSaving(false);
-					return;
-				}
-				payload = {
-					title: analysisName.trim(),
-					source_config: {
-						mode: prepColumns ? 'prep' : useServerCompute ? 'server' : 'local',
-						dataset_id: selectedDatasetId,
-						dataset_ids: [selectedDatasetId],
-						prep_columns: prepColumns ?? undefined,
-					},
-					query_config: chartConfig.query_config,
-					viz_type: 'chart',
-					viz_config: chartConfig.viz_config,
-				};
-			} else {
-				let charts: unknown[] = [];
-				if (storeRef.current?.vizStore?.exportCode) {
-					charts = storeRef.current.vizStore.exportCode();
-				} else if (storeRef.current?.exportChartSpec) {
-					charts = [storeRef.current.exportChartSpec()];
-				}
-
-				payload = {
-					title: analysisName.trim(),
-					source_config: {
-						mode: prepColumns ? 'prep' : useServerCompute ? 'server' : 'local',
-						dataset_id: selectedDatasetId,
-						dataset_ids: [selectedDatasetId],
-						prep_columns: prepColumns ?? undefined,
-					},
-					query_config: { limit: useServerCompute && !prepColumns ? undefined : LOCAL_ROW_LIMIT },
-					viz_type: 'walker',
-					viz_config: { charts },
-				};
+			const chartConfig = quickChartConfigRef.current;
+			if (!chartConfig) {
+				setError('Configure the chart (break down by / show) before saving.');
+				setIsSaving(false);
+				return;
 			}
+			payload = {
+				title: analysisName.trim(),
+				source_config: {
+					mode: prepColumns ? 'prep' : useServerCompute ? 'server' : 'local',
+					dataset_id: selectedDatasetId,
+					dataset_ids: [selectedDatasetId],
+					prep_columns: prepColumns ?? undefined,
+				},
+				query_config: chartConfig.query_config,
+				viz_type: 'chart',
+				viz_config: chartConfig.viz_config,
+			};
 
 			if (projectId) payload.project_id = projectId;
 
@@ -428,14 +412,15 @@ export default function WalkerAnalysisLab({
 					<button
 						type="button"
 						onClick={() => {
-						if (labMode === 'quick' && quickChartConfigRef.current?.titleHint && !analysisName.trim()) {
+						if (labMode !== 'quick') return;
+						if (quickChartConfigRef.current?.titleHint && !analysisName.trim()) {
 							setAnalysisName(quickChartConfigRef.current.titleHint);
 						}
 						setIsSaveModalOpen(true);
 					}}
-						disabled={!sessionReady}
+						disabled={!sessionReady || labMode !== 'quick'}
 						className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-700 bg-emerald-700 px-2.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-						title={labMode === 'quick' ? 'Save as pinnable chart question' : 'Save Walker analysis'}
+						title={labMode === 'quick' ? 'Save as pinnable chart question' : 'Explore is a scratchpad. Save from Charts.'}
 					>
 						<Save className="h-3.5 w-3.5" />
 						Save
@@ -455,7 +440,13 @@ export default function WalkerAnalysisLab({
 					</div>
 				) : labMode === 'quick' ? (
 					<div className="h-[calc(100vh-13rem)] min-h-[28rem] w-full">
-						<QuickChart rows={displayRows} fields={walkerFields} onConfigChange={handleQuickChartConfig} />
+						<QuickChart
+							rows={displayRows}
+							fields={walkerFields}
+							orgId={orgId}
+							datasetId={selectedDatasetId}
+							onConfigChange={handleQuickChartConfig}
+						/>
 					</div>
 				) : walkerLoadError ? (
 					<div className="flex h-full min-h-[28rem] items-center justify-center px-6 text-center text-sm text-rose-600">
@@ -493,7 +484,7 @@ export default function WalkerAnalysisLab({
 						<p className="mt-1 text-xs text-slate-500">
 							{labMode === 'quick'
 								? 'Saves a chart question you can pin on ProjectHub.'
-								: 'Saves a Walker exploration (not used for ProjectHub pins yet).'}
+								: 'Explore is a scratchpad. Switch to Charts to save.'}
 						</p>
 						<div className="mt-4">
 							<label className={analyticsLabelClass}>Title</label>

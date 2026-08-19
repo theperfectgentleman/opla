@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.analytics import SavedQuestion
 from app.models.project_pinned_analytics import ProjectPinnedAnalytics
 
-PINNABLE_VIZ_TYPES = {"chart", "kpi", "goal", "table"}
+PINNABLE_VIZ_TYPES = {"chart", "kpi", "table", "map"}
 MAX_PINS = 4
 
 

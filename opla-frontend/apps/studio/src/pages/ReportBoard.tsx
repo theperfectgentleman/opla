@@ -35,19 +35,23 @@ const ReportBoard: React.FC = () => {
     const { reportId = '' } = useParams();
     const { currentOrg, projects } = useOrg();
     const [bucket, setBucket] = useState<ReportBucket | null>(null);
+    const [loading, setLoading] = useState(true);
     const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
     const [comment, setComment] = useState('');
     const [grantTeamId, setGrantTeamId] = useState('');
     const [grantRole, setGrantRole] = useState<ReportGrantRole>('commenter');
     const [activePanel, setActivePanel] = useState<'canvas' | 'comments' | 'explore' | 'access'>('canvas');
 
-    const reload = () => {
+    const reload = async () => {
         if (!currentOrg || !reportId) return;
-        setBucket(getReportBucket(currentOrg.id, reportId));
+        setLoading(true);
+        const next = await getReportBucket(currentOrg.id, reportId);
+        setBucket(next);
+        setLoading(false);
     };
 
     useEffect(() => {
-        reload();
+        void reload();
     }, [currentOrg?.id, reportId]);
 
     useEffect(() => {
@@ -75,15 +79,15 @@ const ReportBoard: React.FC = () => {
     useEffect(() => {
         if (!currentOrg || !bucket) return;
         const timeoutId = window.setTimeout(() => {
-            updateReportBucket(currentOrg.id, bucket.id, { content: bucket.content });
+            void updateReportBucket(currentOrg.id, bucket.id, { content: bucket.content });
         }, 800);
         return () => window.clearTimeout(timeoutId);
     }, [bucket?.content, bucket?.id, currentOrg?.id]);
 
-    const postComment = (event: React.FormEvent) => {
+    const postComment = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!currentOrg || !bucket || !comment.trim()) return;
-        const next = updateReportBucket(currentOrg.id, bucket.id, {
+        const next = await updateReportBucket(currentOrg.id, bucket.id, {
             comments: [
                 ...bucket.comments,
                 {
@@ -98,7 +102,7 @@ const ReportBoard: React.FC = () => {
         if (next) setBucket(next);
     };
 
-    const addGrant = () => {
+    const addGrant = async () => {
         if (!currentOrg || !bucket || !grantTeamId) return;
         const team = teams.find((t) => t.id === grantTeamId);
         if (!team) return;
@@ -106,7 +110,7 @@ const ReportBoard: React.FC = () => {
             ...bucket.teamGrants.filter((g) => g.teamId !== team.id),
             { teamId: team.id, teamName: team.name, role: grantRole },
         ];
-        const next = updateReportBucket(currentOrg.id, bucket.id, { teamGrants: grants });
+        const next = await updateReportBucket(currentOrg.id, bucket.id, { teamGrants: grants });
         setGrantTeamId('');
         if (next) setBucket(next);
     };
@@ -137,7 +141,11 @@ const ReportBoard: React.FC = () => {
             onOpenInbox={() => navigate(dashboardNavHref('inbox'))}
             contentClassName="flex-1 overflow-y-auto p-6 md:p-10"
         >
-            {!bucket ? (
+            {!bucket && loading ? (
+                <div className="mx-auto max-w-lg rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center">
+                    <p className="text-sm text-[hsl(var(--text-secondary))]">Loading report…</p>
+                </div>
+            ) : !bucket ? (
                 <div className="mx-auto max-w-lg rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center">
                     <p className="text-sm text-[hsl(var(--text-secondary))]">Report board not found.</p>
                     <button

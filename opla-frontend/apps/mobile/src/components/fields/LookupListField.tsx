@@ -122,7 +122,7 @@ export function LookupListField({ field, value, onChange, error, lookupContext, 
         }
     }, [cascadeFilteredOptions]);
 
-    const selectedOption = options.find(o => o.value === value);
+    const selectedOption = cascadeFilteredOptions.find(o => o.value === value);
 
     // Filter based on search query
     const filteredOptions = cascadeFilteredOptions.filter(o => o.label.toLowerCase().includes(searchQuery.toLowerCase()));

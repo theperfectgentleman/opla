@@ -1,10 +1,11 @@
 import React from 'react';
 import { TextInput, View, Text } from 'react-native';
 import { FormField } from '@opla/types';
+import { displayInputValue } from '../../utils/formFields';
 
 interface NumberInputFieldProps {
     field: FormField;
-    value?: string;
+    value?: string | number;
     error?: string;
     onChange: (value: string) => void;
 }
@@ -21,8 +22,9 @@ export function NumberInputField({ field, value, error, onChange }: NumberInputF
     };
 
     const handleBlur = () => {
-        if (value && field.decimal_places !== undefined && field.decimal_places !== null) {
-            const num = parseFloat(value);
+        const raw = displayInputValue(value);
+        if (raw !== '' && field.decimal_places !== undefined && field.decimal_places !== null) {
+            const num = parseFloat(raw);
             if (!isNaN(num)) {
                 onChange(num.toFixed(field.decimal_places));
             }
@@ -48,7 +50,7 @@ export function NumberInputField({ field, value, error, onChange }: NumberInputF
                 ) : null}
 
                 <TextInput
-                    value={value || ''}
+                    value={displayInputValue(value)}
                     onChangeText={handleTextChange}
                     onBlur={handleBlur}
                     placeholder={field.placeholder || field.label}

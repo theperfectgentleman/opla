@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView, TextInput } from 'react-native';
-import { FormField } from '@opla/types';
-import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
+import { FormField, resolveFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -16,19 +15,7 @@ export function MultiSelectDropdownField({ field, value = [], onChange, error, r
     const [searchQuery, setSearchQuery] = useState('');
 
     // Resolve cascading options
-    const options = useMemo(() => {
-        if (fieldUsesDirectoryOptionResolver(field)) {
-            return resolveDirectoryFormFieldOptions(field, responses);
-        }
-        if (field.cascade_parent_field_id && field.cascade_options_map) {
-            const parentValue = responses[field.cascade_parent_field_id];
-            if (parentValue && field.cascade_options_map[parentValue]) {
-                return field.cascade_options_map[parentValue];
-            }
-            return [];
-        }
-        return field.options || [];
-    }, [field, responses]);
+    const options = useMemo(() => resolveFieldOptions(field, responses), [field, responses]);
 
     useEffect(() => {
         if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && Array.isArray(value) && value.length > 0) {

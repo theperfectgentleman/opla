@@ -482,4 +482,5 @@ export interface GenericRangeValue {
 export {
     fieldUsesDirectoryOptionResolver,
     resolveDirectoryFormFieldOptions,
+    resolveFieldOptions,
 } from './directoryFormOptions';

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, FlatList, SafeAreaView } from 'react-native';
 import { FormField } from '@opla/types';
 
 interface Props {
@@ -13,13 +13,13 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
     const rows = field.table_rows || [];
     const columns = field.table_columns || [];
     const cellType = field.table_cell_type || 'radio';
+    const dropdownOptions = field.options || [];
+    const [dropdownCell, setDropdownCell] = useState<{ rowId: string; colId: string } | null>(null);
 
     const handleCellChange = (rowId: string, colId: string, cellVal: any) => {
         if (cellType === 'radio') {
-            // Radio means one choice per row
             onChange({ ...value, [rowId]: colId });
         } else if (cellType === 'checkbox') {
-            // Checkbox means multiple choices per row
             const rowSelections = value[rowId] || [];
             if (rowSelections.includes(colId)) {
                 onChange({ ...value, [rowId]: rowSelections.filter((id: string) => id !== colId) });
@@ -27,11 +27,14 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
                 onChange({ ...value, [rowId]: [...rowSelections, colId] });
             }
         } else {
-            // Text/Number means unique value per cell
             const rowObject = value[rowId] || {};
             onChange({ ...value, [rowId]: { ...rowObject, [colId]: cellVal } });
         }
     };
+
+    const dropdownCellValue = dropdownCell
+        ? ((value[dropdownCell.rowId] || {})[dropdownCell.colId] || '')
+        : '';
 
     return (
         <View style={{ marginBottom: 16 }}>
@@ -42,7 +45,6 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
                 borderColor: error ? '#ef4444' : '#334155'
             }}>
                 <View style={{ padding: 16 }}>
-                    {/* Header Row */}
                     <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#334155', paddingBottom: 12, marginBottom: 12 }}>
                         <View style={{ width: 120, marginRight: 16 }} />
                         {columns.map(col => (
@@ -52,7 +54,6 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
                         ))}
                     </View>
 
-                    {/* Matrix Body */}
                     {rows.map((row, index) => (
                         <View key={row.id} style={{
                             flexDirection: 'row',
@@ -88,12 +89,32 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
                                                 justifyContent: 'center'
                                             }}
                                         >
-                                            {isSelected && !isRadio && <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>?</Text>}
+                                            {isSelected && !isRadio && <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>✓</Text>}
                                             {isSelected && isRadio && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#fff' }} />}
                                         </TouchableOpacity>
                                     );
+                                } else if (cellType === 'dropdown') {
+                                    const selectedValue = (value[row.id] || {})[col.id] || '';
+                                    const selectedLabel = dropdownOptions.find(o => o.value === selectedValue)?.label || selectedValue;
+                                    content = (
+                                        <TouchableOpacity
+                                            onPress={() => setDropdownCell({ rowId: row.id, colId: col.id })}
+                                            style={{
+                                                width: '100%',
+                                                backgroundColor: '#0f172a',
+                                                borderWidth: 1,
+                                                borderColor: '#334155',
+                                                borderRadius: 6,
+                                                paddingHorizontal: 6,
+                                                paddingVertical: 8,
+                                            }}
+                                        >
+                                            <Text numberOfLines={1} style={{ color: selectedValue ? '#f1f5f9' : '#475569', fontSize: 12, textAlign: 'center' }}>
+                                                {selectedLabel || 'Select'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
                                 } else {
-                                    // Text or Number
                                     const cellVal = (value[row.id] || {})[col.id] || '';
                                     content = (
                                         <TextInput
@@ -131,6 +152,51 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
             {error && (
                 <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{error}</Text>
             )}
+
+            <Modal visible={!!dropdownCell} transparent={true} animationType="slide">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <SafeAreaView style={{ backgroundColor: '#0f172a', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+                        <View style={{ paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#1e293b', flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={{ color: '#f1f5f9', fontSize: 15, fontWeight: '700' }}>Select</Text>
+                            <TouchableOpacity onPress={() => setDropdownCell(null)}>
+                                <Text style={{ color: '#158754', fontSize: 14, fontWeight: '600' }}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={dropdownOptions}
+                            keyExtractor={(item) => item.value}
+                            ListEmptyComponent={
+                                <View style={{ padding: 24 }}>
+                                    <Text style={{ color: '#94a3b8', textAlign: 'center' }}>No options configured for this matrix.</Text>
+                                </View>
+                            }
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (dropdownCell) {
+                                            handleCellChange(dropdownCell.rowId, dropdownCell.colId, item.value);
+                                        }
+                                        setDropdownCell(null);
+                                    }}
+                                    style={{
+                                        paddingVertical: 12,
+                                        paddingHorizontal: 16,
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: '#1e293b',
+                                        flexDirection: 'row',
+                                        justifyContent: 'space-between'
+                                    }}
+                                >
+                                    <Text style={{ color: dropdownCellValue === item.value ? '#158754' : '#f1f5f9', fontSize: 14, fontWeight: dropdownCellValue === item.value ? '700' : '400' }}>
+                                        {item.label}
+                                    </Text>
+                                    {dropdownCellValue === item.value && <Text style={{ color: '#158754', fontSize: 14 }}>✓</Text>}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </SafeAreaView>
+                </View>
+            </Modal>
         </View>
     );
 }

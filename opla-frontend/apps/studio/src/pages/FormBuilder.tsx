@@ -150,8 +150,13 @@ interface FormField {
     table_cell_type?: TableCellType;
     table_allow_multiple?: boolean;
     mask?: string;
-    lookup_source_type?: 'preset' | 'custom';
+    lookup_source_type?: 'preset' | 'custom' | 'dataset';
     lookup_preset_id?: string;
+    lookup_dataset_id?: string;
+    lookup_dataset_label_field?: string;
+    lookup_dataset_value_field?: string;
+    lookup_sync_interval_minutes?: number;
+    lookup_allow_stale_cache?: boolean;
     lookup_custom_data?: string;
     lookup_separator?: string;
     lookup_label_column?: number | string;
@@ -1807,7 +1812,7 @@ const FormBuilder: React.FC = () => {
     };
 
     const buildFieldTypeDefaults = (type: FieldType, defaults?: Partial<FormField>): Partial<FormField> => {
-        const isChoice = ['dropdown', 'radio_group', 'checkbox_group'].includes(type);
+        const isChoice = ['dropdown', 'radio_group', 'checkbox_group', 'multi_select_dropdown'].includes(type);
         const defaultOpts: FieldOption[] = isChoice
             ? [{ label: 'Option A', value: 'option_a' }, { label: 'Option B', value: 'option_b' }]
             : [];
@@ -2207,7 +2212,7 @@ const FormBuilder: React.FC = () => {
                 shuffle_options: !!screen.shuffle_options,
             },
             fields: screen.children ? screen.children.map((child: any) => ({
-                id: child.bind,
+                id: child.id || child.bind,
                 type: child.type as FieldType,
                 label: child.label || 'Untitled Field',
                 required: !!child.required,
@@ -2219,6 +2224,7 @@ const FormBuilder: React.FC = () => {
                 max: child.max,
                 minLength: child.minLength,
                 maxLength: child.maxLength,
+                pattern: child.pattern,
                 default_value: child.default_value,
                 is_sensitive: !!child.is_sensitive,
                 exclude_from_export: !!child.exclude_from_export,
@@ -2229,6 +2235,11 @@ const FormBuilder: React.FC = () => {
                 mask: child.mask,
                 lookup_source_type: child.lookup_source_type,
                 lookup_preset_id: child.lookup_preset_id,
+                lookup_dataset_id: child.lookup_dataset_id,
+                lookup_dataset_label_field: child.lookup_dataset_label_field,
+                lookup_dataset_value_field: child.lookup_dataset_value_field,
+                lookup_sync_interval_minutes: child.lookup_sync_interval_minutes,
+                lookup_allow_stale_cache: child.lookup_allow_stale_cache,
                 lookup_custom_data: child.lookup_custom_data,
                 lookup_separator: child.lookup_separator,
                 lookup_label_column: child.lookup_label_column,
@@ -2250,13 +2261,18 @@ const FormBuilder: React.FC = () => {
                 directory_unique_values: !!child.directory_unique_values,
                 directory_cascade_filter_column: child.directory_cascade_filter_column,
                 cascade_parent_field_id: child.cascade_parent_field_id,
+                cascade_options_map: child.cascade_options_map,
+                decimal_places: child.decimal_places,
+                input_prefix: child.input_prefix,
+                input_suffix: child.input_suffix,
+                auto_value: child.auto_value,
+                auto_value_timing: child.auto_value_timing,
+                auto_value_editable: child.auto_value_editable,
                 linked_form_id: child.linked_form_id,
                 linked_form_slug: child.linked_form_slug,
                 linked_form_param_map: child.linked_form_param_map,
-                // Input param annotations
                 is_input_param: child.is_input_param,
                 input_param_readonly: child.input_param_readonly,
-                // Generic Range properties
                 range_type: child.range_type,
                 step_value: child.step_value,
                 step_unit: child.step_unit,
@@ -2576,6 +2592,7 @@ const FormBuilder: React.FC = () => {
 
     const serializeUiField = (field: FormField) => ({
         type: field.type,
+        id: field.id,
         bind: field.id,
         label: field.label,
         required: field.required,
@@ -2587,6 +2604,7 @@ const FormBuilder: React.FC = () => {
         max: field.max,
         minLength: field.minLength,
         maxLength: field.maxLength,
+        pattern: field.pattern,
         default_value: field.default_value,
         is_sensitive: field.is_sensitive,
         exclude_from_export: field.exclude_from_export,
@@ -2597,6 +2615,11 @@ const FormBuilder: React.FC = () => {
         mask: field.mask,
         lookup_source_type: field.lookup_source_type,
         lookup_preset_id: field.lookup_preset_id,
+        lookup_dataset_id: field.lookup_dataset_id,
+        lookup_dataset_label_field: field.lookup_dataset_label_field,
+        lookup_dataset_value_field: field.lookup_dataset_value_field,
+        lookup_sync_interval_minutes: field.lookup_sync_interval_minutes,
+        lookup_allow_stale_cache: field.lookup_allow_stale_cache,
         lookup_custom_data: field.lookup_custom_data,
         lookup_separator: field.lookup_separator,
         lookup_label_column: field.lookup_label_column,
@@ -2618,14 +2641,18 @@ const FormBuilder: React.FC = () => {
         directory_unique_values: field.directory_unique_values,
         directory_cascade_filter_column: field.directory_cascade_filter_column,
         cascade_parent_field_id: field.cascade_parent_field_id,
-        // Form link
+        cascade_options_map: field.cascade_options_map,
+        decimal_places: field.decimal_places,
+        input_prefix: field.input_prefix,
+        input_suffix: field.input_suffix,
+        auto_value: field.auto_value,
+        auto_value_timing: field.auto_value_timing,
+        auto_value_editable: field.auto_value_editable,
         linked_form_id: field.linked_form_id,
         linked_form_slug: field.linked_form_slug,
         linked_form_param_map: field.linked_form_param_map,
-        // Input param annotations
         is_input_param: field.is_input_param,
         input_param_readonly: field.input_param_readonly,
-        // Generic Range properties
         range_type: field.range_type,
         step_value: field.step_value,
         step_unit: field.step_unit,

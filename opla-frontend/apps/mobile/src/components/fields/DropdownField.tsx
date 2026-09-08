@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
-import { FormField } from '@opla/types';
-import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
+import { FormField, resolveFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -14,19 +13,7 @@ interface Props {
 export function DropdownField({ field, value, onChange, error, responses = {} }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
 
-    const options = useMemo(() => {
-        if (fieldUsesDirectoryOptionResolver(field)) {
-            return resolveDirectoryFormFieldOptions(field, responses);
-        }
-        if (field.cascade_parent_field_id && field.cascade_options_map) {
-            const parentValue = responses[field.cascade_parent_field_id];
-            if (parentValue && field.cascade_options_map[parentValue]) {
-                return field.cascade_options_map[parentValue];
-            }
-            return [];
-        }
-        return field.options || [];
-    }, [field, responses]);
+    const options = useMemo(() => resolveFieldOptions(field, responses), [field, responses]);
 
     useEffect(() => {
         if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value) {

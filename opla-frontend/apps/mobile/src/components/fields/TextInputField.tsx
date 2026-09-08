@@ -1,6 +1,7 @@
 import React from 'react';
 import { TextInput, View, Text } from 'react-native';
 import { FormField } from '@opla/types';
+import { applyInputMask, displayInputValue } from '../../utils/formFields';
 
 interface TextInputFieldProps {
     field: FormField;
@@ -18,16 +19,21 @@ export function TextInputField({ field, value, error, onChange }: TextInputField
         : isEmail ? 'email-address' as const
         : 'default' as const;
 
+    const handleChange = (text: string) => {
+        onChange(field.mask ? applyInputMask(text, field.mask) : text);
+    };
+
     return (
         <View>
             <TextInput
-                value={value || ''}
-                onChangeText={onChange}
-                placeholder={field.placeholder || field.label}
+                value={displayInputValue(value)}
+                onChangeText={handleChange}
+                placeholder={field.placeholder || field.mask || field.label}
                 placeholderTextColor="#64748b"
                 multiline={isTextArea}
                 keyboardType={keyboardType}
                 autoCapitalize={isEmail ? 'none' : undefined}
+                maxLength={field.maxLength}
                 style={{
                     backgroundColor: '#1e293b',
                     borderColor: error ? '#ef4444' : '#334155',

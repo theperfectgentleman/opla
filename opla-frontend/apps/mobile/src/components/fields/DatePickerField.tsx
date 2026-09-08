@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Modal, Platform } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Calendar } from 'lucide-react-native';
 import { FormField } from '@opla/types';
+import { formatLocalDate, parseLocalDate } from '../../utils/formFields';
 
 interface Props {
     field: FormField;
@@ -13,7 +14,7 @@ interface Props {
 
 export function DatePickerField({ field, value, error, onChange }: Props) {
     const [showPicker, setShowPicker] = useState(false);
-    const currentDate = value ? new Date(value) : new Date();
+    const currentDate = value ? parseLocalDate(value) : new Date();
 
     const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
         // On Android, the picker closes itself
@@ -21,7 +22,7 @@ export function DatePickerField({ field, value, error, onChange }: Props) {
             setShowPicker(false);
         }
         if (selectedDate && event.type !== 'dismissed') {
-            const formatted = selectedDate.toISOString().split('T')[0];
+            const formatted = formatLocalDate(selectedDate);
             onChange(formatted);
         }
     };

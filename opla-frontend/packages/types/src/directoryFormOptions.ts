@@ -88,3 +88,28 @@ export function resolveDirectoryFormFieldOptions(
 export function fieldUsesDirectoryOptionResolver(field: FormField): boolean {
     return field.options_source === 'directory_form' && Boolean(field.directory_runtime_entries?.length);
 }
+
+/**
+ * Resolve the options a choice widget should show: directory rows, static
+ * cascade maps, or the field's authored options. Shared by mobile, Studio
+ * Simulator, and PublicForm so cascading/directory selects cannot diverge.
+ */
+export function resolveFieldOptions(
+    field: FormField,
+    responses: Record<string, unknown> = {},
+): FieldOption[] {
+    if (fieldUsesDirectoryOptionResolver(field)) {
+        return resolveDirectoryFormFieldOptions(field, responses);
+    }
+    if (field.cascade_parent_field_id && field.cascade_options_map) {
+        const parentValue = responses[field.cascade_parent_field_id];
+        if (parentValue !== undefined && parentValue !== null && String(parentValue).trim() !== '') {
+            const mapped = field.cascade_options_map[String(parentValue)];
+            if (mapped) {
+                return mapped;
+            }
+        }
+        return [];
+    }
+    return field.options || [];
+}

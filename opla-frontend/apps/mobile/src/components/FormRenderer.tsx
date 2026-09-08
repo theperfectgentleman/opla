@@ -40,6 +40,26 @@ import { agentFormAPI, publicFormAPI } from '../../services/api';
 import { syncAllLookupDatasets } from '../utils/lookupCache';
 import { hydrateBlueprintDirectoryForms } from '../utils/directoryFormLookup';
 import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
+import {
+    collectFieldDefaults,
+    displayInputValue,
+    ensureFieldIdentity,
+    getFieldKey,
+    hasMeaningfulValue,
+    isOnPlatform,
+    resolveAutoValue,
+    validateFieldConstraints,
+} from '../utils/formFields';
+
+function normalizeBlueprint(blueprint: FormBlueprint): FormBlueprint {
+    return {
+        ...blueprint,
+        ui: (blueprint.ui || []).map((section) => ({
+            ...section,
+            children: (section.children || []).map((field) => ensureFieldIdentity(field)),
+        })),
+    };
+}
 
 function getNestedValue(value: unknown, path: string[]): unknown {
     return path.reduce<unknown>((current, segment) => {
@@ -107,16 +127,6 @@ function resolveObjectDefinition(field: FormField, blueprint: FormBlueprint): Fo
     return undefined;
 }
 
-function hasMeaningfulValue(value: unknown): boolean {
-    if (Array.isArray(value)) {
-        return value.length > 0;
-    }
-    if (value && typeof value === 'object') {
-        return Object.values(value as Record<string, unknown>).some((entry) => hasMeaningfulValue(entry));
-    }
-    return value !== undefined && value !== null && value !== '';
-}
-
 function validateObjectProperties(properties: ObjectPropertyDefinition[], value: unknown, path: string[] = []): string | undefined {
     const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
@@ -144,92 +154,10 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
         return undefined;
     }
 
-    // Check if rules engine overrides required status
-    const rulesRequired = rulesResult ? isFieldRequiredByRules(field.id, rulesResult) : null;
+    const fieldKey = getFieldKey(field);
+    const rulesRequired = rulesResult ? isFieldRequiredByRules(fieldKey, rulesResult) : null;
     const isRequired = rulesRequired !== null ? rulesRequired : field.required;
-
-    if (field.type === 'generic_range') {
-        const rangeVal = value as any;
-        const startFilled = rangeVal?.start_value !== undefined && rangeVal?.start_value !== null && rangeVal?.start_value !== '';
-        const endFilled = rangeVal?.end_value !== undefined && rangeVal?.end_value !== null && rangeVal?.end_value !== '';
-        if (isRequired) {
-            if (field.has_no_min && !endFilled) {
-                return 'End boundary value is required';
-            }
-            if (field.has_no_max && !startFilled) {
-                return 'Start boundary value is required';
-            }
-            if (!field.has_no_min && !field.has_no_max && (!startFilled || !endFilled)) {
-                return 'Both start and end values are required';
-            }
-        }
-
-        // Validate step increments if configured
-        if (field.step_value) {
-            const stepNum = parseFloat(field.step_value);
-            if (!isNaN(stepNum) && stepNum > 0) {
-                if (field.range_type === 'NUMBER' || field.range_type === 'INTEGER' || field.range_type === 'INDEX') {
-                    if (startFilled) {
-                        const startNum = parseFloat(rangeVal.start_value);
-                        if (!isNaN(startNum)) {
-                            const remainder = Math.abs(startNum % stepNum);
-                            const tolerance = 0.00001;
-                            const isDivisible = remainder < tolerance || Math.abs(remainder - stepNum) < tolerance;
-                            if (!isDivisible) {
-                                return `Start value must be a multiple of ${field.step_value}`;
-                            }
-                        }
-                    }
-                    if (endFilled) {
-                        const endNum = parseFloat(rangeVal.end_value);
-                        if (!isNaN(endNum)) {
-                            const remainder = Math.abs(endNum % stepNum);
-                            const tolerance = 0.00001;
-                            const isDivisible = remainder < tolerance || Math.abs(remainder - stepNum) < tolerance;
-                            if (!isDivisible) {
-                                return `End value must be a multiple of ${field.step_value}`;
-                            }
-                        }
-                    }
-                } else if (field.range_type === 'TIME') {
-                    const checkTimeValue = (val: string) => {
-                        const parts = val.split(':');
-                        if (parts.length >= 2) {
-                            const hrs = parseInt(parts[0], 10);
-                            const mins = parseInt(parts[1], 10);
-                            if (!isNaN(hrs) && !isNaN(mins)) {
-                                const totalMins = hrs * 60 + mins;
-                                const stepMins = field.step_unit === 'HOUR' ? stepNum * 60 : stepNum;
-                                const remainder = totalMins % stepMins;
-                                if (remainder !== 0) {
-                                    return false;
-                                }
-                            }
-                        }
-                        return true;
-                    };
-
-                    if (startFilled && !checkTimeValue(rangeVal.start_value)) {
-                        const unitName = field.step_unit === 'HOUR' ? 'hour(s)' : 'minute(s)';
-                        return `Start time must be in increments of ${field.step_value} ${unitName}`;
-                    }
-                    if (endFilled && !checkTimeValue(rangeVal.end_value)) {
-                        const unitName = field.step_unit === 'HOUR' ? 'hour(s)' : 'minute(s)';
-                        return `End time must be in increments of ${field.step_value} ${unitName}`;
-                    }
-                }
-            }
-        }
-
-        return undefined;
-    }
-
-    if (!isRequired && (field.type !== 'object_collection' && field.type !== 'object_instance')) {
-        // Run format/pattern validation even if optional, but only if a value exists
-        if (value === undefined || value === null || value === '') {
-            return undefined;
-        }
-    }
+    const fieldForConstraints = { ...field, required: isRequired };
 
     if (field.type === 'object_collection') {
         if (isRequired && (!Array.isArray(value) || value.length === 0)) {
@@ -258,39 +186,15 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
         return objectDefinition ? validateObjectProperties(objectDefinition.properties || [], value, [field.label]) : undefined;
     }
 
-    if (isRequired && !hasMeaningfulValue(value)) {
-        return 'This field is required';
+    const constraintError = validateFieldConstraints(fieldForConstraints, value);
+    if (constraintError) {
+        return constraintError;
     }
 
-    // Check for VALIDATE rules (custom validation from the rules engine)
     if (rulesResult) {
-        const rulesValidationError = getValidationErrorByRules(field.id, rulesResult);
+        const rulesValidationError = getValidationErrorByRules(fieldKey, rulesResult);
         if (rulesValidationError) {
             return rulesValidationError;
-        }
-    }
-
-    // Format & pattern validations
-    if (value !== undefined && value !== null && value !== '') {
-        if (field.type === 'phone_input') {
-            const phoneStr = String(value).replace(/[\s\-().]/g, '');
-            if (!/^\+?\d{7,15}$/.test(phoneStr)) {
-                return 'Please enter a valid phone number';
-            }
-        }
-
-        if (field.type === 'email_input') {
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
-                return 'Please enter a valid email address';
-            }
-        }
-
-        if (field.pattern) {
-            try {
-                if (!new RegExp(field.pattern).test(String(value))) {
-                    return 'Input does not match the required format';
-                }
-            } catch { /* skip invalid regex */ }
         }
     }
 
@@ -298,11 +202,13 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
 }
 
 function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint, responses, rulesResult, onFormLinkPress, prefilledFieldIds }: any) {
+    const fieldKey = getFieldKey(field);
+
     // Read-only view for input_param_readonly fields that have been pre-filled
-    if (field.input_param_readonly && prefilledFieldIds?.has(field.id)) {
+    if (field.input_param_readonly && prefilledFieldIds?.has(fieldKey)) {
         return (
             <View style={{ backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, opacity: 0.8 }}>
-                <Text style={{ color: '#cbd5e1', fontSize: 14 }}>{value === undefined || value === null || value === '' ? '—' : String(value)}</Text>
+                <Text style={{ color: '#cbd5e1', fontSize: 14 }}>{displayInputValue(value) === '' ? '—' : displayInputValue(value)}</Text>
                 <Text style={{ color: '#64748b', fontSize: 10, marginTop: 4 }}>Pre-filled · Read only</Text>
             </View>
         );
@@ -311,7 +217,7 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
     if (field.formula || (field.auto_value && field.auto_value_editable === false)) {
         return (
             <View style={{ backgroundColor: '#1e293b', borderColor: error ? '#ef4444' : '#334155', borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12 }}>
-                <Text style={{ color: '#cbd5e1', fontSize: 14 }}>{value === undefined || value === null || value === '' ? 'Will be set automatically' : String(value)}</Text>
+                <Text style={{ color: '#cbd5e1', fontSize: 14 }}>{displayInputValue(value) === '' ? 'Will be set automatically' : displayInputValue(value)}</Text>
             </View>
         );
     }
@@ -349,7 +255,7 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         : field;
 
     const filteredOptions = rulesResult
-        ? getFilteredOptionsByRules(field.id, rulesResult, responses, directoryResolvedField.options)
+        ? getFilteredOptionsByRules(fieldKey, rulesResult, responses, directoryResolvedField.options)
         : null;
     const effectiveField = filteredOptions
         ? { ...directoryResolvedField, options: filteredOptions }
@@ -366,7 +272,7 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         case 'radio_group':
             return <RadioGroupField field={effectiveField} value={value} onChange={onChange} error={error} responses={responses} />;
         case 'checkbox_group':
-            return <CheckboxGroupField field={effectiveField} value={value} onChange={onChange} error={error} />;
+            return <CheckboxGroupField field={effectiveField} value={value} onChange={onChange} error={error} responses={responses} />;
         case 'dropdown':
             return <DropdownField field={effectiveField} value={value} onChange={onChange} error={error} responses={responses} />;
         case 'multi_select_dropdown':
@@ -389,8 +295,6 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
             return <DatePickerField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'time_picker':
             return <TimePickerField field={effectiveField} value={value} onChange={onChange} error={error} />;
-        case 'time_range':
-            return <TimeRangeField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'generic_range':
             return <GenericRangeField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'gps_capture':
@@ -451,7 +355,7 @@ export function FormRenderer({
     const [submitting, setSubmitting] = useState(false);
     const [loadingDraft, setLoadingDraft] = useState(true);
     const [syncingLookups, setSyncingLookups] = useState(false);
-    const [runtimeBlueprint, setRuntimeBlueprint] = useState(blueprint);
+    const [runtimeBlueprint, setRuntimeBlueprint] = useState(() => normalizeBlueprint(blueprint));
 
     const lookupContext = useMemo(() => ({
         mode: lookupMode,
@@ -463,7 +367,7 @@ export function FormRenderer({
         let mounted = true;
         hydrateBlueprintDirectoryForms(blueprint, lookupContext).then((next) => {
             if (mounted) {
-                setRuntimeBlueprint(next);
+                setRuntimeBlueprint(normalizeBlueprint(next));
             }
         });
         return () => {
@@ -477,10 +381,14 @@ export function FormRenderer({
         return new Set(Object.keys(prefillData));
     }, [prefillData]);
 
+    const allUiFields = useMemo(
+        () => (runtimeBlueprint.ui || []).flatMap((section) => section.children || []),
+        [runtimeBlueprint.ui],
+    );
+
     const draftKey = `draft_${blueprint.meta.form_id}`;
 
     useEffect(() => {
-        // Load draft on mount
         const loadDraft = async () => {
             try {
                 const d = await AsyncStorage.getItem(draftKey);
@@ -507,6 +415,19 @@ export function FormRenderer({
     }, [draftKey]);
 
     useEffect(() => {
+        if (loadingDraft) {
+            return;
+        }
+        setResponses((current) => {
+            const defaults = collectFieldDefaults(allUiFields, current);
+            if (Object.keys(defaults).length === 0) {
+                return current;
+            }
+            return { ...defaults, ...current };
+        });
+    }, [loadingDraft, allUiFields]);
+
+    useEffect(() => {
         // Save draft when responses change
         if (!loadingDraft && Object.keys(responses).length > 0) {
             AsyncStorage.setItem(draftKey, JSON.stringify(responses)).catch(console.error);
@@ -529,8 +450,12 @@ export function FormRenderer({
             if (computedValue === undefined) {
                 return;
             }
-            if (responses[field.id] !== computedValue) {
-                updates[field.id] = computedValue;
+            const key = getFieldKey(field);
+            if (!key) {
+                return;
+            }
+            if (responses[key] !== computedValue) {
+                updates[key] = computedValue;
             }
         });
 
@@ -564,18 +489,7 @@ export function FormRenderer({
     }, [rulesResult]);
 
     // Helper to resolve auto_values
-    const resolveAutoValue = (autoValue: string): any => {
-        switch (autoValue) {
-            case 'now()':
-                return new Date().toISOString();
-            case 'today()':
-                return new Date().toISOString().split('T')[0];
-            case 'current_time()':
-                return new Date().toTimeString().slice(0, 5); // HH:MM
-            default:
-                return undefined;
-        }
-    };
+    const resolveAuto = (autoValue: string) => resolveAutoValue(autoValue);
 
     // Evaluate auto-values on mount/load
     useEffect(() => {
@@ -585,11 +499,14 @@ export function FormRenderer({
 
         const updates: Record<string, any> = {};
         autoFields.forEach((field) => {
-            // Only set if not already set (e.g. from draft)
-            if (responses[field.id] === undefined || responses[field.id] === null || responses[field.id] === '') {
-                const resolved = resolveAutoValue(field.auto_value!);
+            const key = getFieldKey(field);
+            if (!key) {
+                return;
+            }
+            if (responses[key] === undefined || responses[key] === null || responses[key] === '') {
+                const resolved = resolveAuto(field.auto_value!);
                 if (resolved !== undefined) {
-                    updates[field.id] = resolved;
+                    updates[key] = resolved;
                 }
             }
         });
@@ -603,6 +520,7 @@ export function FormRenderer({
     const sections = useMemo(() => {
         const allSections = runtimeBlueprint.ui || [];
         return allSections.filter(section => {
+            if (!isOnPlatform(section, 'mobile')) return false;
             const rulesVisible = isSectionVisibleByRules(section.id, rulesResult);
             if (rulesVisible === false) return false;
             return true;
@@ -621,7 +539,8 @@ export function FormRenderer({
 
     const visibleFields = useMemo(() => {
         return currentSection ? currentSection.children.filter(field => {
-            const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+            if (!isOnPlatform(field, 'mobile')) return false;
+            const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
             return rulesVisible !== null ? rulesVisible : true;
         }) : [];
     }, [currentSection, rulesResult]);
@@ -631,8 +550,8 @@ export function FormRenderer({
     // Sync activeFieldId on load / check if it becomes hidden reactively
     useEffect(() => {
         if (isSingleMode && visibleFields.length > 0) {
-            if (!activeFieldId || !visibleFields.some(f => f.id === activeFieldId)) {
-                setActiveFieldId(visibleFields[0].id);
+            if (!activeFieldId || !visibleFields.some(f => getFieldKey(f) === activeFieldId)) {
+                setActiveFieldId(getFieldKey(visibleFields[0]));
             }
         } else {
             setActiveFieldId(null);
@@ -645,11 +564,12 @@ export function FormRenderer({
             const firstSec = sections[0];
             if (firstSec && firstSec.render_mode === 'single') {
                 const vFields = firstSec.children.filter(field => {
-                    const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+                    if (!isOnPlatform(field, 'mobile')) return false;
+                    const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
                     return rulesVisible !== null ? rulesVisible : true;
                 });
                 if (vFields.length > 0) {
-                    setActiveFieldId(vFields[0].id);
+                    setActiveFieldId(getFieldKey(vFields[0]));
                 }
             }
         }
@@ -662,7 +582,8 @@ export function FormRenderer({
             const sec = sections[index];
             const hasFormLinks = sec.children.some(f => f.type === 'form_link');
             const vFields = sec.children.filter(field => {
-                const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+                if (!isOnPlatform(field, 'mobile')) return false;
+                const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
                 return rulesVisible !== null ? rulesVisible : true;
             });
             // A section is navigable/not empty if it has visible fields or contains form links (menu section)
@@ -681,14 +602,15 @@ export function FormRenderer({
             const nextSec = sections[targetIndex];
             if (nextSec && nextSec.render_mode === 'single') {
                 const vFields = nextSec.children.filter(field => {
-                    const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+                    if (!isOnPlatform(field, 'mobile')) return false;
+                    const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
                     return rulesVisible !== null ? rulesVisible : true;
                 });
                 if (vFields.length > 0) {
                     if (direction === 'forward') {
-                        setActiveFieldId(vFields[0].id);
+                        setActiveFieldId(getFieldKey(vFields[0]));
                     } else {
-                        setActiveFieldId(vFields[vFields.length - 1].id);
+                        setActiveFieldId(getFieldKey(vFields[vFields.length - 1]));
                     }
                 } else {
                     setActiveFieldId(null);
@@ -706,7 +628,7 @@ export function FormRenderer({
 
     const singleModeProgressText = useMemo(() => {
         if (!isSingleMode || visibleFields.length <= 1 || !activeFieldId) return null;
-        const index = visibleFields.findIndex(f => f.id === activeFieldId);
+        const index = visibleFields.findIndex(f => getFieldKey(f) === activeFieldId);
         if (index < 0) return null;
         return `${index + 1} of ${visibleFields.length}`;
     }, [isSingleMode, visibleFields, activeFieldId]);
@@ -723,11 +645,12 @@ export function FormRenderer({
     const handleNext = () => {
         if (isSingleMode && activeFieldId) {
             // Validate ONLY the current active field
-            const activeField = visibleFields.find(f => f.id === activeFieldId);
+            const activeField = visibleFields.find(f => getFieldKey(f) === activeFieldId);
             if (activeField) {
-                const fieldError = validateField(activeField, responses[activeField.id], runtimeBlueprint, rulesResult);
+                const key = getFieldKey(activeField);
+                const fieldError = validateField(activeField, responses[key], runtimeBlueprint, rulesResult);
                 if (fieldError) {
-                    setErrors({ [activeField.id]: fieldError });
+                    setErrors({ [key]: fieldError });
                     return;
                 }
             }
@@ -739,18 +662,19 @@ export function FormRenderer({
             }
 
             // Move to the next visible field in this section if there is one
-            const currentIndex = visibleFields.findIndex(f => f.id === activeFieldId);
+            const currentIndex = visibleFields.findIndex(f => getFieldKey(f) === activeFieldId);
             if (currentIndex >= 0 && currentIndex < visibleFields.length - 1) {
-                setActiveFieldId(visibleFields[currentIndex + 1].id);
+                setActiveFieldId(getFieldKey(visibleFields[currentIndex + 1]));
                 return;
             }
         } else {
             // List Mode: Validate ALL visible fields in the current section
             const newErrors: Record<string, string> = {};
             visibleFields.forEach(field => {
-                const fieldError = validateField(field, responses[field.id], runtimeBlueprint, rulesResult);
+                const key = getFieldKey(field);
+                const fieldError = validateField(field, responses[key], runtimeBlueprint, rulesResult);
                 if (fieldError) {
-                    newErrors[field.id] = fieldError;
+                    newErrors[key] = fieldError;
                 }
             });
 
@@ -786,9 +710,9 @@ export function FormRenderer({
 
     const handleBack = () => {
         if (isSingleMode && activeFieldId) {
-            const currentIndex = visibleFields.findIndex(f => f.id === activeFieldId);
+            const currentIndex = visibleFields.findIndex(f => getFieldKey(f) === activeFieldId);
             if (currentIndex > 0) {
-                setActiveFieldId(visibleFields[currentIndex - 1].id);
+                setActiveFieldId(getFieldKey(visibleFields[currentIndex - 1]));
                 return;
             }
         }
@@ -810,8 +734,9 @@ export function FormRenderer({
             const finalResponses = { ...responses };
             submitAutoFields.forEach((field) => {
                 const resolved = resolveAutoValue(field.auto_value!);
-                if (resolved !== undefined) {
-                    finalResponses[field.id] = resolved;
+                const key = getFieldKey(field);
+                if (resolved !== undefined && key) {
+                    finalResponses[key] = resolved;
                 }
             });
 
@@ -837,7 +762,7 @@ export function FormRenderer({
         try {
             const synced = await syncAllLookupDatasets(runtimeBlueprint, lookupContext);
             const hydrated = await hydrateBlueprintDirectoryForms(runtimeBlueprint, lookupContext);
-            setRuntimeBlueprint(hydrated);
+            setRuntimeBlueprint(normalizeBlueprint(hydrated));
             Alert.alert('Lookup data synced', synced > 0 ? `Updated ${synced} dataset source${synced === 1 ? '' : 's'}.` : 'Catalog and dataset lookups refreshed.');
         } catch {
             Alert.alert('Sync failed', 'Could not refresh lookup data right now. Cached data remains available on this device.');
@@ -882,19 +807,21 @@ export function FormRenderer({
                 )}
 
                 {currentSection.children.map(field => {
-                    const rulesVisible = isFieldVisibleByRules(field.id, rulesResult);
+                    const key = getFieldKey(field);
+                    if (!isOnPlatform(field, 'mobile')) return null;
+                    const rulesVisible = isFieldVisibleByRules(key, rulesResult);
                     const visible = rulesVisible !== null ? rulesVisible : true;
                     if (!visible) return null;
 
-                    if (isSingleMode && field.id !== activeFieldId) return null;
+                    if (isSingleMode && key !== activeFieldId) return null;
 
-                    const rulesRequired = isFieldRequiredByRules(field.id, rulesResult);
+                    const rulesRequired = isFieldRequiredByRules(key, rulesResult);
                     const isRequired = rulesRequired !== null ? rulesRequired : field.required;
 
                     // Form link fields render without a label header (the card IS the label)
                     if (field.type === 'form_link') {
                         return (
-                            <View key={field.id} style={{ marginBottom: 12 }}>
+                            <View key={key || field.label} style={{ marginBottom: 12 }}>
                                 <FieldRenderer
                                     field={field}
                                     value={undefined}
@@ -911,27 +838,27 @@ export function FormRenderer({
                     }
 
                     return (
-                        <View key={field.id} style={{ marginBottom: 16 }}>
+                        <View key={key || field.label} style={{ marginBottom: 16 }}>
                             <Text style={{ fontSize: 14, fontWeight: '600', color: '#e2e8f0', marginBottom: 5 }}>
                                 {field.label} {isRequired && <Text style={{ color: '#ef4444' }}>*</Text>}
-                                {field.is_input_param && prefilledFieldIds.has(field.id) && (
+                                {field.is_input_param && prefilledFieldIds.has(key) && (
                                     <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '400' }}> ↓ param</Text>
                                 )}
                             </Text>
                             <FieldRenderer
                                 field={field}
-                                value={responses[field.id]}
+                                value={responses[key]}
                                 onChange={(val: any) => {
-                                    setResponses({ ...responses, [field.id]: val });
-                                    if (errors[field.id]) {
+                                    setResponses({ ...responses, [key]: val });
+                                    if (errors[key]) {
                                         setErrors(prev => {
                                             const next = { ...prev };
-                                            delete next[field.id];
+                                            delete next[key];
                                             return next;
                                         });
                                     }
                                 }}
-                                error={errors[field.id]}
+                                error={errors[key]}
                                 lookupContext={lookupContext}
                                 blueprint={runtimeBlueprint}
                                 responses={responses}
@@ -939,8 +866,8 @@ export function FormRenderer({
                                 onFormLinkPress={onFormLinkPress}
                                 prefilledFieldIds={prefilledFieldIds}
                             />
-                            {errors[field.id] && (
-                                <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{errors[field.id]}</Text>
+                            {errors[key] && (
+                                <Text style={{ color: '#ef4444', fontSize: 13, marginTop: 6 }}>{errors[key]}</Text>
                             )}
                         </View>
                     );

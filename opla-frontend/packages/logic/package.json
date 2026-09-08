@@ -5,7 +5,8 @@
     "main": "./src/index.ts",
     "types": "./src/index.ts",
     "scripts": {
-        "type-check": "tsc --noEmit"
+        "type-check": "tsc --noEmit",
+        "test": "node --experimental-strip-types --test src/formFields.test.ts"
     },
     "dependencies": {
         "@opla/types": "*"

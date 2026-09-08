@@ -17,6 +17,7 @@ import {
     getFilteredOptionsByRules
 } from '../../../mobile/src/utils/rulesEngine';
 import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
+import { applyInputMask } from '../../../../packages/logic/src/formFields';
 
 interface UIField {
     type: string;
@@ -116,40 +117,7 @@ const getHtmlInputStep = (rangeType?: string, stepValue?: string, stepUnit?: str
     return undefined;
 };
 
-const applyMask = (value: string, mask: string) => {
-    if (!mask) return value;
-    const rawValue = value.replace(/[^a-zA-Z0-9]/g, '');
-    let formattedValue = '';
-    let rawIndex = 0;
-
-    for (let i = 0; i < mask.length; i++) {
-        if (rawIndex >= rawValue.length) {
-            break;
-        }
-
-        const maskChar = mask[i];
-        const char = rawValue[rawIndex];
-
-        if (maskChar === '9') {
-            if (/[0-9]/.test(char)) { formattedValue += char; rawIndex++; }
-            else { break; }
-        } else if (maskChar === 'A') {
-            if (/[a-zA-Z]/.test(char)) { formattedValue += char.toUpperCase(); rawIndex++; }
-            else { break; }
-        } else if (maskChar === 'a') {
-            if (/[a-zA-Z]/.test(char)) { formattedValue += char.toLowerCase(); rawIndex++; }
-            else { break; }
-        } else if (maskChar === '*') {
-            formattedValue += char; rawIndex++;
-        } else {
-            formattedValue += maskChar;
-            if (/[a-zA-Z0-9]/.test(maskChar) && char.toLowerCase() === maskChar.toLowerCase()) {
-                rawIndex++;
-            }
-        }
-    }
-    return formattedValue;
-};
+const applyMask = (value: string, mask: string) => applyInputMask(value, mask);
 
 const LookupFieldRenderer = ({ field, value, onChange, rulesResult, responses }: any) => {
     const [search, setSearch] = useState('');

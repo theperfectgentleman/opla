@@ -1,17 +1,28 @@
-import React from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { FormField } from '@opla/types';
+import { FormField, resolveFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
     value: any; // usually an array of strings
     onChange: (value: any) => void;
     error?: string;
+    responses?: Record<string, any>;
 }
 
-export function CheckboxGroupField({ field, value, onChange, error }: Props) {
-    const options = field.options || [];
+export function CheckboxGroupField({ field, value, onChange, error, responses = {} }: Props) {
+    const options = useMemo(() => resolveFieldOptions(field, responses), [field, responses]);
     const selectedValues: string[] = Array.isArray(value) ? value : [];
+
+    useEffect(() => {
+        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && selectedValues.length > 0) {
+            const validValues = options.map(o => o.value);
+            const filteredValue = selectedValues.filter(v => validValues.includes(v));
+            if (filteredValue.length !== selectedValues.length) {
+                onChange(filteredValue);
+            }
+        }
+    }, [options]);
 
     const toggleOption = (optValue: string) => {
         if (selectedValues.includes(optValue)) {
@@ -55,7 +66,7 @@ export function CheckboxGroupField({ field, value, onChange, error }: Props) {
                                 }}
                             >
                                 {isSelected && (
-                                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>?</Text>
+                                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✓</Text>
                                 )}
                             </View>
                             <Text style={{ color: '#f1f5f9', fontSize: 14 }}>{opt.label}</Text>

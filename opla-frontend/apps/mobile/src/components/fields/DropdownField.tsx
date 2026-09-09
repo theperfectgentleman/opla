@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
-import { FormField, resolveFieldOptions } from '@opla/types';
+import { FormField } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -10,13 +10,12 @@ interface Props {
     responses?: Record<string, any>;
 }
 
-export function DropdownField({ field, value, onChange, error, responses = {} }: Props) {
+export function DropdownField({ field, value, onChange, error }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
-
-    const options = useMemo(() => resolveFieldOptions(field, responses), [field, responses]);
+    const options = field.options || [];
 
     useEffect(() => {
-        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value) {
+        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value !== undefined && value !== null && value !== '') {
             const stillValid = options.some(o => o.value === value);
             if (!stillValid) {
                 onChange('');

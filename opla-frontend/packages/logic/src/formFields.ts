@@ -26,6 +26,15 @@ export type FieldLike = FieldIdentity & {
     range_type?: string;
     step_value?: string;
     step_unit?: string;
+    decimal_places?: number;
+    input_prefix?: string;
+    input_suffix?: string;
+    auto_value?: string;
+    auto_value_timing?: 'on_load' | 'on_submit';
+    auto_value_editable?: boolean;
+    linked_form_param_map?: Record<string, string>;
+    linked_form_id?: string;
+    linked_form_slug?: string;
 };
 
 export const MOBILE_FIELD_TYPES = [
@@ -249,6 +258,166 @@ export function resolveAutoValue(autoValue: string, now: Date = new Date()): str
     }
 }
 
+/**
+ * Coerce auto-values to the widget's stored shape. `now()` on a date picker
+ * must be a local YYYY-MM-DD, not a UTC ISO timestamp.
+ */
+export function resolveAutoValueForField(field: FieldLike, now: Date = new Date()): string | undefined {
+    if (!field.auto_value) {
+        return undefined;
+    }
+    if (field.type === 'date_picker') {
+        if (field.auto_value === 'now()' || field.auto_value === 'today()') {
+            return formatLocalDate(now);
+        }
+    }
+    if (field.type === 'time_picker') {
+        if (field.auto_value === 'now()' || field.auto_value === 'current_time()') {
+            return resolveAutoValue('current_time()', now);
+        }
+    }
+    return resolveAutoValue(field.auto_value, now);
+}
+
+export function applyOnLoadAutoValues(
+    fields: FieldLike[],
+    existing: Record<string, unknown> = {},
+    now: Date = new Date(),
+): Record<string, unknown> {
+    const next: Record<string, unknown> = {};
+    for (const field of fields) {
+        if (!field.auto_value || (field.auto_value_timing && field.auto_value_timing !== 'on_load')) {
+            continue;
+        }
+        const key = getFieldKey(field);
+        if (!key || hasMeaningfulValue(existing[key])) {
+            continue;
+        }
+        const resolved = resolveAutoValueForField(field, now);
+        if (resolved !== undefined) {
+            next[key] = resolved;
+        }
+    }
+    return next;
+}
+
+export function applyOnSubmitAutoValues(
+    fields: FieldLike[],
+    existing: Record<string, unknown> = {},
+    now: Date = new Date(),
+): Record<string, unknown> {
+    const next: Record<string, unknown> = { ...existing };
+    for (const field of fields) {
+        if (!field.auto_value || field.auto_value_timing !== 'on_submit') {
+            continue;
+        }
+        const key = getFieldKey(field);
+        if (!key) {
+            continue;
+        }
+        const resolved = resolveAutoValueForField(field, now);
+        if (resolved !== undefined) {
+            next[key] = resolved;
+        }
+    }
+    return next;
+}
+
+export function normalizeDecimalValue(field: FieldLike, value: unknown): unknown {
+    if (field.decimal_places === undefined || field.decimal_places === null) {
+        return value;
+    }
+    if (value === undefined || value === null || value === '') {
+        return value;
+    }
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+        return value;
+    }
+    return numeric.toFixed(field.decimal_places);
+}
+
+export function applyDecimalNormalization(
+    fields: FieldLike[],
+    responses: Record<string, unknown>,
+): Record<string, unknown> {
+    const next = { ...responses };
+    for (const field of fields) {
+        if (field.type !== 'input_number') {
+            continue;
+        }
+        const key = getFieldKey(field);
+        if (!key) {
+            continue;
+        }
+        next[key] = normalizeDecimalValue(field, next[key]);
+    }
+    return next;
+}
+
+/** Navigational cards are not data fields — never block Next/Submit. */
+export function isNavigationalField(field: FieldLike): boolean {
+    return field.type === 'form_link';
+}
+
+export type FormLinkParamMap = Record<string, string>;
+
+export function resolveFormLinkParams(
+    paramMap: FormLinkParamMap | undefined,
+    responses: Record<string, unknown>,
+    fields: FieldIdentity[] = [],
+): Record<string, unknown> {
+    const params: Record<string, unknown> = {};
+    if (!paramMap) {
+        return params;
+    }
+    for (const [sourceFieldId, targetFieldId] of Object.entries(paramMap)) {
+        if (!targetFieldId) {
+            continue;
+        }
+        const value = lookupResponseFromFields(responses, sourceFieldId, fields);
+        if (value !== undefined) {
+            params[targetFieldId] = value;
+        }
+    }
+    return params;
+}
+
+function lookupResponseFromFields(
+    responses: Record<string, unknown>,
+    fieldRef: string,
+    fields: FieldIdentity[],
+): unknown {
+    if (Object.prototype.hasOwnProperty.call(responses, fieldRef)) {
+        return responses[fieldRef];
+    }
+    const field = fields.find((entry) => entry.id === fieldRef || entry.bind === fieldRef);
+    if (!field) {
+        return undefined;
+    }
+    for (const key of [field.bind, field.id, getFieldKey(field)]) {
+        if (key && Object.prototype.hasOwnProperty.call(responses, key)) {
+            return responses[key];
+        }
+    }
+    return undefined;
+}
+
+/** When a mask is set, RN maxLength must not clip literals like `(999) 999-9999`. */
+export function effectiveInputMaxLength(field: FieldLike): number | undefined {
+    if (field.mask) {
+        return field.mask.length;
+    }
+    return field.maxLength;
+}
+
+export function cellInputValue(value: unknown): string {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    return String(value);
+}
+
 export function hasMeaningfulValue(value: unknown): boolean {
     if (Array.isArray(value)) {
         return value.length > 0;
@@ -285,7 +454,7 @@ function compareBound(value: unknown, bound: number | string, op: 'min' | 'max')
 }
 
 export function validateFieldConstraints(field: FieldLike, value: unknown): string | undefined {
-    if (field.formula) {
+    if (field.formula || isNavigationalField(field)) {
         return undefined;
     }
 
@@ -391,12 +560,19 @@ export function validateFieldConstraints(field: FieldLike, value: unknown): stri
             }
         }
 
-        if (field.minLength !== undefined && field.minLength !== null && String(value).length < Number(field.minLength)) {
+        if (field.minLength !== undefined && field.minLength !== null && !field.mask && String(value).length < Number(field.minLength)) {
             return `Must be at least ${field.minLength} characters`;
         }
 
-        if (field.maxLength !== undefined && field.maxLength !== null && String(value).length > Number(field.maxLength)) {
+        if (field.maxLength !== undefined && field.maxLength !== null && !field.mask && String(value).length > Number(field.maxLength)) {
             return `Must be at most ${field.maxLength} characters`;
+        }
+
+        if (field.decimal_places !== undefined && field.decimal_places !== null && field.type === 'input_number') {
+            const parts = String(value).split('.');
+            if (parts[1] && parts[1].length > Number(field.decimal_places)) {
+                return `Must have at most ${field.decimal_places} decimal places`;
+            }
         }
 
         if (field.min !== undefined && field.min !== null && field.min !== '') {

@@ -3,15 +3,16 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FormBlueprint, FormField, FormObjectDefinition, FormSchemaField, ObjectPropertyDefinition } from '@opla/types';
 import {
-  evaluateAllRules,
-  isFieldVisibleByRules,
-  isFieldRequiredByRules,
-  isSectionVisibleByRules,
-  getFilteredOptionsByRules,
-  getSetValueEffects,
-  getValidationErrorByRules,
-  getJumpToSectionTarget,
-  RulesEvaluationResult,
+    evaluateAllRules,
+    isFieldVisibleByRules,
+    isFieldRequiredByRules,
+    isSectionVisibleByRules,
+    getFilteredOptionsByRules,
+    getSetValueEffects,
+    getValidationErrorByRules,
+    getJumpToSectionTarget,
+    readFieldRuleFlag,
+    RulesEvaluationResult,
 } from '../utils/rulesEngine';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TextInputField } from './fields/TextInputField';
@@ -39,15 +40,19 @@ import { GenericRangeField } from './fields/GenericRangeField';
 import { agentFormAPI, publicFormAPI } from '../../services/api';
 import { syncAllLookupDatasets } from '../utils/lookupCache';
 import { hydrateBlueprintDirectoryForms } from '../utils/directoryFormLookup';
-import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
+import { resolveFieldOptions } from '@opla/types';
 import {
+    applyDecimalNormalization,
+    applyOnLoadAutoValues,
+    applyOnSubmitAutoValues,
     collectFieldDefaults,
     displayInputValue,
     ensureFieldIdentity,
     getFieldKey,
     hasMeaningfulValue,
+    isNavigationalField,
     isOnPlatform,
-    resolveAutoValue,
+    resolveFormLinkParams,
     validateFieldConstraints,
 } from '../utils/formFields';
 
@@ -150,12 +155,12 @@ function validateObjectProperties(properties: ObjectPropertyDefinition[], value:
 }
 
 function validateField(field: FormField, value: unknown, blueprint: FormBlueprint, rulesResult?: RulesEvaluationResult): string | undefined {
-    if (field.formula) {
+    if (field.formula || isNavigationalField(field)) {
         return undefined;
     }
 
     const fieldKey = getFieldKey(field);
-    const rulesRequired = rulesResult ? isFieldRequiredByRules(fieldKey, rulesResult) : null;
+    const rulesRequired = rulesResult ? readFieldRuleFlag(field, rulesResult, isFieldRequiredByRules) : null;
     const isRequired = rulesRequired !== null ? rulesRequired : field.required;
     const fieldForConstraints = { ...field, required: isRequired };
 
@@ -192,7 +197,10 @@ function validateField(field: FormField, value: unknown, blueprint: FormBlueprin
     }
 
     if (rulesResult) {
-        const rulesValidationError = getValidationErrorByRules(fieldKey, rulesResult);
+        const rulesValidationError =
+            getValidationErrorByRules(fieldKey, rulesResult)
+            || (field.id && field.id !== fieldKey ? getValidationErrorByRules(field.id, rulesResult) : null)
+            || (field.bind && field.bind !== fieldKey ? getValidationErrorByRules(field.bind, rulesResult) : null);
         if (rulesValidationError) {
             return rulesValidationError;
         }
@@ -229,15 +237,8 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
                 field={field}
                 onPress={() => {
                     if (onFormLinkPress && (field.linked_form_id || field.linked_form_slug)) {
-                        // Resolve parameter mapping
-                        const params: Record<string, any> = {};
-                        if (field.linked_form_param_map) {
-                            for (const [sourceFieldId, targetFieldId] of Object.entries(field.linked_form_param_map as Record<string, string>)) {
-                                if (responses[sourceFieldId] !== undefined) {
-                                    params[targetFieldId] = responses[sourceFieldId];
-                                }
-                            }
-                        }
+                        const allFields = (blueprint?.ui || []).flatMap((section: any) => section.children || []);
+                        const params = resolveFormLinkParams(field.linked_form_param_map, responses || {}, allFields);
                         onFormLinkPress({
                             formId: field.linked_form_id,
                             formSlug: field.linked_form_slug,
@@ -250,16 +251,15 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         );
     }
 
-    const directoryResolvedField = fieldUsesDirectoryOptionResolver(field)
-        ? { ...field, options: resolveDirectoryFormFieldOptions(field, responses) }
-        : field;
-
+    const allFields = (blueprint?.ui || []).flatMap((section: any) => section.children || []);
+    const resolvedOptions = resolveFieldOptions(field, responses || {}, allFields);
     const filteredOptions = rulesResult
-        ? getFilteredOptionsByRules(fieldKey, rulesResult, responses, directoryResolvedField.options)
+        ? getFilteredOptionsByRules(fieldKey, rulesResult, responses, resolvedOptions, allFields)
         : null;
-    const effectiveField = filteredOptions
-        ? { ...directoryResolvedField, options: filteredOptions }
-        : directoryResolvedField;
+    const effectiveField = {
+        ...field,
+        options: filteredOptions ?? resolvedOptions,
+    };
 
     switch (effectiveField.type) {
         case 'input_text':
@@ -282,7 +282,7 @@ function FieldRenderer({ field, value, onChange, error, lookupContext, blueprint
         case 'matrix_table':
             return <MatrixTableField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'lookup_list':
-            return <LookupListField field={effectiveField} value={value} onChange={onChange} error={error} lookupContext={lookupContext} responses={responses} rulesResult={rulesResult} />;
+            return <LookupListField field={effectiveField} value={value} onChange={onChange} error={error} lookupContext={lookupContext} responses={responses} rulesResult={rulesResult} fields={allFields} />;
         case 'rating_scale':
             return <RatingScaleField field={effectiveField} value={value} onChange={onChange} error={error} />;
         case 'toggle':
@@ -477,9 +477,10 @@ export function FormRenderer({
 
         const updates: Record<string, any> = {};
         for (const { fieldId, value } of setValueEffects) {
-            // Only update if value differs to prevent infinite re-render loops
-            if (String(responses[fieldId] ?? '') !== String(value)) {
-                updates[fieldId] = value;
+            const target = allUiFields.find((entry) => entry.id === fieldId || entry.bind === fieldId);
+            const key = target ? getFieldKey(target) : fieldId;
+            if (String(responses[key] ?? '') !== String(value)) {
+                updates[key] = value;
             }
         }
 
@@ -488,33 +489,19 @@ export function FormRenderer({
         }
     }, [rulesResult]);
 
-    // Helper to resolve auto_values
-    const resolveAuto = (autoValue: string) => resolveAutoValue(autoValue);
-
-    // Evaluate auto-values on mount/load
+    // Evaluate auto-values after draft load so a resume does not clobber on_load stamps
     useEffect(() => {
-        const autoFields = (runtimeBlueprint.ui || [])
-            .flatMap((section) => section.children || [])
-            .filter((field) => field.auto_value && (!field.auto_value_timing || field.auto_value_timing === 'on_load'));
-
-        const updates: Record<string, any> = {};
-        autoFields.forEach((field) => {
-            const key = getFieldKey(field);
-            if (!key) {
-                return;
-            }
-            if (responses[key] === undefined || responses[key] === null || responses[key] === '') {
-                const resolved = resolveAuto(field.auto_value!);
-                if (resolved !== undefined) {
-                    updates[key] = resolved;
-                }
-            }
-        });
-
-        if (Object.keys(updates).length > 0) {
-            setResponses((current) => ({ ...current, ...updates }));
+        if (loadingDraft) {
+            return;
         }
-    }, [runtimeBlueprint.ui]);
+        setResponses((current) => {
+            const updates = applyOnLoadAutoValues(allUiFields, current);
+            if (Object.keys(updates).length === 0) {
+                return current;
+            }
+            return { ...updates, ...current };
+        });
+    }, [runtimeBlueprint.ui, loadingDraft, allUiFields]);
 
     // Filter sections based on rules engine
     const sections = useMemo(() => {
@@ -540,7 +527,7 @@ export function FormRenderer({
     const visibleFields = useMemo(() => {
         return currentSection ? currentSection.children.filter(field => {
             if (!isOnPlatform(field, 'mobile')) return false;
-            const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
+            const rulesVisible = readFieldRuleFlag(field, rulesResult, isFieldVisibleByRules);
             return rulesVisible !== null ? rulesVisible : true;
         }) : [];
     }, [currentSection, rulesResult]);
@@ -565,7 +552,7 @@ export function FormRenderer({
             if (firstSec && firstSec.render_mode === 'single') {
                 const vFields = firstSec.children.filter(field => {
                     if (!isOnPlatform(field, 'mobile')) return false;
-                    const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
+                    const rulesVisible = readFieldRuleFlag(field, rulesResult, isFieldVisibleByRules);
                     return rulesVisible !== null ? rulesVisible : true;
                 });
                 if (vFields.length > 0) {
@@ -583,7 +570,7 @@ export function FormRenderer({
             const hasFormLinks = sec.children.some(f => f.type === 'form_link');
             const vFields = sec.children.filter(field => {
                 if (!isOnPlatform(field, 'mobile')) return false;
-                const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
+                const rulesVisible = readFieldRuleFlag(field, rulesResult, isFieldVisibleByRules);
                 return rulesVisible !== null ? rulesVisible : true;
             });
             // A section is navigable/not empty if it has visible fields or contains form links (menu section)
@@ -603,7 +590,7 @@ export function FormRenderer({
             if (nextSec && nextSec.render_mode === 'single') {
                 const vFields = nextSec.children.filter(field => {
                     if (!isOnPlatform(field, 'mobile')) return false;
-                    const rulesVisible = isFieldVisibleByRules(getFieldKey(field), rulesResult);
+                    const rulesVisible = readFieldRuleFlag(field, rulesResult, isFieldVisibleByRules);
                     return rulesVisible !== null ? rulesVisible : true;
                 });
                 if (vFields.length > 0) {
@@ -728,17 +715,9 @@ export function FormRenderer({
         try {
             // Resolve on_submit auto-values
             const submitAutoFields = (runtimeBlueprint.ui || [])
-                .flatMap((section) => section.children || [])
-                .filter((field) => field.auto_value && field.auto_value_timing === 'on_submit');
-
-            const finalResponses = { ...responses };
-            submitAutoFields.forEach((field) => {
-                const resolved = resolveAutoValue(field.auto_value!);
-                const key = getFieldKey(field);
-                if (resolved !== undefined && key) {
-                    finalResponses[key] = resolved;
-                }
-            });
+                .flatMap((section) => section.children || []);
+            const withAuto = applyOnSubmitAutoValues(submitAutoFields, responses);
+            const finalResponses = applyDecimalNormalization(submitAutoFields, withAuto);
 
             if (onSubmitAttempt && lookupMode === 'agent') {
                 onSubmitAttempt(runtimeBlueprint.meta.form_id, finalResponses, { source: 'mobile_agent' });
@@ -809,13 +788,13 @@ export function FormRenderer({
                 {currentSection.children.map(field => {
                     const key = getFieldKey(field);
                     if (!isOnPlatform(field, 'mobile')) return null;
-                    const rulesVisible = isFieldVisibleByRules(key, rulesResult);
+                    const rulesVisible = readFieldRuleFlag(field, rulesResult, isFieldVisibleByRules);
                     const visible = rulesVisible !== null ? rulesVisible : true;
                     if (!visible) return null;
 
                     if (isSingleMode && key !== activeFieldId) return null;
 
-                    const rulesRequired = isFieldRequiredByRules(key, rulesResult);
+                    const rulesRequired = readFieldRuleFlag(field, rulesResult, isFieldRequiredByRules);
                     const isRequired = rulesRequired !== null ? rulesRequired : field.required;
 
                     // Form link fields render without a label header (the card IS the label)

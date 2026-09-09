@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView, TextInput, ActivityIndicator } from 'react-native';
-import { FormField } from '@opla/types';
+import { FormField, lookupResponse, hasParentValue } from '@opla/types';
+import { getFieldKey } from '../../utils/formFields';
 import { loadLookupOptions, LookupContext, LookupOption, resolveStaticLookupOptions } from '../../utils/lookupCache';
 import { fmtDateTime } from '../../utils/dateFormat';
 import { RulesEvaluationResult, getFilteredOptionsByRules } from '../../utils/rulesEngine';
@@ -13,9 +14,10 @@ interface Props {
     lookupContext: LookupContext;
     responses?: Record<string, any>;
     rulesResult?: RulesEvaluationResult;
+    fields?: Array<{ id?: string; bind?: string }>;
 }
 
-export function LookupListField({ field, value, onChange, error, lookupContext, responses = {}, rulesResult }: Props) {
+export function LookupListField({ field, value, onChange, error, lookupContext, responses = {}, rulesResult, fields = [] }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [options, setOptions] = useState<LookupOption[]>([]);
@@ -86,35 +88,36 @@ export function LookupListField({ field, value, onChange, error, lookupContext, 
         }
     }, [field.lookup_preset_id, field.lookup_source_type]);
 
-    // Resolve rules-filtered options if any FILTER_OPTIONS rule is active
+    const fieldKey = getFieldKey(field);
     const rulesFilteredOptions = useMemo(() => {
         if (rulesResult) {
-            const rulesFiltered = getFilteredOptionsByRules(field.id, rulesResult, responses, options);
+            const rulesFiltered = getFilteredOptionsByRules(fieldKey, rulesResult, responses, options, fields);
             if (rulesFiltered !== null) {
                 return rulesFiltered;
             }
         }
         return null;
-    }, [options, field.id, rulesResult, responses]);
+    }, [options, fieldKey, rulesResult, responses, fields]);
 
-    // Resolve cascading options
     const cascadeFilteredOptions = useMemo(() => {
         if (rulesFilteredOptions !== null) {
             return rulesFilteredOptions;
         }
         if (field.cascade_parent_field_id && field.cascade_options_map && responses) {
-            const parentValue = responses[field.cascade_parent_field_id];
-            if (parentValue && field.cascade_options_map[parentValue]) {
-                return field.cascade_options_map[parentValue];
+            const parentValue = lookupResponse(responses, field.cascade_parent_field_id, fields);
+            if (hasParentValue(parentValue)) {
+                const mapped = field.cascade_options_map[String(parentValue)];
+                if (mapped) {
+                    return mapped;
+                }
             }
-            return []; // Parent not selected yet — show nothing
+            return [];
         }
         return options;
-    }, [options, rulesFilteredOptions, field.cascade_parent_field_id, field.cascade_options_map, responses]);
+    }, [options, rulesFilteredOptions, field.cascade_parent_field_id, field.cascade_options_map, responses, fields]);
 
-    // Clear value if parent changes and current value is no longer valid
     useEffect(() => {
-        if (field.cascade_parent_field_id && value) {
+        if (field.cascade_parent_field_id && value !== undefined && value !== null && value !== '') {
             const stillValid = cascadeFilteredOptions.some(o => o.value === value);
             if (!stillValid) {
                 onChange('');

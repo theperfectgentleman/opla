@@ -1,6 +1,6 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { FormField, resolveFieldOptions } from '@opla/types';
+import { FormField } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -10,8 +10,8 @@ interface Props {
     responses?: Record<string, any>;
 }
 
-export function CheckboxGroupField({ field, value, onChange, error, responses = {} }: Props) {
-    const options = useMemo(() => resolveFieldOptions(field, responses), [field, responses]);
+export function CheckboxGroupField({ field, value, onChange, error }: Props) {
+    const options = field.options || [];
     const selectedValues: string[] = Array.isArray(value) ? value : [];
 
     useEffect(() => {

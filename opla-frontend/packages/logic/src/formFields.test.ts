@@ -16,7 +16,7 @@ import {
     resolveAutoValue,
     validateFieldConstraints,
 } from './formFields.ts';
-import { resolveFieldOptions } from '../../types/src/directoryFormOptions.ts';
+import { lookupResponse, resolveFieldOptions } from '../../types/src/directoryFormOptions.ts';
 
 describe('mobile field identity', () => {
     it('prefers bind over id so published blueprints match Studio/Simulator keys', () => {
@@ -155,6 +155,10 @@ describe('choice option resolution', () => {
         assert.deepEqual(resolveFieldOptions(field, { region: 'ashanti' }), [
             { label: 'Kumasi', value: 'kumasi' },
         ]);
+        assert.equal(
+            lookupResponse({ region: 'ashanti' }, 'field_region', [{ id: 'field_region', bind: 'region' }]),
+            'ashanti',
+        );
     });
 
     it('falls back to authored options when there is no cascade', () => {

@@ -6,7 +6,7 @@
     "types": "./src/index.ts",
     "scripts": {
         "type-check": "tsc --noEmit",
-        "test": "node --experimental-strip-types --test src/formFields.test.ts"
+        "test": "node --experimental-strip-types --test src/*.test.ts"
     },
     "dependencies": {
         "@opla/types": "*"

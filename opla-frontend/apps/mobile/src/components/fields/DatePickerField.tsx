@@ -27,6 +27,9 @@ export function DatePickerField({ field, value, error, onChange }: Props) {
         }
     };
 
+    const minimumDate = field.min ? parseLocalDate(String(field.min)) : undefined;
+    const maximumDate = field.max ? parseLocalDate(String(field.max)) : undefined;
+
     return (
         <View>
             <TouchableOpacity
@@ -73,6 +76,8 @@ export function DatePickerField({ field, value, error, onChange }: Props) {
                                     mode="date"
                                     display="spinner"
                                     textColor="#f1f5f9"
+                                    minimumDate={minimumDate}
+                                    maximumDate={maximumDate}
                                     onChange={handleDateChange}
                                 />
                             </View>
@@ -87,6 +92,8 @@ export function DatePickerField({ field, value, error, onChange }: Props) {
                     value={currentDate}
                     mode="date"
                     display="default"
+                    minimumDate={minimumDate}
+                    maximumDate={maximumDate}
                     onChange={handleDateChange}
                 />
             )}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, FlatList, SafeAreaView } from 'react-native';
 import { FormField } from '@opla/types';
+import { cellInputValue } from '../../utils/formFields';
 
 interface Props {
     field: FormField;
@@ -33,7 +34,7 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
     };
 
     const dropdownCellValue = dropdownCell
-        ? ((value[dropdownCell.rowId] || {})[dropdownCell.colId] || '')
+        ? cellInputValue((value[dropdownCell.rowId] || {})[dropdownCell.colId])
         : '';
 
     return (
@@ -94,7 +95,7 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
                                         </TouchableOpacity>
                                     );
                                 } else if (cellType === 'dropdown') {
-                                    const selectedValue = (value[row.id] || {})[col.id] || '';
+                                    const selectedValue = cellInputValue((value[row.id] || {})[col.id]);
                                     const selectedLabel = dropdownOptions.find(o => o.value === selectedValue)?.label || selectedValue;
                                     content = (
                                         <TouchableOpacity
@@ -115,7 +116,7 @@ export function MatrixTableField({ field, value = {}, onChange, error }: Props) 
                                         </TouchableOpacity>
                                     );
                                 } else {
-                                    const cellVal = (value[row.id] || {})[col.id] || '';
+                                    const cellVal = cellInputValue((value[row.id] || {})[col.id]);
                                     content = (
                                         <TextInput
                                             value={cellVal}

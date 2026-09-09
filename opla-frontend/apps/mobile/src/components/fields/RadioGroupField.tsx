@@ -1,6 +1,6 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { FormField, resolveFieldOptions } from '@opla/types';
+import { FormField } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -10,11 +10,11 @@ interface Props {
     responses?: Record<string, any>;
 }
 
-export function RadioGroupField({ field, value, onChange, error, responses = {} }: Props) {
-    const options = useMemo(() => resolveFieldOptions(field, responses), [field, responses]);
+export function RadioGroupField({ field, value, onChange, error }: Props) {
+    const options = field.options || [];
 
     useEffect(() => {
-        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value) {
+        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value !== undefined && value !== null && value !== '') {
             const stillValid = options.some(o => o.value === value);
             if (!stillValid) {
                 onChange('');

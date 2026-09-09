@@ -1,7 +1,7 @@
 import React from 'react';
 import { TextInput, View, Text } from 'react-native';
 import { FormField } from '@opla/types';
-import { applyInputMask, displayInputValue } from '../../utils/formFields';
+import { applyInputMask, displayInputValue, effectiveInputMaxLength } from '../../utils/formFields';
 
 interface TextInputFieldProps {
     field: FormField;
@@ -33,7 +33,7 @@ export function TextInputField({ field, value, error, onChange }: TextInputField
                 multiline={isTextArea}
                 keyboardType={keyboardType}
                 autoCapitalize={isEmail ? 'none' : undefined}
-                maxLength={field.maxLength}
+                maxLength={effectiveInputMaxLength(field)}
                 style={{
                     backgroundColor: '#1e293b',
                     borderColor: error ? '#ef4444' : '#334155',

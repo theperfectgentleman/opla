@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView, TextInput } from 'react-native';
-import { FormField, resolveFieldOptions } from '@opla/types';
+import { FormField } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -10,12 +10,11 @@ interface Props {
     responses?: Record<string, any>;
 }
 
-export function MultiSelectDropdownField({ field, value = [], onChange, error, responses = {} }: Props) {
+export function MultiSelectDropdownField({ field, value = [], onChange, error }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Resolve cascading options
-    const options = useMemo(() => resolveFieldOptions(field, responses), [field, responses]);
+    const options = field.options || [];
 
     useEffect(() => {
         if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && Array.isArray(value) && value.length > 0) {

@@ -4,6 +4,16 @@ All notable changes to Opla are documented here. Reconstruct older work from git
 
 ## [Unreleased]
 
+### Mobile field pass (Expo FormRenderer, after PR #2)
+
+- Cascade / directory options look up the parent by `id` *or* `bind`, so published answers keyed by `bind` still filter child dropdowns.
+- `form_link` is navigational (no longer blocks Next when required) and copies params across id/bind. Studio can author the parameter map.
+- Currency: Studio min/max keep `0` and decimals; Expo prefixes/suffixes; submit normalizes `decimal_places`.
+- Auto-value: Studio can set `now()` / `today()` / `current_time()`; date pickers stamp a local calendar day; on-load runs after draft resume.
+- Matrix numeric `0` displays; phone masks are not clipped by a shorter `maxLength`.
+- Choice widgets consume options already resolved by FormRenderer (cascade + directory + FILTER_OPTIONS) so the three layers cannot fight.
+- Proof: `cd opla-frontend/packages/logic && node --experimental-strip-types --test src/*.test.ts` (25 tests, including a market-activation blueprint pass). No Expo device in this environment.
+
 ### Mobile field parity (Expo FormRenderer)
 
 - Mobile now keys responses by `bind` (falling back to `id`), matching Studio Simulator / published blueprints, so values, rules, and submit payloads no longer collide when `id` is missing.

@@ -481,6 +481,9 @@ export interface GenericRangeValue {
 
 export {
     fieldUsesDirectoryOptionResolver,
+    hasParentValue,
+    lookupResponse,
     resolveDirectoryFormFieldOptions,
     resolveFieldOptions,
 } from './directoryFormOptions';
+export type { FieldIdentityRef } from './directoryFormOptions';

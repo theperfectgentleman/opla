@@ -52,6 +52,15 @@ npm run dev
 3. Enter credentials
 4. Click **Sign In**
 
+### Studio Ops (Attendance + Review)
+
+Open a **project** → **Ops** → **Attendance** or **Review**. These screens call the local API (`http://localhost:8000/api/v1`):
+
+- Attendance: `GET/POST /organizations/{orgId}/projects/{projectId}/attendance` (list, `my-status`, `check-in`, `check-out`)
+- Review: `GET /forms/{formId}/submissions` and `PATCH /submissions/{id}/review`
+
+Agents check in from mobile; Studio lists the live roster and reviews submissions. No mock data.
+
 ---
 
 ## Test Credentials

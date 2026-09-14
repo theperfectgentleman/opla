@@ -1,4 +1,13 @@
 import axios from 'axios';
+import {
+    formSubmissionsPath,
+    projectAttendanceCheckInPath,
+    projectAttendanceCheckOutPath,
+    projectAttendanceCollectionPath,
+    projectAttendanceMyStatusPath,
+    submissionReviewPath,
+    type AttendanceEventPayload,
+} from './opsApi';
 
 // API Base URL from environment
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -350,9 +359,23 @@ export const projectAPI = {
         return response.data;
     },
     listAttendance: async (orgId: string, projectId: string, date?: string) => {
-        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/attendance`, {
+        const response = await apiClient.get(projectAttendanceCollectionPath(orgId, projectId), {
             params: date ? { date } : undefined,
         });
+        return response.data;
+    },
+    getMyAttendanceStatus: async (orgId: string, projectId: string, date: string) => {
+        const response = await apiClient.get(projectAttendanceMyStatusPath(orgId, projectId), {
+            params: { date },
+        });
+        return response.data;
+    },
+    checkInAttendance: async (orgId: string, projectId: string, data: AttendanceEventPayload) => {
+        const response = await apiClient.post(projectAttendanceCheckInPath(orgId, projectId), data);
+        return response.data;
+    },
+    checkOutAttendance: async (orgId: string, projectId: string, data: AttendanceEventPayload) => {
+        const response = await apiClient.post(projectAttendanceCheckOutPath(orgId, projectId), data);
         return response.data;
     },
     listPinnedAnalytics: async (orgId: string, projectId: string) => {
@@ -745,13 +768,13 @@ export const submissionAPI = {
         return response.data;
     },
     listForForm: async (formId: string, reviewStatus?: 'submitted' | 'approved' | 'rejected') => {
-        const response = await apiClient.get(`/forms/${formId}/submissions`, {
+        const response = await apiClient.get(formSubmissionsPath(formId), {
             params: reviewStatus ? { review_status: reviewStatus } : undefined,
         });
         return response.data;
     },
     review: async (submissionId: string, data: { review_status: 'submitted' | 'approved' | 'rejected'; review_comment?: string }) => {
-        const response = await apiClient.patch(`/submissions/${submissionId}/review`, data);
+        const response = await apiClient.patch(submissionReviewPath(submissionId), data);
         return response.data;
     },
     getPublicForm: async (slug: string) => {

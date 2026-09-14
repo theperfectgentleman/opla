@@ -20,14 +20,14 @@ Canonical nouns: Organisation → Inbox / Projects / Reports / Teams / Audience 
 
 ## Current status
 
-Grounded in code as of 2026-09-09:
+Grounded in code as of 2026-09-14:
 
 - **Auth & orgs:** Email/password + phone OTP (Redis), JWT access/refresh, orgs, members, teams, invitations, permission catalog (`opla-backend/app/core/permission_catalog.py`).
 - **Studio shell:** Inbox landing, Projects, Reports, Teams, Audience placeholder, Settings (`vocabulary.ts`, `Dashboard.tsx`). Project workspace tabs: Hub / Tasks / Ops / Design / Data / Messages.
 - **Design:** Form builder (~26 field types in `@opla/types`), RulesBuilder, draft vs published versions, simulator, AI survey wizard (Groq). Market-activation field gaps (cascading, phone, time range, multi-select, currency, auto-timestamp, section skip, MSRP formula, centralized rules, form-link, JUMP_TO_SECTION) are marked implemented in [`docs/Gap Analysis — Market Activation Features.md`](docs/Gap%20Analysis%20—%20Market%20Activation%20Features.md).
 - **Players:** Expo agent/pulse/yard routes; SDUI `FormRenderer` + field widgets keyed by `bind`; defaults / min-max / masks / platforms / cascade+directory options / matrix dropdown cells; currency prefix+decimals; auto-value (`now()`/`today()`/`current_time()`); form_link param maps; lookup; AsyncStorage offline queue. Public web form at `/s/:slug` (`PublicForm.tsx`). Shared helpers live in `@opla/logic` (`formFields.ts`, `mobileFieldPass.ts`) and `@opla/types` (`lookupResponse`, `resolveFieldOptions`).
 - **Directory & capture:** Directory items (ex-catalog), directory forms, CSV import, lookups. Submissions with review status. Tasks including `field_visit`.
-- **Ops APIs (live) / Studio Ops UI (mock):** Attendance check-in/out and submission review exist on the API and mobile; Studio still mounts `OpsAttendanceMock` / `OpsReviewMock` in `ProjectWorkspace.tsx`.
+- **Ops Attendance + Review (wired):** Studio project Ops → Attendance / Review call the live project attendance and submission review APIs (same contracts as mobile). Check-in/out from Studio uses browser geolocation; agents still check in from Expo. Mocks removed.
 - **Hub:** `ProjectHub` at `/projects/:id/hub` — phases 0–5 in [`docs/Project-Command-Centre-Phases.md`](docs/Project-Command-Centre-Phases.md) marked Done (shell, pinned analytics, Needs Attention, form media, messages, `create_alert`). `/pdemo` redirects to Inbox. **Final cutover** (Hub as default project home) is not done — `/projects/:id` is still `ProjectWorkspace`.
 - **Data / reports:** Form datasets, analytics query API, Graphic Walker lab, dashboard canvas, org-level Reports portfolio (demo bucket init). Spatial Analysis Lab exists but uses Accra **demo** polygons, not live geo.
 - **Automation:** Form automation rules (`create_task`, `create_alert`) wired to Needs Attention.
@@ -38,7 +38,6 @@ Treat early docs (`docs/DEVELOPMENT_CHECKLIST.md`, `docs/DOCUMENTATION_COMPLETE.
 
 - **No public deploy** in-repo; planned `*.opla.app` hosts are placeholders.
 - **No billing / subscriptions / metering** — no Stripe or seat-license code.
-- Studio **Ops Attendance + Review** still mock; wire to existing project attendance + submission review APIs.
 - **Audience** nav is a dashed placeholder. Org **Media** tab is a placeholder (project media APIs exist).
 - **Maps in Analysis (Phase 6)** — clarifying questions unanswered; Leaflet lab is demo data.
 - **ProjectHub cutover** — opening a project still lands on ProjectWorkspace, not Hub.
@@ -73,11 +72,10 @@ Blueprint shape: `meta` + `schema` + `ui` (sections/fields) + `logic` (legacy) +
 
 ## How to continue
 
-1. Wire Studio Ops Attendance / Review to the live APIs (drop the mocks).
-2. Answer Phase 6 map questions in `docs/Project-Command-Centre-Phases.md`, then plot real attendance/submission geo.
-3. Cut over project home to `ProjectHub` when Ops is live.
-4. Close remaining Design gaps only if a real FMCG/interview form is blocked (display/instruction blocks, show-cards, native Other-specify, grouped matrix rows). PublicForm still lags Simulator/mobile on matrix, lookup, object collection, multi-select, and form_link. Expo phone-path field pass after PR #2 is covered by `@opla/logic` `runMobileFieldPass` tests.
-5. Keep product nouns from `docs/PRODUCT_VOCABULARY.md` — do not revive Catalog / Journey / Assets in UI copy.
+1. Answer Phase 6 map questions in `docs/Project-Command-Centre-Phases.md`, then plot real attendance/submission geo.
+2. Cut over project home to `ProjectHub` (Ops Attendance + Review are live).
+3. Close remaining Design gaps only if a real FMCG/interview form is blocked (display/instruction blocks, show-cards, native Other-specify, grouped matrix rows). PublicForm still lags Simulator/mobile on matrix, lookup, object collection, multi-select, and form_link. Expo phone-path field pass after PR #2 is covered by `@opla/logic` `runMobileFieldPass` tests.
+4. Keep product nouns from `docs/PRODUCT_VOCABULARY.md` — do not revive Catalog / Journey / Assets in UI copy.
 
 ## Rules for agents
 

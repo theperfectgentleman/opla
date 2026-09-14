@@ -19,8 +19,8 @@ import ConfirmPopover from '../components/ConfirmPopover';
 import DirectoryGrid from '../components/directory/DirectoryGrid';
 import FormsDesignPanel from '../components/forms/FormsDesignPanel';
 import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
-import OpsAttendanceMock from '../components/ops/OpsAttendanceMock';
-import OpsReviewMock from '../components/ops/OpsReviewMock';
+import OpsAttendance from '../components/ops/OpsAttendance';
+import OpsReview from '../components/ops/OpsReview';
 import { useOrg } from '../contexts/OrgContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -762,18 +762,6 @@ const ProjectWorkspace: React.FC = () => {
 
     const getTaskAssignmentValue = (task: ProjectTask) => getAccessorValue(task.assigned_accessor_id, task.assigned_accessor_type);
 
-    const resolveAttendanceMemberLabel = (record: ProjectAttendanceRecord) => {
-        const member = members.find(item => item.user_id === record.user_id);
-        return member?.user?.full_name || member?.user?.email || member?.user?.phone || record.user_id;
-    };
-
-    const formatAttendanceLocation = (location?: { latitude: number; longitude: number; accuracy_meters?: number; label?: string } | null) => {
-        if (!location) {
-            return 'Location pending';
-        }
-        return location.label || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
-    };
-
     const attendanceSummary = useMemo(() => ({
         total: attendanceRecords.length,
         checkedIn: attendanceRecords.filter((record) => record.status === 'checked_in').length,
@@ -974,33 +962,6 @@ const ProjectWorkspace: React.FC = () => {
         await formAPI.upsertDirectoryEntry(selectedDirectoryForm.id, data);
         const entries = await formAPI.getDirectoryEntries(selectedDirectoryForm.id);
         setDirectoryEntries(Array.isArray(entries) ? entries.map(normalizeDirectoryEntry) : []);
-    };
-
-
-
-    const summariseSubmissionData = (data: Record<string, any>) => {
-        const entries = Object.entries(data || {})
-            .filter(([, value]) => value !== null && value !== undefined && value !== '')
-            .slice(0, 3)
-            .map(([key, value]) => {
-                if (typeof value === 'object') {
-                    if (Array.isArray(value)) {
-                        return `${key}: ${value.length} item${value.length === 1 ? '' : 's'}`;
-                    }
-                    return `${key}: object`;
-                }
-                return `${key}: ${String(value)}`;
-            });
-        return entries.length > 0 ? entries.join(' • ') : 'No preview available';
-    };
-
-    const handleReviewSubmission = async (submissionId: string, reviewStatus: 'approved' | 'rejected') => {
-        try {
-            await submissionAPI.review(submissionId, { review_status: reviewStatus });
-            setReviewQueue(prev => prev.filter(item => item.id !== submissionId));
-        } catch (err: any) {
-            setError(err?.response?.data?.detail || err?.message || 'Failed to update submission review');
-        }
     };
 
     const handleReportUpdate = async (reportId: string, payload: Partial<ReportArtifact>) => {
@@ -1619,12 +1580,24 @@ const ProjectWorkspace: React.FC = () => {
                             </div>
                         )}
 
-                        {/* 2. OPS — mock Attendance + Review */}
-                        {activeTab === 'ops' && opsView === 'attendance' && (
-                            <OpsAttendanceMock projectName={currentProject.name} />
+                        {/* 2. OPS — live Attendance + Review */}
+                        {activeTab === 'ops' && opsView === 'attendance' && currentOrg && projectId && (
+                            <OpsAttendance
+                                orgId={currentOrg.id}
+                                projectId={projectId}
+                                projectName={currentProject.name}
+                                members={members}
+                                currentUserId={user?.id}
+                                onTodayRecordsChange={setAttendanceRecords}
+                            />
                         )}
                         {activeTab === 'ops' && opsView === 'review' && (
-                            <OpsReviewMock projectName={currentProject.name} />
+                            <OpsReview
+                                projectName={currentProject.name}
+                                forms={forms}
+                                members={members}
+                                onPendingQueueChange={setReviewQueue}
+                            />
                         )}
 
                         {activeTab === 'tasks' && (

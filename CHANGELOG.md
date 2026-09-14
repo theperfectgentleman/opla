@@ -4,6 +4,13 @@ All notable changes to Opla are documented here. Reconstruct older work from git
 
 ## [Unreleased]
 
+### Studio Ops Attendance + Review (live)
+
+- Replaced `OpsAttendanceMock` / `OpsReviewMock` with live Studio Ops surfaces under a project (`Ops` → Attendance / Review).
+- Attendance lists the day’s roster from `GET /organizations/{org}/projects/{id}/attendance`, and Studio check-in/out uses the same payloads as mobile (`check-in` / `check-out` + location).
+- Review loads form submissions and `PATCH /submissions/{id}/review` (approve / reject + optional comment) — same contract as the API and mobile review permission.
+- Proof: `cd opla-frontend/apps/studio && npm test`. Local path is Studio `:5173` + API `:8000` (`QUICK_START.md`).
+
 ### Mobile field pass (Expo FormRenderer, after PR #2)
 
 - Cascade / directory options look up the parent by `id` *or* `bind`, so published answers keyed by `bind` still filter child dropdowns.

@@ -24,7 +24,7 @@ Organisation
       │     ├── Attendance
       │     └── Review
       ├── Design           (forms, automations)
-      ├── Messages         (threads)
+      ├── Messages         (threads + broadcasts)
       └── Data
             ├── Directory  (reference / master data — shops, outlets, SKUs; was “catalog”)
             ├── Datasets   (derived from capture)
@@ -55,7 +55,7 @@ Organisation
 | **Tasks** | Assigned work; agents use **Today** as the primary queue | Agents, managers |
 | **Ops** | Project-scoped field workflows: attendance and submission review | Agents, supervisors |
 | **Design** | Design-time configuration: forms and automations | Studio admins |
-| **Messages** | Project threads and team communication | All project members |
+| **Messages** | **Threads** (in-app project channels) + **Broadcasts** (outbound field alerts, e.g. WhatsApp); see [`Messaging-Broadcasts-MVP.md`](./Messaging-Broadcasts-MVP.md) | All project members |
 | **Data** | Everything you maintain or explore from project data | Admins, analysts |
 | **Directory** | Reference / master data (outlets, products, etc.). Forms **consume** it (lookup) or **contribute** to it (via automation) | Admins; agents select records in capture |
 | **Datasets** | Structured tables derived from form submissions | Analysts |

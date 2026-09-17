@@ -4,6 +4,10 @@ All notable changes to Opla are documented here. Reconstruct older work from git
 
 ## [Unreleased]
 
+### Messaging / Field broadcasts (spec)
+
+- Locked MVP fit for project **Messages**: in-app **Threads** plus outbound **Broadcasts**; see `docs/Messaging-Broadcasts-MVP.md` (OPLA-MSG-01).
+
 ### Studio Ops Attendance + Review (live)
 
 - Replaced `OpsAttendanceMock` / `OpsReviewMock` with live Studio Ops surfaces under a project (`Ops` → Attendance / Review).

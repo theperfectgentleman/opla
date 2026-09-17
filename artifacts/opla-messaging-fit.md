@@ -1,10 +1,12 @@
 # Opla Messaging / Communications — codebase fit brief
 
-**Date:** 2026-09-17  
+**Date:** 2026-09-17 (updated per Forge alignment)  
 **Repo:** [theperfectgentleman/opla](https://github.com/theperfectgentleman/opla) (`main`)  
-**Method:** Read-only via `gh` API + local tree inspection (VM already had a checkout). No feature PR.
+**Method:** Read-only via `gh` API + local tree inspection. **No feature PR** from this work (product docs: **OPLA-MSG-01** launches separately).
 
-**Product intent (Joseph / Forge):** Not a full chat app. Day-1 = **outbound compose + audience pick + delivery log**. WhatsApp-first via **Sent.dm** later; no Sent API keys in-repo tonight unless provided.
+**Product intent (Joseph / Forge):** Not a full chat app. Day-1 = **outbound compose + audience pick + delivery log**. WhatsApp-first via **Sent.dm** later; no Sent API keys in-repo unless provided.
+
+**Forge mapping (canonical for build):** Project **Messages** nav already hosts **Phase 4 threads** (in-app channels). The **gap** is **Broadcasts** (WhatsApp / outbound) as a **sibling sub-view under Messages**, not a new top-level tab and not under Ops.
 
 ---
 
@@ -12,251 +14,176 @@
 
 | Area | Path | Role |
 |------|------|------|
-| **API** | `opla-backend/` | FastAPI “Intelligence Layer” — Poetry, Alembic, PostgreSQL, optional Redis |
-| **Studio** | `opla-frontend/apps/studio/` | Vite, React 19, React Router — builder, hub, ops, reports |
-| **Mobile** | `opla-frontend/apps/mobile/` | Expo 54 — agent capture, attendance, pulse |
-| **Shared packages** | `opla-frontend/packages/{types,logic,ui,config}/` | `@opla/types`, `@opla/logic`, etc. (TurboRepo root: `opla-frontend/package.json`) |
-| **Docs** | `docs/` | Product vocabulary, roadmaps |
-| **Legacy (ignore)** | Root `apps/studio/` | Empty scaffold; README says active Studio is under `opla-frontend` |
+| **API** | `opla-backend/` | FastAPI — Poetry, Alembic, PostgreSQL, optional Redis |
+| **Studio** | `opla-frontend/apps/studio/` | Vite, React 19, React Router |
+| **Mobile** | `opla-frontend/apps/mobile/` | Expo 54 — agent capture, attendance |
+| **Shared packages** | `opla-frontend/packages/{types,logic,ui,config}/` | TurboRepo (`opla-frontend/package.json`) |
+| **Docs** | `docs/` | Vocabulary, Command Centre phases |
+| **Legacy (ignore)** | Root `apps/studio/` | Not active Studio |
 
-**Run surfaces:** API `localhost:8000` (`/api/v1`, OpenAPI `/api/docs`); Studio `localhost:5173`; `VITE_API_URL` → API base.
-
-**Routers registered** (`opla-backend/app/main.py`): `auth`, `organizations`, `projects`, `forms`, `submissions`, `roles`, `teams`, `section_templates`, `reports`, `assets`, `messages`, `analytics`, `walker_compute`, `ai_survey`.
+**Routers** (`opla-backend/app/main.py`): includes `messages` (in-app threads + `message-notifications`), not outbound WhatsApp.
 
 ---
 
-## 2. Studio Ops nav today (exact paths & routes)
+## 2. Studio nav today — Ops vs Messages
 
-### Canonical vocabulary
+### Ops (unchanged)
 
-- **Types / labels:** `opla-frontend/apps/studio/src/lib/vocabulary.ts`
-  - `ProjectOpsSection`: `'overview' | 'attendance' | 'review'`
-  - `OPS_SECTION_LABELS`: Overview, Attendance, Review
-  - `PROJECT_SHELL_NAV`: hub, tasks, ops, design, data, messages
+| Item | Files | Route |
+|------|-------|-------|
+| Vocabulary | `opla-frontend/apps/studio/src/lib/vocabulary.ts` — `ProjectOpsSection`: `attendance`, `review` | |
+| Submenu | `StudioLayout.tsx` — `projectOpsSectionSubItems`: Attendance, Review | |
+| Page | `ProjectWorkspace.tsx` → `OpsAttendance.tsx`, `OpsReview.tsx` | `/projects/:projectId?tab=ops&section=attendance` (default Ops) or `section=review` |
+| API client | `lib/opsApi.ts` | Same paths as mobile attendance/review |
 
-### Sidebar UI
+### Messages — Phase 4 threads (exists)
 
-- **Project Ops submenu items:** `opla-frontend/apps/studio/src/components/StudioLayout.tsx`
-  - `projectOpsSectionSubItems`: **Attendance**, **Review** (keys `attendance`, `review`)
-  - Ops parent nav key: `ops` (label **Ops**)
+| Item | Detail |
+|------|--------|
+| **Product phase** | `docs/Project-Command-Centre-Phases.md` — **Phase 4 — Proper threads** (status **Done**) |
+| **Nav** | Project sidebar key `messages` — `StudioLayout.tsx`, label **Messages** |
+| **Route** | `/projects/:projectId?tab=messages` (optional `channel` / legacy `thread` query for deep link) |
+| **UI** | `ProjectWorkspace.tsx` → `components/hub/ProjectThreadsPanel.tsx` (also surfaced on `ProjectHub.tsx`) |
+| **Backend** | `opla-backend/app/api/routes/messages.py` — channels (`general` \| `team`), channel messages, org-level `message-notifications` |
+| **Tables** | `project_message_channels`, `project_messages`, `project_message_notifications` |
 
-### Routes
+**Today:** Messages is a **single pane** (threads only). There is **no** Messages submenu yet; Forge adds **Threads \| Broadcasts** mirroring Ops → Attendance \| Review.
 
-| Destination | URL pattern |
-|-------------|-------------|
-| Org shell | `/dashboard?tab={inbox\|projects\|reports\|members\|audience\|settings}` (+ `section` for members/data/design) |
-| Project Hub | `/projects/:projectId/hub` |
-| Project workspace | `/projects/:projectId?tab=…&section=…&view=…` |
-| **Ops → Attendance** | `/projects/:projectId?tab=ops&section=attendance` (default if `tab=ops` with no section) |
-| **Ops → Review** | `/projects/:projectId?tab=ops&section=review` or legacy `?tab=ops&view=review` / `?tab=review` |
-| Ops Overview (redirect) | `section=overview` → redirected to Hub (`ProjectWorkspace.tsx`) |
+### Org shell (context)
 
-**Helpers:** `projectNavHref()`, `resolveOpsSection()`, `resolveLegacyProjectTab()` in `vocabulary.ts`.
-
-### Page wiring
-
-- **Shell + tab rendering:** `opla-frontend/apps/studio/src/pages/ProjectWorkspace.tsx`
-  - `activeTab === 'ops' && opsView === 'attendance'` → `components/ops/OpsAttendance.tsx`
-  - `activeTab === 'ops' && opsView === 'review'` → `components/ops/OpsReview.tsx`
-- **API client (Ops):** `opla-frontend/apps/studio/src/lib/opsApi.ts` (attendance + submission review; mirrors mobile paths)
-- **App router:** `opla-frontend/apps/studio/src/App.tsx` — project route is `/projects/:projectId` → `ProjectWorkspace`
-
-**Related (not Ops):** In-app **Messages** = project tab `tab=messages` → `ProjectThreadsPanel` (thread channels, not SMS/WhatsApp).
+`/dashboard?tab=inbox|projects|reports|members|audience|settings` — org **Audience** is still a placeholder (`Dashboard.tsx`), not the broadcast audience picker.
 
 ---
 
-## 3. Domain model: projects, teams, roles, sites, field workers
+## 3. Domain model (audience reuse for Broadcasts)
 
-### Projects
-
-- **Table / model:** `projects` — `opla-backend/app/models/project.py`
-- **API:** `opla-backend/app/api/routes/projects.py` under prefix `/organizations/{org_id}/projects`
-  - CRUD, status, collection window, expectations
-  - `/access`, `/tasks`, `/attendance`, `/directory-items`, `/attention`, `/pinned-analytics`, `/media`, etc.
-
-### Teams & org membership
-
-| Concept | Table | Model | API |
-|---------|-------|-------|-----|
-| Org teams | `teams` | `app/models/team.py` | `GET/POST /organizations/{org_id}/teams`, members via org + `teams.py` |
-| Team membership | `team_members` | `app/models/team_member.py` | `POST /organizations/{org_id}/teams/{team_id}/members/{user_id}`, `GET …/members` |
-| Org membership | `org_members` | `app/models/org_member.py` | `GET /organizations/{org_id}/members` |
-| Invitations | `invitations` | `app/models/invitation.py` | `/organizations/{org_id}/invitations/*`, accept at `/organizations/invitations/accept` |
-
-Studio loads **org `members`** via `useOrg()` (`OrgContext`) for labels in Ops/Tasks; project **access rules** via `projectAPI.listAccess`.
-
-### Roles (two layers)
-
-1. **Org roles (RBAC templates):** `org_roles`, `org_role_assignments` — `app/models/org_role.py`, routes in `organizations.py` (`/roles`, `/roles/catalog`, `/roles/assignments`).
-2. **Project access:** `project_access` — polymorphic `accessor_type` `user` \| `team`, optional `project_role` (`collector` \| `analyst` \| `editor`) or `project_role_templates` — `app/models/project_access.py`, `ProjectAccessService` in `app/services/project_access_service.py`.
-   - Effective permissions merge org roles + direct/team project access (`permission_catalog.py`).
-
-### Field workers (agents)
-
-- **Users:** `users` — `phone`, `email`, `full_name` (`app/models/user.py`). Primary identity for outbound contact.
-- **Assignment surfaces:** project access (user/team), tasks (`assigned_accessor_id` + `assigned_accessor_type`), attendance (`project_attendance_records.user_id`).
-- **Tasks / field visits:** `project_tasks` with `kind` `general` \| `field_visit` — `app/models/project_task.py`; API on projects router (`/tasks`, `/tasks/my-day`).
-
-### Sites / locations (no dedicated “sites” table)
-
-| Mechanism | Purpose |
-|-----------|---------|
-| **Directory (reference data)** | **Data → Directory:** directory-kind **forms** + submissions; legacy SKU table `project_directory_items` still has API (`/directory-items`) but product term is Directory (shops/outlets via form capture). Models: `form.py` (`FormKind.DIRECTORY`), `project_directory_service.py`, Studio `components/directory/*`. |
-| **Attendance geo** | `project_attendance_records` — `check_in_location_json` / `check_out_location_json` (lat/lng/label) — `project_attendance.py` |
-| **Capture GPS** | Form field types `gps_*` in blueprints (`@opla/types`) |
-| **Field visit context** | `project_tasks.context_json` (JSONB) for visit metadata |
-
-**Audience for messaging MVP:** resolve recipients from **org members** + **team rosters** + **project access** (expand team accessors to user IDs). Directory rows are **outlets**, not message recipients, unless product later adds “message all agents assigned to outlet X” (not modeled today).
+| Entity | Model / API | Use for broadcasts |
+|--------|-------------|-------------------|
+| **Project** | `projects`, `/organizations/{org_id}/projects/...` | Scope all sends |
+| **Teams** | `teams`, `team_members`; org team APIs | Audience segment |
+| **Project access** | `project_access` (user \| team + roles/templates); `ProjectAccessService` | “Everyone on this project” expansion |
+| **Org members** | `org_members`, `GET …/members`; Studio `useOrg().members` | Labels + picker |
+| **Field workers** | `users.phone`, `users.email` | Delivery addresses |
+| **Sites / outlets** | Directory forms + submissions (not a `sites` table); attendance `*_location_json` | **Not** recipients in v1 |
 
 ---
 
-## 4. Existing phone / WhatsApp / SMS / email / notifications
+## 4. Phone / WhatsApp / SMS / email (current)
 
-| Capability | Status | Location |
-|------------|--------|----------|
-| **Phone on user profile** | Stored, unique indexed | `users.phone` |
-| **Phone OTP auth** | Redis-backed; **no real SMS** | `app/services/otp_service.py` — `_send_sms` is `pass`; dev returns OTP in response / `123456` bypass |
-| **Email/password auth** | Yes | `app/api/routes/auth.py` |
-| **Invitations** | DB + token/link; **no outbound email sender** | `invitation_service.py` — `delivery_mode` includes `email` but no SMTP integration |
-| **In-app message notifications** | DB only (@mentions → `project_message_notifications`) | `messages.py`, `project_message_service.py` |
-| **In-app project threads** | Channels `general` \| `team` | `project_message_channels`, `project_messages` |
-| **WhatsApp / Sent.dm / Twilio / SendGrid** | **Not present** | PRD mentions SMS/USSD (`docs/Project Opla_PRD.md`); no implementation |
-| **Secrets pattern** | Repo-root `.env` via Pydantic `Settings` | `opla-backend/app/core/config.py`: `DATABASE_URL`, `JWT_*`, `REDIS_URL`, `GROQ_API_KEY`, `ENVIRONMENT` — **no** messaging provider keys |
+| Capability | Status |
+|------------|--------|
+| `users.phone` / `users.email` | Stored on user |
+| OTP “SMS” | `otp_service.py` — **no provider**; dev OTP in response |
+| Invitations | `email` delivery mode in DB; **no SMTP send** |
+| In-app threads | Live (`messages.py`) |
+| **WhatsApp / Sent.dm** | **Not implemented** |
+| Secrets | `config.py`: JWT, DB, Redis, `GROQ_API_KEY` — **no** `SENT_DM_*` yet |
 
-Form-level `phone_input` is capture/validation only (`@opla/logic/formFields.ts`), not outbound messaging.
+Do **not** store outbound WhatsApp payloads in `project_messages` (thread bodies). Broadcasts need a **separate** persistence and API namespace.
 
 ---
 
-## 5. Recommended insertion point — Communications MVP
+## 5. Recommended insertion — **Messages → Threads \| Broadcasts** (Forge)
 
-### Keep separate from **Messages**
+### What already exists
 
-- **Messages** = threaded, in-app, bidirectional chat (`ProjectThreadsPanel`, `project_message_*` tables).
-- **Communications** (Joseph) = **manager → field outbound** + **delivery log** + external channel later.
+- **Threads:** bidirectional, in-app, channel-based (General + per-team channels). Phase 4 complete.
+- **Gap:** manager **outbound** compose, **audience pick**, **per-recipient delivery log**, provider hook for WhatsApp (Sent.dm later).
 
-### Recommended: **Project Ops → Communications** (third Ops subsection)
+### Proposed UX (align with Ops submenu pattern)
 
-**Why**
+| Sub-view | Key | Route (proposed) | UI (proposed) |
+|----------|-----|------------------|---------------|
+| **Threads** | `threads` | `?tab=messages&section=threads` (default when `tab=messages`) | Existing `ProjectThreadsPanel` |
+| **Broadcasts** | `broadcasts` | `?tab=messages&section=broadcasts` | New `MessagesBroadcasts.tsx` (compose + log table) |
 
-- Same persona and permissions as Attendance/Review (project leads, supervisors).
-- Reuses **project-scoped** context and existing Studio patterns (`OpsAttendance` / `opsApi.ts`).
-- Audience picker can mirror task assignment UX (members + teams + project access) already in `ProjectWorkspace.tsx`.
-- Avoids conflating with org **Audience** placeholder (`Dashboard.tsx` — empty “Audience Pool Management”) which is org-wide sampling, not operational broadcast.
-- Aligns with “during field work” without building a chat UI.
+**Files to extend (implementation — not this PR):**
 
-**Nav / route (proposed)**
+- `vocabulary.ts` — `ProjectMessagesSection`, `MESSAGES_SECTION_LABELS`, `resolveMessagesSection()`, `buildProjectSearchParams` for `messages` + `section`
+- `StudioLayout.tsx` — `projectMessagesSectionSubItems` (parallel to Ops)
+- `ProjectWorkspace.tsx` — branch on `messages` section
+- `lib/broadcastsApi.ts` (or `messagesApi.ts` split) — **distinct** from thread methods in `lib/api.ts`
 
-- Extend `ProjectOpsSection` + `projectOpsSectionSubItems` with `communications`.
-- URL: `/projects/:projectId?tab=ops&section=communications`
-- Component: `opla-frontend/apps/studio/src/components/ops/OpsCommunications.tsx` (new)
-- Client module: `communicationsApi.ts` or extend `opsApi.ts` if tiny.
+### Proposed API (new; do not overload thread routes)
 
-**API surface (proposed, new router or `projects` sub-resource)**
+Prefix: `/organizations/{org_id}/projects/{project_id}/broadcasts`
 
-Prefix: `/organizations/{org_id}/projects/{project_id}/communications`
+| Method | Purpose |
+|--------|---------|
+| `POST /broadcasts` | Create send (body, `channel`: `whatsapp` first; later `sms` \| `email`), audience spec |
+| `GET /broadcasts` | Delivery log (campaign list) |
+| `GET /broadcasts/{id}` | Campaign + per-recipient rows |
+| Optional `GET /broadcasts/audience-preview` | Server expand teams / project accessors → users with contact flags |
 
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /communications` | Create broadcast (body, channel enum `whatsapp` \| `sms` \| `email`, audience spec) |
-| `GET /communications` | List sends (delivery log) |
-| `GET /communications/{id}` | Detail + per-recipient rows |
-| `GET /communications/audience-options` | Optional: server-side expand teams → users with `phone`/`email` flags |
+**Data model (proposed):** `project_broadcasts` + `project_broadcast_deliveries` (names per OPLA-MSG-01).
 
-**Data model (proposed)**
+**Provider:** `app/services/messaging/` — `StubProvider` day-1; `SentDmProvider` when `SENT_DM_API_KEY` is set (empty default in `config.py`).
 
-- `project_communications` (campaign row: project_id, author_id, body, channel, status, created_at)
-- `project_communication_deliveries` (communication_id, user_id, address, status, provider_id, error, sent_at)
+**Permissions:** e.g. `project.broadcasts.send` in `permission_catalog.py`, or reuse edit-project gate consistent with thread post policy.
 
-**Provider abstraction**
+**Mobile:** Studio-first MVP; optional later link from Inbox / attention — not required day-1.
 
-- `app/services/messaging/` with `MessagingProvider` protocol; day-1 **`StubProvider`** (queued/sent_simulated) + structured log; **`SentDmProvider`** stub raising clear error until `SENT_DM_API_KEY` in settings.
+### Agent assessment — do we disagree with Threads \| Broadcasts under **Messages**?
 
-**Permissions**
+**No — we align with Forge for implementation.** Rationale:
 
-- Reuse `ProjectAccessService.ensure_can_edit_project` or a new `project.communications.send` key in `permission_catalog.py` (mirror who can create tasks/alerts).
+1. **Nav cohesion:** Phase 4 already anchored project communication under **Messages**; Broadcasts is the same persona (project lead → field), different **transport** (external vs in-app).
+2. **Ops stay field-ops:** `PRODUCT_VOCABULARY.md` locks Ops to Attendance + Review; stuffing outbound WhatsApp there blurs “what’s happening in the field” vs “push a message out.”
+3. **Implementation precedent:** Ops already uses a **tab + section** submenu; Messages should mirror that for Threads \| Broadcasts.
 
-**Mobile**
+**Caveats (call out in OPLA-MSG-01, not blockers):**
 
-- MVP can be Studio-only; optional later: Inbox item or push when delivery log ties to `project_attention` / notifications.
+| Risk | Mitigation |
+|------|------------|
+| Vocabulary says Messages = “threads” only | Update `docs/PRODUCT_VOCABULARY.md` in **OPLA-MSG-01**: Messages = Threads + Broadcasts |
+| Backend route name `messages` = threads today | New **`/broadcasts`** router; never POST WhatsApp bodies to `message-channels/.../messages` |
+| Users may confuse thread @mentions with WhatsApp | UI copy: “Broadcast” / “WhatsApp to agents”; separate delivery log |
+| Org **Audience** nav sounds related | Keep org Audience as future sampling pools; broadcast audience = project teams/members/access |
 
-**Vocabulary doc**
-
-- Update `docs/PRODUCT_VOCABULARY.md` Ops children: Attendance, Review, **Communications** (outbound broadcasts).
-
----
-
-## 6. Suggested atomic tickets (cloud agents)
-
-### Ticket 1 — Backend schema + stub send + list log
-
-**Files:** Alembic migration; `app/models/project_communication.py`; `app/services/communications_service.py`; `app/api/schemas/communication.py`; `app/api/routes/communications.py` (or add to `projects.py`); register in `app/main.py`; `app/core/config.py` optional `SENT_DM_API_KEY` (empty default).
-
-**Acceptance**
-
-- `POST` creates a communication and N delivery rows for resolved recipients (user/team/project_access spec).
-- `GET` returns paginated log for project.
-- No external HTTP calls; deliveries marked `pending` → `simulated_sent` in dev.
-- Permission denied without project edit/send permission.
-- Tests in `test_project_workspace_api.py` style or new `test_communications_api.py`.
-
-### Ticket 2 — Audience resolution service
-
-**Files:** `app/services/communication_audience_service.py` (expand teams, dedupe users, filter `users.phone`/`email` by channel).
-
-**Acceptance**
-
-- Given audience `{ "type": "team", "team_id": "…" }` or `{ "type": "project_accessors" }` or explicit `user_ids`, returns canonical recipient list with contact availability flags.
-- Unit tests for team expansion + empty phone handling.
-
-### Ticket 3 — Studio Ops nav + compose UI
-
-**Files:** `vocabulary.ts` (`communications` ops section); `StudioLayout.tsx` submenu; `ProjectWorkspace.tsx` tab branch; `components/ops/OpsCommunications.tsx`; `lib/communicationsApi.ts`.
-
-**Acceptance**
-
-- Nav shows **Communications** under Ops; route `?tab=ops&section=communications`.
-- Compose: message body, channel selector (WhatsApp default disabled with “provider not configured” until stub allows), multi-select audience (teams + individuals from org members / project access).
-- Submit calls API; table shows delivery log with status columns.
-- Matches Ops visual patterns (Attendance/Review cards).
-
-### Ticket 4 — Sent.dm provider interface (no live keys)
-
-**Files:** `app/services/messaging/sent_dm_provider.py`; wire in service factory when `SENT_DM_API_KEY` set.
-
-**Acceptance**
-
-- Factory selects stub when key missing; when key present, provider methods exist but can `NotImplementedError` or dry-run until Sent API contract is confirmed.
-- Document env var in `QUICK_START.md` / `AGENT.md` only (no secrets committed).
-
-### Ticket 5 — Product vocabulary + AGENT.md status line
-
-**Files:** `docs/PRODUCT_VOCABULARY.md`, `AGENT.md`, `CHANGELOG.md` entry.
-
-**Acceptance**
-
-- Ops lists Communications; distinguishes **Messages** (threads) vs **Communications** (outbound log).
-- No UI copy promises live WhatsApp until provider ticket is done.
+**Alternative considered (rejected for product, not for lack of code fit):** **Ops → Communications** third subsection — good for supervisor persona, but splits “all project messaging” across **Messages** and **Ops** and fights existing Phase 4 placement. Prefer Forge layout unless Joseph reopens nav.
 
 ---
 
-## Parallel consultation notes (Knox)
+## 6. Atomic tickets (cloud agents; feature work after OPLA-MSG-01)
 
-- **Knox alignment:** Confirm Sent.dm payload shape (template vs free text, per-country WhatsApp rules) before Ticket 4 leaves stub.
-- **Joseph constraints satisfied:** MVP is outbound + audience + log; WhatsApp path is pluggable; no Sent keys required for Tickets 1–3.
-- **Existing reuse:** `users.phone` / `users.email`, `teams` + `team_members`, `project_access`, `ProjectAccessService`, Studio Ops shell — **do not** extend `project_messages` for SMS.
+### MSG-BE-01 — Broadcast schema + stub provider + API
+
+Alembic; models; `broadcasts_service.py`; `routes/broadcasts.py`; register in `main.py`; tests.
+
+**Acceptance:** POST creates campaign + delivery rows; GET log; stub marks `simulated_sent`; no external HTTP without key.
+
+### MSG-BE-02 — Audience resolver
+
+Expand team / project_access / explicit `user_ids`; dedupe; flag missing `phone` for WhatsApp.
+
+### MSG-FE-01 — Messages submenu + Broadcasts UI
+
+`vocabulary.ts`, `StudioLayout.tsx`, `ProjectWorkspace.tsx`, `MessagesBroadcasts.tsx`, `broadcastsApi.ts`.
+
+**Acceptance:** `?tab=messages&section=broadcasts`; compose + log; Threads default at `section=threads` or omit section.
+
+### MSG-BE-03 — Sent.dm adapter shell
+
+Factory + env var; no live send until Knox/Sent contract + keys.
+
+### Docs
+
+Owned by **OPLA-MSG-01** (separate docs PR) — vocabulary, AGENT.md, CHANGELOG; this artifact is engineering fit only.
 
 ---
 
-## Key file index (quick links)
+## 7. Key file index
 
 | Topic | Path |
 |-------|------|
-| Ops nav labels | `opla-frontend/apps/studio/src/lib/vocabulary.ts` |
-| Ops submenu | `opla-frontend/apps/studio/src/components/StudioLayout.tsx` |
-| Ops pages | `opla-frontend/apps/studio/src/pages/ProjectWorkspace.tsx` |
-| Attendance API client | `opla-frontend/apps/studio/src/lib/opsApi.ts` |
-| Project API | `opla-backend/app/api/routes/projects.py` |
-| Threads / in-app messages | `opla-backend/app/api/routes/messages.py` |
-| Permissions | `opla-backend/app/core/permission_catalog.py` |
+| Phase 4 threads | `docs/Project-Command-Centre-Phases.md` |
+| Messages nav | `vocabulary.ts`, `StudioLayout.tsx`, `ProjectWorkspace.tsx` |
+| Threads UI | `components/hub/ProjectThreadsPanel.tsx` |
+| Thread API | `opla-backend/app/api/routes/messages.py` |
+| Ops (reference submenu pattern) | `StudioLayout.tsx` (`projectOpsSectionSubItems`) |
+| Audience data | `users`, `teams`, `project_access`, `ProjectAccessService` |
 | Config / secrets | `opla-backend/app/core/config.py` |
-| Product hierarchy | `docs/PRODUCT_VOCABULARY.md` |
+
+---
+
+**Stop line:** This file is the research/fit artifact only. Do not open a competing implementation PR here; follow **OPLA-MSG-01** for product docs, then MSG-BE/FE tickets for code.

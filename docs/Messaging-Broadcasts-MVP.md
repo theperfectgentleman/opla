@@ -1,124 +1,43 @@
 # Opla — Project Messaging / Field broadcasts (MVP fit)
 
-**Status:** Spec locked in repo (OPLA-MSG-01 / ticket **A**). IA locked by Knox (17 Sep 2026).  
-**Owner:** Forge  
-**Repo:** theperfectgentleman/opla  
-**Drive copy:** https://docs.google.com/document/d/1wWXBW0pQ8YB4gtyEv3LCOGeKFUYa7FTBHNz9_j1pGbU/edit
+**Status:** Knox-locked 17 Sep 2026 Accra night. Sent.dm keys deferred to tomorrow.  
+**Owner:** Forge + Knox  
+**Repo:** theperfectgentleman/opla
 
-## Knox lock (17 Sep 2026 Accra)
+## Knox lock (17 Sep 2026 Accra) — CONFIRMED
 
-Product IA and MVP boundaries for this programme:
+**IA:** Extend project **Messages** (already in vocab + nav: hub|tasks|ops|design|data|messages). Do **not** invent a new top-level or bury it only in Studio Ops / org Settings. Optional later: thin Broadcast action on Hub that deep-links into Messages compose. Org Settings only for provider config (Sent.dm key, default WhatsApp sender) when keys wire.
 
-1. **IA** — Extend project **Messages** (already in nav). Do **not** add a new top-level area or bury compose only under Ops or Settings. Optional later: **Hub** thin “Broadcast” deep-link into Messages compose. **Org Settings** is only for provider config when keys are wired.
-2. **MVP** — Outbound broadcast + delivery log from Studio. **Sent.dm** WhatsApp **utility** first. Persist who / when / channel / status / error. Reuse `general` \| `team` channels; add a **broadcast mode** if thread chat UX gets in the way — still under Messages. **Later:** agent inbox, SMS fallback, two-way reply, templates, cost meter. **Not MVP:** full chat app, consumer DMs, replacing threads.
-3. **Audience** — Project members; **Team** (`kind=team` + `team_id`); role template if easy; **saved group = Team for v1**. Do **not** use site as a people segment.
-4. **Reuse** — `users.phone`, existing message tables/UI, teams. Greenfield adapter behind a messaging interface; `SENT_DM_API_KEY` placeholder + mock provider (no real keys in repo).
-5. **Keys** — None tonight; provider wiring lands tomorrow / ticket **D**.
-6. **Tickets (A–E)** — **A** spec (this PR). **B** backend: `OutboundMessage` + stub + POST/list. **C** Studio Broadcast UI. **D** org provider settings (env-only OK Friday). **E** mock tests + one WhatsApp smoke when key lands. **Ship B → C first.**
+**MVP:** Outbound broadcast + delivery log from Studio while a project is live. Compose → audience → Sent.dm WhatsApp utility first. Persist who/when/channel/status/error. Reuse general|team channels; add a broadcast mode if thread chat UX gets in the way — still under Messages.
 
----
+**Later:** In-app inbox for agents, SMS fallback, two-way reply sync, templates library, cost meter.  
+**Not MVP:** Full chat app, consumer DMs, replacing in-app threads.
 
-## 1. What we need
+**Audience:** Project members; Team (`kind=team` + `team_id`); role template if leads think in roles; saved group = Team for v1. Skip site as first-class people segment (Directory is outlets/SKUs).
 
-A Messaging section in Opla so managers can send messages to different groups or teams while running a project — managing field communications, not building another chat app.
+**Reuse:** `users.phone`; existing message channels/messages/notifications + `ProjectThreadsPanel`; teams + team_members. Greenfield messaging adapter. No keys tonight — `SENT_DM_API_KEY` placeholder + mock provider until tomorrow.
 
-Cost context (Ghana, ~500 msgs/month via Sent.dm utility): WhatsApp utility-style roughly GH₵110–150; marketing higher; pure SMS much more expensive (~GH₵1,800+).
+**Tickets (Knox A–E):**
+| Knox | Work | Key? |
+|------|------|------|
+| A | Spec/PRD slice (this doc) | No |
+| B | Backend OutboundMessage + service + Sent stub + POST broadcast + list log | No |
+| C | Studio Broadcast compose + audience (members/team/role) + log table | No |
+| D | Org provider settings UI (env-only OK for Fri) | Later |
+| E | Mock tests + one manual WA send once key lands | Yes |
 
-## 2. What already exists (do not reinvent)
+Ship **B→C** first. No Sent.dm calls without a key. If Fri Opla 3hr locks to Messaging, **B+C** is the slice.
 
-Product vocabulary already names **Messages**: Threads (in-app) + Broadcasts (outbound field alerts) — see [`PRODUCT_VOCABULARY.md`](./PRODUCT_VOCABULARY.md).
+## What already exists
 
-Project shell nav already includes: `hub | tasks | ops | design | data | messages`  
-(see `docs/PRODUCT_VOCABULARY.md` and Studio `vocabulary.ts`).
+Product vocabulary already names Messages. Project shell includes messages. Backend: `project_message_channels`, `project_messages`, mention notifications. Studio: `ProjectThreadsPanel`. Phase 4 threads Done. Users have `phone`.
 
-Backend already has:
+Gap is not “add Messages tab” — gap is **outbound field alerts** with an honest delivery log beside Threads.
 
-- `project_message_channels` (kind: `general` | `team`, optional `team_id`)
-- `project_messages` (body, mentions, edit/delete window)
-- `project_message_notifications` (in-app @mentions only)
-- APIs under `/organizations/{org}/projects/{project}/messages…`
+## Technical shape (B)
 
-Studio already has `ProjectThreadsPanel` wired to those APIs. Command Centre Phase 4 “Proper threads” is **Done**. Users already have a `phone` field (email or phone/OTP auth).
+Sibling tables (do not overload `project_messages` for phone fan-out): outbound/broadcast + recipients + thin opt-outs. `BroadcastService` + `MessagingProvider` protocol; Fake/mock + SentDm when keyed. Optional system note into General thread after send.
 
-The gap is **outbound field alerts** (WhatsApp first) with a delivery log beside existing in-app threads — not a new Messages tab.
+## Success (Accra feel)
 
-## 3. Product fit (locked)
-
-Keep one **Messages** area under the project. Two jobs:
-
-**Threads (already live)**  
-In-app conversation on General + per-team channels. Mentions notify in Inbox. No phone send.
-
-**Broadcasts (MVP)**  
-One-way field alerts from Studio; Sent.dm WhatsApp utility; honest delivery log (who, when, channel, status, error).
-
-If thread chat UX conflicts with broadcast compose/history, add an explicit **broadcast mode** or sub-nav — still inside Messages, not Ops or Settings.
-
-**UI sketch** (Studio → project → Messages):
-
-- Sub-nav: **Threads | Broadcasts** (or equivalent broadcast mode)
-- Broadcasts list: title, audience summary, channel (WhatsApp / later SMS), status counts, sent_at, sender
-- Compose: audience picker → body → preview recipient count → Send → log row
-
-**Hub (later):** optional deep-link from programme day view into Messages broadcast compose — Hub does not own compose.
-
-**Mobile v1:** receive on WhatsApp only; no mobile compose in MVP.
-
-## 4. Audience model (reuse existing data)
-
-| Audience | MVP | Notes |
-|----------|-----|--------|
-| **Project members** | Yes | Users with project access and E.164 `users.phone` |
-| **Team** | Yes | `project_message_channels` with `kind=team` + `team_id` / `team_members` |
-| **Role template** | If easy | Optional stretch; not blocking |
-| **Saved group** | v1 = Team | No new group entity; map “saved group” to a Team |
-| **Site / location** | No | Not a people segment for broadcasts |
-
-Hard rules: skip users with no E.164 phone (show skipped count before send); never silently drop; dedupe by user_id/phone; respect opt-outs when table exists.
-
-## 5. MVP scope vs later
-
-**MVP**
-
-- Studio: outbound broadcast compose + delivery log / history
-- Audiences: project members + Team
-- Sent.dm WhatsApp utility via provider adapter; mock provider when `SENT_DM_API_KEY` unset
-- Persist per-recipient: who, when, channel, status, error
-- Managers / appropriate project roles only
-
-**Later**
-
-- Agent inbox, SMS fallback, two-way reply, templates, cost meter
-- Hub broadcast deep-link
-- Org Settings UI for provider (ticket **D** may start env-only)
-
-**Not MVP**
-
-- Full chat app, consumer DMs, replacing threads
-- Two-way WhatsApp inbox, marketing/Audience merge, auto-broadcast on every thread message
-
-## 6. Technical shape
-
-- Reuse `users.phone`, `project_message_channels` (`general` \| `team`), teams, and existing thread UI where possible.
-- Greenfield **messaging provider** interface; **Sent.dm** implementation + **mock provider** for dev/CI.
-- Outbound persistence (names may evolve in **B**): e.g. `OutboundMessage` + recipient rows; do not overload `project_messages` for delivery state.
-- Env placeholder only: `SENT_DM_API_KEY` (no keys in repo or committed `.env` samples).
-- Optional post-send: system note in General thread (ticket **E** polish).
-
-## 7. Tickets
-
-| Letter | ID | Work | Provider key? | Order |
-|--------|-----|------|---------------|--------|
-| **A** | OPLA-MSG-01 | Spec lock in repo + vocab line | No | This PR |
-| **B** | OPLA-MSG-02 | Backend: `OutboundMessage` + stub provider + POST/list APIs + tests | No | **Ship first** |
-| **C** | OPLA-MSG-03 | Studio Broadcast UI (Threads \| Broadcasts) | No | **Ship second** (after B) |
-| **D** | OPLA-MSG-04 | Org provider settings; env-only OK initially | Yes (when live) | After B/C or parallel Fri |
-| **E** | OPLA-MSG-05 | Mock tests + one WhatsApp smoke when key lands; audit polish | Smoke needs key | After D |
-
-## 8. Provider keys
-
-No Sent.dm key tonight. Tickets **A**–**C** use the mock provider. Wire **D** when keys are available (deployment secrets only).
-
-## 9. Success criteria
-
-Project lead opens Messages → Broadcasts, picks Field Team A, sends “Site closed — do not visit today”, phones buzz on WhatsApp, Studio shows delivered/failed honestly.
+Project lead opens Messages → Broadcast, picks Field Team A, sends “Site closed — do not visit today”, phones buzz on WhatsApp, Studio shows delivered/failed honestly.

@@ -6,7 +6,7 @@ All notable changes to Opla are documented here. Reconstruct older work from git
 
 ### Messaging / Field broadcasts (spec)
 
-- Locked MVP fit for project **Messages**: in-app **Threads** plus outbound **Broadcasts**; see `docs/Messaging-Broadcasts-MVP.md` (OPLA-MSG-01).
+- Locked MVP fit for project **Messages**: in-app **Threads** plus outbound **Broadcasts**; Knox IA lock (17 Sep 2026) and tickets A–E in `docs/Messaging-Broadcasts-MVP.md` (OPLA-MSG-01).
 
 ### Studio Ops Attendance + Review (live)
 

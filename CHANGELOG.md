@@ -4,6 +4,15 @@ All notable changes to Opla are documented here. Reconstruct older work from git
 
 ## [Unreleased]
 
+### AI credits wallet (manual top-up)
+
+- Each organisation has an AI credit balance, a ledger, and per-action costs. Alembic `032_ai_credits`. New organisations start at zero.
+- Org admins and platform admins can add credits by hand (after MoMo or invoice) and change how many AI credits each survey action spends. Members can see the balance. No Paystack or card charge.
+- Survey wizard interview, draft, and revise call `spend_or_reject`. At zero — or below that action’s cost — the API returns 402 and Studio shows a top-up message instead of calling the model. Compile and “generate into Opla” stay available. A failed model call refunds the spend.
+- AI credits are named and stored separately from any future SMS costs.
+- Proof: `cd opla-backend && poetry run python -m unittest test_ai_credits.py` and `cd opla-frontend/apps/studio && npm test`.
+- Fresh-database Alembic can reach head again: `005` skips the teams tables `002` already creates, `5c4b43dbcbc6` ignores constraint renames that are already in place, `009` renames early enum types to the names the models use, and `023` no-ops when attendance foreign keys are already cascading. `poetry.lock` regenerates so current Poetry can install. Repo-root `.env.example` lists `DATABASE_URL`, `JWT_SECRET_KEY`, and `JWT_REFRESH_SECRET_KEY` (the app does not read `JWT_SECRET`). If npm skips devDependencies, install Studio with `npm install --include=dev`.
+
 ### Studio Ops Attendance + Review (live)
 
 - Replaced `OpsAttendanceMock` / `OpsReviewMock` with live Studio Ops surfaces under a project (`Ops` → Attendance / Review).

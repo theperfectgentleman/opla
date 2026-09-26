@@ -40,7 +40,7 @@ npx expo start
 
 Or use `./deploy.sh` / `manage.ps1`. More detail: [QUICK_START.md](QUICK_START.md).
 
-API base for Studio: `VITE_API_URL` (default `http://localhost:8000/api/v1`). Backend reads a repo-root `.env` (`DATABASE_URL`, JWT secrets, optional `REDIS_URL`, `GROQ_API_KEY`).
+API base for Studio: `VITE_API_URL` (default `http://localhost:8000/api/v1`). Backend reads a repo-root `.env` (`DATABASE_URL`, `JWT_SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`, optional `REDIS_URL`, `GROQ_API_KEY`). Copy [`.env.example`](.env.example) and fill values locally — do not commit them.
 
 ## Hosts
 

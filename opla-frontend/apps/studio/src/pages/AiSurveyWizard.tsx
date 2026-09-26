@@ -1,9 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Code2, Eye, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
 import SurveyMarkdownPreview from '../components/SurveyMarkdownPreview';
-import { aiSurveyAPI, type AiSurveyInterviewQuestion } from '../lib/api';
+import { aiCreditsAPI, aiSurveyAPI, type AiSurveyInterviewQuestion } from '../lib/api';
+import { useOrg } from '../contexts/OrgContext';
+import {
+    AI_SURVEY_DRAFT,
+    AI_SURVEY_INTERVIEW,
+    AI_SURVEY_REVISE,
+    aiCreditsBannerMessage,
+    readAiCreditsBlock,
+    walletBlocksAction,
+    type AiCreditWallet,
+} from '../lib/aiCredits';
 
 type WizardStep = 'brief' | 'interview' | 'draft';
 type DraftViewMode = 'preview' | 'edit';
@@ -11,6 +21,7 @@ type DraftViewMode = 'preview' | 'edit';
 const AiSurveyWizard: React.FC = () => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
+    const { currentOrg } = useOrg();
 
     const [step, setStep] = useState<WizardStep>('brief');
     const [brief, setBrief] = useState('');
@@ -23,11 +34,34 @@ const AiSurveyWizard: React.FC = () => {
     const [sectionCount, setSectionCount] = useState(0);
     const [fieldCount, setFieldCount] = useState(0);
     const [error, setError] = useState('');
+    const [topUpMessage, setTopUpMessage] = useState('');
+    const [wallet, setWallet] = useState<AiCreditWallet | null>(null);
     const [busy, setBusy] = useState(false);
     const [busyLabel, setBusyLabel] = useState('Working…');
     const [draftView, setDraftView] = useState<DraftViewMode>('preview');
 
     const canContinueBrief = brief.trim().length >= 8;
+    const interviewBlocked = walletBlocksAction(wallet, AI_SURVEY_INTERVIEW);
+    const draftBlocked = walletBlocksAction(wallet, AI_SURVEY_DRAFT);
+    const reviseBlocked = walletBlocksAction(wallet, AI_SURVEY_REVISE);
+
+    const refreshWallet = useCallback(async () => {
+        if (!currentOrg?.id) {
+            setWallet(null);
+            return;
+        }
+        try {
+            const next = await aiCreditsAPI.getWallet(currentOrg.id);
+            setWallet(next);
+            setTopUpMessage(aiCreditsBannerMessage(next));
+        } catch {
+            setWallet(null);
+        }
+    }, [currentOrg?.id]);
+
+    useEffect(() => {
+        void refreshWallet();
+    }, [refreshWallet]);
 
     const stepLabel = useMemo(() => {
         if (step === 'brief') return '1 · Brief';
@@ -63,43 +97,69 @@ const AiSurveyWizard: React.FC = () => {
         return () => window.clearTimeout(handle);
     }, [markdown, step]);
 
-    const extractError = (err: any) =>
-        err?.response?.data?.detail || err?.message || 'Something went wrong';
+    const extractError = (err: any) => {
+        const detail = err?.response?.data?.detail;
+        if (typeof detail === 'string') return detail;
+        return err?.message || 'Something went wrong';
+    };
+
+    const noteAiCredits = (err: unknown) => {
+        const blocked = readAiCreditsBlock(err);
+        if (blocked) {
+            setTopUpMessage(blocked);
+            setError('');
+            return true;
+        }
+        setError(extractError(err));
+        return false;
+    };
+
+    const requireOrg = () => {
+        if (currentOrg?.id) return currentOrg.id;
+        setError('Select an organization before using AI credits.');
+        return null;
+    };
 
     const runDraft = async (withAnswers: Record<string, string> | undefined) => {
-        if (!brief.trim()) return;
+        if (!brief.trim() || draftBlocked) return;
+        const organizationId = requireOrg();
+        if (!organizationId) return;
         setBusy(true);
         setBusyLabel('Drafting questionnaire… larger surveys are built section-by-section');
         setError('');
         try {
-            const result = await aiSurveyAPI.draft(brief.trim(), withAnswers);
+            const result = await aiSurveyAPI.draft(brief.trim(), organizationId, withAnswers);
             setTitle(result.title);
             setMarkdown(result.markdown);
             setDraftView('preview');
             setStep('draft');
         } catch (err: any) {
-            setError(extractError(err));
+            noteAiCredits(err);
         } finally {
             setBusy(false);
             setBusyLabel('Working…');
+            void refreshWallet();
         }
     };
 
     const handleStartInterview = async () => {
-        if (!canContinueBrief) return;
+        if (!canContinueBrief || interviewBlocked) return;
+        const organizationId = requireOrg();
+        if (!organizationId) return;
         setBusy(true);
         setBusyLabel('Preparing follow-up questions…');
         setError('');
         try {
-            const result = await aiSurveyAPI.interview(brief.trim());
+            const result = await aiSurveyAPI.interview(brief.trim(), organizationId);
             setQuestions(result.questions || []);
             setAnswers({});
             setStep('interview');
         } catch (err: any) {
-            setError(extractError(err));
+            noteAiCredits(err);
         } finally {
             setBusy(false);
             setBusyLabel('Working…');
+            void refreshWallet();
         }
     };
 
@@ -112,19 +172,22 @@ const AiSurveyWizard: React.FC = () => {
     };
 
     const handleRevise = async () => {
-        if (!reviseInstruction.trim() || !markdown.trim()) return;
+        if (!reviseInstruction.trim() || !markdown.trim() || reviseBlocked) return;
+        const organizationId = requireOrg();
+        if (!organizationId) return;
         setBusy(true);
         setBusyLabel('Revising…');
         setError('');
         try {
-            const result = await aiSurveyAPI.revise(markdown, reviseInstruction.trim());
+            const result = await aiSurveyAPI.revise(markdown, reviseInstruction.trim(), organizationId);
             setMarkdown(result.markdown);
             setReviseInstruction('');
         } catch (err: any) {
-            setError(extractError(err));
+            noteAiCredits(err);
         } finally {
             setBusy(false);
             setBusyLabel('Working…');
+            void refreshWallet();
         }
     };
 
@@ -160,12 +223,33 @@ const AiSurveyWizard: React.FC = () => {
                         <Sparkles className="w-4 h-4 text-[hsl(var(--primary))]" />
                         AI Survey Builder
                         <span className="text-[hsl(var(--text-tertiary))] font-normal">· {stepLabel}</span>
+                        {wallet ? (
+                            <span className="text-[hsl(var(--text-tertiary))] font-normal" data-testid="ai-survey-credit-balance">
+                                · {wallet.balance} AI credits
+                            </span>
+                        ) : null}
                     </div>
                     <ThemeToggle />
                 </div>
             </header>
 
             <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+                {topUpMessage ? (
+                    <div
+                        className="rounded-xl border border-amber-500/40 bg-amber-500/10 text-sm px-4 py-3 space-y-2"
+                        data-testid="ai-credits-topup-message"
+                    >
+                        <p>{topUpMessage}</p>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/dashboard?tab=settings')}
+                            className="text-sm font-semibold underline"
+                        >
+                            Top up AI credits
+                        </button>
+                    </div>
+                ) : null}
+
                 {error ? (
                     <div className="rounded-xl border border-[hsl(var(--error))]/30 bg-[hsl(var(--error))]/10 text-[hsl(var(--error))] text-sm px-4 py-3">
                         {error}
@@ -197,7 +281,7 @@ const AiSurveyWizard: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-2">
                             <button
                                 type="button"
-                                disabled={!canContinueBrief || busy}
+                                disabled={!canContinueBrief || busy || interviewBlocked}
                                 onClick={handleStartInterview}
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[hsl(var(--primary))] text-white text-sm font-semibold disabled:opacity-50"
                             >
@@ -206,7 +290,7 @@ const AiSurveyWizard: React.FC = () => {
                             </button>
                             <button
                                 type="button"
-                                disabled={!canContinueBrief || busy}
+                                disabled={!canContinueBrief || busy || draftBlocked}
                                 onClick={handleSkipInterview}
                                 className="px-4 py-2.5 rounded-lg border border-[hsl(var(--border))] text-sm font-semibold text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))] disabled:opacity-50"
                             >
@@ -263,7 +347,7 @@ const AiSurveyWizard: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-2">
                             <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || draftBlocked}
                                 onClick={handleSubmitInterview}
                                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[hsl(var(--primary))] text-white text-sm font-semibold disabled:opacity-50"
                             >
@@ -272,7 +356,7 @@ const AiSurveyWizard: React.FC = () => {
                             </button>
                             <button
                                 type="button"
-                                disabled={busy}
+                                disabled={busy || draftBlocked}
                                 onClick={handleSkipInterview}
                                 className="px-4 py-2.5 rounded-lg border border-[hsl(var(--border))] text-sm font-semibold text-[hsl(var(--text-secondary))] disabled:opacity-50"
                             >
@@ -388,7 +472,7 @@ const AiSurveyWizard: React.FC = () => {
                             />
                             <button
                                 type="button"
-                                disabled={busy || !reviseInstruction.trim()}
+                                disabled={busy || reviseBlocked || !reviseInstruction.trim()}
                                 onClick={handleRevise}
                                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-[hsl(var(--border))] text-sm font-semibold disabled:opacity-50"
                             >

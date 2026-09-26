@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrg } from '../contexts/OrgContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { formAPI, projectAPI, reportAPI, teamAPI, analyticsAPI } from '../lib/api';
 import StudioLayout from '../components/StudioLayout';
@@ -17,6 +18,7 @@ import {
     Plus, ChevronRight, ChevronLeft, FileText, Activity, CheckSquare, FileBarChart2, MessageSquare, Paperclip, Loader2, Database, Search, Folder, List, Grid, Sparkles
 } from 'lucide-react';
 import FontProfileSelector from '../components/FontProfileSelector';
+import AiCreditsPanel from '../components/settings/AiCreditsPanel';
 import { resolveLegacyDashboardTab, resolveDataSection, resolveDesignSection, buildDashboardSearchParams, type DashboardNavKey as VocabularyDashboardNavKey, type ProjectDataSection, type ProjectDesignSection } from '../lib/vocabulary';
 
 const AnalyticsHub = lazy(() => import('../components/analytics/AnalyticsHub'));
@@ -93,6 +95,7 @@ function AnalyticsTabFallback() {
 
 const Dashboard: React.FC = () => {
     const { currentOrg, organizations, projects, members, createProject, isLoading, setCurrentProject } = useOrg();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const { showToast } = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -225,6 +228,10 @@ const Dashboard: React.FC = () => {
     );
 
     const isAdmin = true;
+    const canManageAiCredits = Boolean(
+        user?.is_platform_admin
+        || members.some((member) => member.user_id === user?.id && member.global_role === 'admin'),
+    );
 
     useEffect(() => {
         setCurrentProject(null);
@@ -1719,6 +1726,9 @@ const Dashboard: React.FC = () => {
                             <h2 className="text-3xl font-bold mb-2">Organization Settings</h2>
                             <p className="text-[hsl(var(--text-secondary))]">Manage organization-level preferences, branding, and governance options.</p>
                         </div>
+                        {currentOrg ? (
+                            <AiCreditsPanel orgId={currentOrg.id} canManage={canManageAiCredits} />
+                        ) : null}
                         <div className="card">
                             <div className="space-y-8">
                                 <FontProfileSelector />

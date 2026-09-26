@@ -96,6 +96,22 @@ def ensure_wallet(db: Session, organization_id: uuid.UUID) -> OrgAiCreditBalance
     return balance
 
 
+def _lock_balance(db: Session, organization_id: uuid.UUID) -> OrgAiCreditBalance:
+    """Lock the wallet row and re-read it.
+
+    ``ensure_wallet`` loads this row before the lock. Without
+    ``populate_existing()``, ``SELECT ... FOR UPDATE`` returns that
+    identity-mapped instance and a concurrent commit is overwritten.
+    """
+    return (
+        db.query(OrgAiCreditBalance)
+        .filter(OrgAiCreditBalance.organization_id == organization_id)
+        .populate_existing()
+        .with_for_update()
+        .one()
+    )
+
+
 def get_balance(db: Session, organization_id: uuid.UUID) -> int:
     row = (
         db.query(OrgAiCreditBalance)
@@ -165,12 +181,7 @@ def top_up(
         raise AiCreditOrgNotFound(organization_id)
 
     ensure_wallet(db, organization_id)
-    balance_row = (
-        db.query(OrgAiCreditBalance)
-        .filter(OrgAiCreditBalance.organization_id == organization_id)
-        .with_for_update()
-        .one()
-    )
+    balance_row = _lock_balance(db, organization_id)
     balance_row.balance = int(balance_row.balance) + int(amount)
     balance_row.updated_at = datetime.utcnow()
     entry = AiCreditLedgerEntry(
@@ -245,12 +256,7 @@ def spend_or_reject(
         .one()
     )
     cost = int(cost_row.credit_cost)
-    balance_row = (
-        db.query(OrgAiCreditBalance)
-        .filter(OrgAiCreditBalance.organization_id == organization_id)
-        .with_for_update()
-        .one()
-    )
+    balance_row = _lock_balance(db, organization_id)
     current = int(balance_row.balance)
     if current < cost:
         db.rollback()
@@ -283,12 +289,18 @@ def refund_spend(
     amount = abs(int(entry.amount))
     if amount == 0:
         return None
-    balance_row = (
-        db.query(OrgAiCreditBalance)
-        .filter(OrgAiCreditBalance.organization_id == entry.organization_id)
-        .with_for_update()
-        .one()
+    balance_row = _lock_balance(db, entry.organization_id)
+    existing = (
+        db.query(AiCreditLedgerEntry)
+        .filter(
+            AiCreditLedgerEntry.related_entry_id == entry.id,
+            AiCreditLedgerEntry.entry_type == "refund",
+        )
+        .first()
     )
+    if existing is not None:
+        db.commit()
+        return existing
     balance_row.balance = int(balance_row.balance) + amount
     balance_row.updated_at = datetime.utcnow()
     refund = AiCreditLedgerEntry(

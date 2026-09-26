@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import unittest
 import uuid
 from unittest.mock import patch
@@ -22,7 +23,13 @@ from app.services.ai_credit_catalog import (
     AI_SURVEY_INTERVIEW,
     AI_SURVEY_REVISE,
 )
-from app.services.ai_credit_service import InsufficientAiCredits, spend_or_reject, top_up, update_action_cost
+from app.services.ai_credit_service import (
+    InsufficientAiCredits,
+    refund_spend,
+    spend_or_reject,
+    top_up,
+    update_action_cost,
+)
 from app.services.ai_survey_service import AiSurveyServiceError
 from app.services.auth_service import auth_service
 from app.services.organization_service import OrganizationService
@@ -123,6 +130,149 @@ class AiCreditServiceTests(unittest.TestCase):
         )
         self.assertEqual(spend_rows, 2)
 
+    def test_refund_applies_exactly_once(self):
+        top_up(self.db, self.org.id, 3, actor_user_id=self.owner.id)
+        spent = spend_or_reject(self.db, self.org.id, AI_SURVEY_INTERVIEW, self.owner.id)
+        first = refund_spend(self.db, spent, note="model failed")
+        second = refund_spend(self.db, spent, note="model failed again")
+        self.assertIsNotNone(first)
+        self.assertEqual(second.id, first.id)
+        self.assertEqual(first.amount, 1)
+        self.assertEqual(first.related_entry_id, spent.id)
+        balance = (
+            self.db.query(OrgAiCreditBalance)
+            .filter(OrgAiCreditBalance.organization_id == self.org.id)
+            .one()
+        )
+        self.assertEqual(int(balance.balance), 3)
+        refunds = (
+            self.db.query(AiCreditLedgerEntry)
+            .filter(
+                AiCreditLedgerEntry.organization_id == self.org.id,
+                AiCreditLedgerEntry.entry_type == "refund",
+                AiCreditLedgerEntry.related_entry_id == spent.id,
+            )
+            .count()
+        )
+        self.assertEqual(refunds, 1)
+
+    def _preload_balance(self, db, organization_id):
+        (
+            db.query(OrgAiCreditBalance)
+            .filter(OrgAiCreditBalance.organization_id == organization_id)
+            .one()
+        )
+
+    def test_parallel_spends_at_balance_equal_cost_cannot_overspend(self):
+        top_up(self.db, self.org.id, 1, actor_user_id=self.owner.id)
+        barrier = threading.Barrier(2)
+        outcomes = []
+        errors = []
+        guard = threading.Lock()
+
+        def worker():
+            db = SessionLocal()
+            try:
+                self._preload_balance(db, self.org.id)
+                barrier.wait(timeout=15)
+                try:
+                    spend_or_reject(db, self.org.id, AI_SURVEY_INTERVIEW, self.owner.id)
+                    with guard:
+                        outcomes.append("ok")
+                except InsufficientAiCredits:
+                    with guard:
+                        outcomes.append("blocked")
+            except Exception as exc:
+                with guard:
+                    errors.append(repr(exc))
+                try:
+                    barrier.abort()
+                except Exception:
+                    pass
+            finally:
+                db.close()
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=20)
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(outcomes), ["blocked", "ok"])
+
+        fresh = SessionLocal()
+        try:
+            balance = (
+                fresh.query(OrgAiCreditBalance)
+                .filter(OrgAiCreditBalance.organization_id == self.org.id)
+                .one()
+            )
+            spends = (
+                fresh.query(AiCreditLedgerEntry)
+                .filter(
+                    AiCreditLedgerEntry.organization_id == self.org.id,
+                    AiCreditLedgerEntry.entry_type == "spend",
+                )
+                .count()
+            )
+            self.assertEqual(int(balance.balance), 0)
+            self.assertEqual(spends, 1)
+        finally:
+            fresh.close()
+
+    def test_parallel_top_ups_sum(self):
+        barrier = threading.Barrier(2)
+        errors = []
+        guard = threading.Lock()
+
+        def worker(amount: int):
+            db = SessionLocal()
+            try:
+                self._preload_balance(db, self.org.id)
+                barrier.wait(timeout=15)
+                top_up(db, self.org.id, amount, actor_user_id=self.owner.id, note=f"parallel {amount}")
+            except Exception as exc:
+                with guard:
+                    errors.append(repr(exc))
+                try:
+                    barrier.abort()
+                except Exception:
+                    pass
+            finally:
+                db.close()
+
+        threads = [
+            threading.Thread(target=worker, args=(10,)),
+            threading.Thread(target=worker, args=(1,)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=20)
+        self.assertTrue(all(not thread.is_alive() for thread in threads))
+        self.assertEqual(errors, [])
+
+        fresh = SessionLocal()
+        try:
+            balance = (
+                fresh.query(OrgAiCreditBalance)
+                .filter(OrgAiCreditBalance.organization_id == self.org.id)
+                .one()
+            )
+            credited = (
+                fresh.query(AiCreditLedgerEntry)
+                .filter(
+                    AiCreditLedgerEntry.organization_id == self.org.id,
+                    AiCreditLedgerEntry.entry_type == "top_up",
+                )
+                .all()
+            )
+            self.assertEqual(int(balance.balance), 11)
+            self.assertEqual(sum(int(row.amount) for row in credited), 11)
+        finally:
+            fresh.close()
+
 
 class AiCreditApiTests(unittest.TestCase):
     @classmethod
@@ -157,6 +307,8 @@ class AiCreditApiTests(unittest.TestCase):
             is_active=True,
             is_platform_admin=True,
         )
+        self.extra_org_ids: list[uuid.UUID] = []
+        self.extra_user_ids: list[uuid.UUID] = []
         self.db.add_all([self.admin, self.member, self.outsider, self.platform_admin])
         self.db.flush()
         self.organization = Organization(
@@ -195,6 +347,14 @@ class AiCreditApiTests(unittest.TestCase):
         self.db.query(OrgAiCreditBalance).filter(OrgAiCreditBalance.organization_id == org_id).delete(synchronize_session=False)
         self.db.query(OrgMember).filter(OrgMember.org_id == org_id).delete(synchronize_session=False)
         self.db.query(Organization).filter(Organization.id == org_id).delete(synchronize_session=False)
+        for extra_org_id in self.extra_org_ids:
+            self.db.query(AiCreditLedgerEntry).filter(AiCreditLedgerEntry.organization_id == extra_org_id).delete(synchronize_session=False)
+            self.db.query(OrgAiActionCost).filter(OrgAiActionCost.organization_id == extra_org_id).delete(synchronize_session=False)
+            self.db.query(OrgAiCreditBalance).filter(OrgAiCreditBalance.organization_id == extra_org_id).delete(synchronize_session=False)
+            self.db.query(OrgMember).filter(OrgMember.org_id == extra_org_id).delete(synchronize_session=False)
+            self.db.query(Organization).filter(Organization.id == extra_org_id).delete(synchronize_session=False)
+        if self.extra_user_ids:
+            self.db.query(User).filter(User.id.in_(self.extra_user_ids)).delete(synchronize_session=False)
         self.db.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
         self.db.commit()
         self.db.close()
@@ -256,6 +416,45 @@ class AiCreditApiTests(unittest.TestCase):
         )
         self.assertEqual(platform.status_code, 201)
         self.assertEqual(platform.json()["balance"], 3)
+
+    def test_cross_org_admin_top_up_is_forbidden(self):
+        other_admin = User(
+            email=f"credits-other-admin-{self.suffix}@example.com",
+            full_name="Other Org Admin",
+            password_hash="not-used",
+            is_active=True,
+        )
+        self.db.add(other_admin)
+        self.db.flush()
+        other_org = Organization(
+            name=f"Other Wallet Org {self.suffix}",
+            slug=f"other-wallet-org-{self.suffix}",
+            owner_id=other_admin.id,
+        )
+        self.db.add(other_org)
+        self.db.flush()
+        self.db.add(
+            OrgMember(
+                user_id=other_admin.id,
+                org_id=other_org.id,
+                global_role=GlobalRole.ADMIN,
+                member_type=MemberType.INTERNAL,
+                invitation_status=InvitationStatus.ACCEPTED,
+            )
+        )
+        self.db.commit()
+        self.extra_org_ids.append(other_org.id)
+        self.extra_user_ids.append(other_admin.id)
+
+        response = self.client.post(
+            f"{self.wallet_url()}/top-ups",
+            headers=self.auth_headers(other_admin),
+            json={"amount": 5, "note": "cross org"},
+        )
+        self.assertEqual(response.status_code, 403)
+        wallet = self.client.get(self.wallet_url(), headers=self.auth_headers(self.admin))
+        self.assertEqual(wallet.status_code, 200)
+        self.assertEqual(wallet.json()["balance"], 0)
 
     def test_interview_blocks_at_zero_and_does_not_call_the_model(self):
         with patch("app.api.routes.ai_survey.ai_survey_service.generate_interview_questions") as mocked:

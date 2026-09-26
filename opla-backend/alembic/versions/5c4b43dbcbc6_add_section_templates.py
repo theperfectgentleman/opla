@@ -10,6 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import ProgrammingError
 
 # revision identifiers, used by Alembic.
 revision: str = '5c4b43dbcbc6'
@@ -30,7 +31,7 @@ def _best_effort(fn):
         try:
             with op.get_bind().begin_nested():
                 return fn(*args, **kwargs)
-        except Exception:
+        except ProgrammingError:
             return None
 
     return wrapped

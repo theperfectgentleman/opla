@@ -22,6 +22,7 @@ from app.models.project_asset import ProjectAsset
 from app.models.project_message_channel import ProjectMessageChannel
 from app.models.project_message import ProjectMessage, ProjectMessageNotification
 from app.models.project_pinned_analytics import ProjectPinnedAnalytics
+from app.models.project_broadcast import ProjectBroadcast, ProjectBroadcastDelivery, OrgMessageOptOut
 from app.models.project_attention import ProjectAttentionHook, ProjectAttentionItem
 from app.models.form_submission_media import FormSubmissionMedia
 from app.models.analytics import SavedQuestion, AnalyticsDashboard, DashboardCard

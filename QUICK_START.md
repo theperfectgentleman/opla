@@ -61,6 +61,24 @@ Open a **project** → **Ops** → **Attendance** or **Review**. These screens c
 
 Agents check in from mobile; Studio lists the live roster and reviews submissions. No mock data.
 
+### Messages → Broadcasts (SMS)
+
+Open a **project** → **Messages** → **Broadcasts**. Sending is off until the API has an SMS provider. Repo-root `.env`:
+
+```
+# off when unset; "fake" accepts every send without network (local only, refused when ENVIRONMENT=production)
+SMS_PROVIDER=fake
+# for real sends via mNotify (BMS Africa, Ghana numbers):
+# SMS_PROVIDER=mnotify
+# MNOTIFY_API_KEY=...
+# MNOTIFY_SENDER_ID=Opla        # must already be approved on the mNotify account, max 11 characters
+# SMS_BATCH_SIZE=100            # recipients per mNotify request
+# SMS_BATCH_DELAY_SECONDS=0.5   # pause between requests
+# SMS_MAX_RECIPIENTS=5000       # per broadcast
+```
+
+Run `poetry run alembic upgrade head` for `032_project_broadcasts`. Only org admins, Project Managers and Field Supervisors (permission `communication.field`) see the compose form.
+
 ---
 
 ## Test Credentials

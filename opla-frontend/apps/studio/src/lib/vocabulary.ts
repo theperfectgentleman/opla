@@ -14,6 +14,7 @@ export type ProjectWorkspaceTab = (typeof PROJECT_WORKSPACE_TABS)[number];
 export type ProjectDataSection = 'directory' | 'datasets' | 'analysis' | 'media';
 export type ProjectOpsSection = 'overview' | 'attendance' | 'review';
 export type ProjectDesignSection = 'forms' | 'automations';
+export type ProjectMessagesSection = 'threads' | 'broadcasts';
 
 export const PROJECT_TAB_LABELS: Record<ProjectWorkspaceTab, string> = {
     tasks: 'Tasks',
@@ -35,6 +36,11 @@ export const OPS_SECTION_LABELS: Record<ProjectOpsSection, string> = {
     overview: 'Overview',
     attendance: 'Attendance',
     review: 'Review',
+};
+
+export const MESSAGES_SECTION_LABELS: Record<ProjectMessagesSection, string> = {
+    threads: 'Threads',
+    broadcasts: 'Broadcasts',
 };
 
 export const DESIGN_SECTION_LABELS: Record<ProjectDesignSection, string> = {
@@ -368,6 +374,11 @@ export function resolveDesignSection(section: string | null): ProjectDesignSecti
         return section;
     }
     return 'forms';
+}
+
+/** Messages → Threads (default, in-app channels) | Broadcasts (outbound SMS). */
+export function resolveMessagesSection(section: string | null): ProjectMessagesSection {
+    return section === 'broadcasts' ? 'broadcasts' : 'threads';
 }
 
 export function resolveOpsSection(section: string | null, view?: string | null): ProjectOpsSection {

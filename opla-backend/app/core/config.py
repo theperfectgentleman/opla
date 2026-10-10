@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.1-8b-instant"
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+
+    # SMS broadcasts (project Messages → Broadcasts). Off unless SMS_PROVIDER is set.
+    # SMS_PROVIDER: "" (off) | "mnotify" | "fake" (local dev/tests only, refused in production)
+    SMS_PROVIDER: str = ""
+    MNOTIFY_API_KEY: str = ""
+    # Must be a sender ID already approved on the mNotify account (max 11 characters).
+    MNOTIFY_SENDER_ID: str = ""
+    MNOTIFY_BASE_URL: str = "https://api.mnotify.com/api"
+    # Recipients per provider request, pause between requests, and cap per broadcast.
+    SMS_BATCH_SIZE: int = 100
+    SMS_BATCH_DELAY_SECONDS: float = 0.5
+    SMS_MAX_RECIPIENTS: int = 5000
     
     @property
     def cors_origins_list(self) -> List[str]:

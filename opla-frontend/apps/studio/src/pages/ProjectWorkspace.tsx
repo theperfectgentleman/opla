@@ -21,6 +21,7 @@ import FormsDesignPanel from '../components/forms/FormsDesignPanel';
 import ProjectThreadsPanel from '../components/hub/ProjectThreadsPanel';
 import OpsAttendance from '../components/ops/OpsAttendance';
 import OpsReview from '../components/ops/OpsReview';
+import MessagesBroadcasts from '../components/messages/MessagesBroadcasts';
 import { useOrg } from '../contexts/OrgContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -33,6 +34,7 @@ import {
     resolveLegacyProjectTab,
     resolveDesignSection,
     resolveOpsSection,
+    resolveMessagesSection,
     projectNavHref,
     projectShellNavHref,
     type ProjectWorkspaceTab,
@@ -307,6 +309,7 @@ const ProjectWorkspace: React.FC = () => {
     const activeTab: ProjectWorkspaceTab = legacyResolved.tab;
     const dataSection: DataView = (legacyResolved.section as DataView) || 'datasets';
     const designSection: DesignView = resolveDesignSection(legacyResolved.section || null);
+    const messagesSection = resolveMessagesSection(legacyResolved.section || null);
     const opsView: OpsView = resolveOpsSection(
         legacyResolved.section || null,
         legacyResolved.view || searchParams.get('view'),
@@ -1175,6 +1178,10 @@ const ProjectWorkspace: React.FC = () => {
             onSelectOpsSection={(section) => {
                 setWorkspaceTab('ops', { section });
             }}
+            activeMessagesSection={activeTab === 'messages' ? messagesSection : null}
+            onSelectMessagesSection={(section) => {
+                setWorkspaceTab('messages', section === 'threads' ? undefined : { section });
+            }}
             activeDataSection={
                 activeTab === 'data' && dataSection !== 'analysis'
                     ? (dataSection as 'directory' | 'datasets' | 'media')
@@ -2000,7 +2007,15 @@ const ProjectWorkspace: React.FC = () => {
                             />
                         )}
 
-                        {activeTab === 'messages' && currentOrg?.id && (
+                        {activeTab === 'messages' && messagesSection === 'broadcasts' && currentOrg?.id && projectId && (
+                            <MessagesBroadcasts
+                                orgId={currentOrg.id}
+                                projectId={projectId}
+                                projectName={currentProject.name}
+                            />
+                        )}
+
+                        {activeTab === 'messages' && messagesSection === 'threads' && currentOrg?.id && (
                             <div className="mx-auto max-w-5xl space-y-6">
                                 <ProjectThreadsPanel
                                     orgId={currentOrg.id}

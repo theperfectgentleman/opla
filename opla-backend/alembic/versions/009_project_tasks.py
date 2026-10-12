@@ -20,6 +20,39 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # 002 named these enums without underscores. Models and later migrations
+    # expect the underscored names. Rename only when the destination is missing
+    # so databases that already created accessor_type are left alone.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'accessortype')
+               AND NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'accessor_type') THEN
+                ALTER TYPE accessortype RENAME TO accessor_type;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'accessor_type') THEN
+                CREATE TYPE accessor_type AS ENUM ('user', 'team');
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'projectrole')
+               AND NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_role') THEN
+                ALTER TYPE projectrole RENAME TO project_role;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'globalrole')
+               AND NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'global_role') THEN
+                ALTER TYPE globalrole RENAME TO global_role;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invitationstatus')
+               AND NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'invitation_status') THEN
+                ALTER TYPE invitationstatus RENAME TO invitation_status;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'formstatus')
+               AND NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'form_status') THEN
+                ALTER TYPE formstatus RENAME TO form_status;
+            END IF;
+        END $$;
+        """
+    )
     op.create_table(
         "project_tasks",
         sa.Column("id", sa.UUID(), nullable=False),

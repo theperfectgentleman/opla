@@ -28,6 +28,7 @@ Grounded in code as of 2026-09-14:
 - **Players:** Expo agent/pulse/yard routes; SDUI `FormRenderer` + field widgets keyed by `bind`; defaults / min-max / masks / platforms / cascade+directory options / matrix dropdown cells; currency prefix+decimals; auto-value (`now()`/`today()`/`current_time()`); form_link param maps; lookup; AsyncStorage offline queue. Public web form at `/s/:slug` (`PublicForm.tsx`). Shared helpers live in `@opla/logic` (`formFields.ts`, `mobileFieldPass.ts`) and `@opla/types` (`lookupResponse`, `resolveFieldOptions`).
 - **Directory & capture:** Directory items (ex-catalog), directory forms, CSV import, lookups. Submissions with review status. Tasks including `field_visit`.
 - **Ops Attendance + Review (wired):** Studio project Ops → Attendance / Review call the live project attendance and submission review APIs (same contracts as mobile). Check-in/out from Studio uses browser geolocation; agents still check in from Expo. Mocks removed.
+- **AI credits (manual wallet):** Each organisation has an AI credit balance, ledger, and per-action costs (`org_ai_credit_balances`, `org_ai_action_costs`, `ai_credit_ledger`). Studio Settings shows balance, history, and manual top-up for org admins and platform admins. The survey wizard spends credits on interview, draft, and revise; at zero (or below the action cost) those calls return HTTP 402 and Studio shows a top-up message. Compile and form generate stay local. No Paystack. AI credits are separate from any future SMS metering.
 - **Hub:** `ProjectHub` at `/projects/:id/hub` — phases 0–5 in [`docs/Project-Command-Centre-Phases.md`](docs/Project-Command-Centre-Phases.md) marked Done (shell, pinned analytics, Needs Attention, form media, messages, `create_alert`). `/pdemo` redirects to Inbox. **Final cutover** (Hub as default project home) is not done — `/projects/:id` is still `ProjectWorkspace`.
 - **Data / reports:** Form datasets, analytics query API, Graphic Walker lab, dashboard canvas, org-level Reports portfolio (demo bucket init). Spatial Analysis Lab exists but uses Accra **demo** polygons, not live geo.
 - **Automation:** Form automation rules (`create_task`, `create_alert`) wired to Needs Attention.
@@ -38,7 +39,7 @@ Treat early docs (`docs/DEVELOPMENT_CHECKLIST.md`, `docs/DOCUMENTATION_COMPLETE.
 ## Not yet / blockers
 
 - **No public deploy** in-repo; planned `*.opla.app` hosts are placeholders.
-- **No billing / subscriptions / metering** — no Stripe or seat-license code.
+- **No subscriptions or card billing.** AI credits are a manual wallet only (MoMo or invoice, then an admin top-up). Paystack, Stripe, and SMS metering are not implemented. Do not fold SMS into `ai_credits`.
 - **Audience** nav is a dashed placeholder. Org **Media** tab is a placeholder (project media APIs exist).
 - **Maps in Analysis (Phase 6)** — clarifying questions unanswered; Leaflet lab is demo data.
 - **ProjectHub cutover** — opening a project still lands on ProjectWorkspace, not Hub.
@@ -59,7 +60,7 @@ Treat early docs (`docs/DEVELOPMENT_CHECKLIST.md`, `docs/DOCUMENTATION_COMPLETE.
 
 ```
 opla-backend/          FastAPI “Intelligence Layer” — Poetry, Alembic, PostgreSQL (+ JSONB blueprints/submissions), Redis OTP
-  app/main.py          Routers: auth, orgs, projects, forms, submissions, roles, teams, reports, assets, messages, analytics, walker_compute, ai_survey
+  app/main.py          Routers: auth, orgs, projects, forms, submissions, roles, teams, reports, assets, messages, analytics, walker_compute, ai_survey, ai_credits
 opla-frontend/         TurboRepo (Node ≥18)
   apps/studio          Vite + React 19 — builder, hub, analytics, reports
   apps/mobile          Expo 54 / RN 0.81 — agent capture, pulse public forms, attendance
@@ -77,6 +78,7 @@ Blueprint shape: `meta` + `schema` + `ui` (sections/fields) + `logic` (legacy) +
 2. Cut over project home to `ProjectHub` (Ops Attendance + Review are live).
 3. Close remaining Design gaps only if a real FMCG/interview form is blocked (display/instruction blocks, show-cards, native Other-specify, grouped matrix rows). PublicForm still lags Simulator/mobile on matrix, lookup, object collection, multi-select, and form_link. Expo phone-path field pass after PR #2 is covered by `@opla/logic` `runMobileFieldPass` tests.
 4. Keep product nouns from `docs/PRODUCT_VOCABULARY.md` — do not revive Catalog / Journey / Assets in UI copy.
+5. AI credit costs live in `org_ai_action_costs` (seeded from `ai_credit_catalog.py`, edited in Settings). New model-backed AI routes should call `spend_or_reject` and refund if the provider call fails. Do not hard-code a second cost table, and do not invent prices.
 
 ## Rules for agents
 

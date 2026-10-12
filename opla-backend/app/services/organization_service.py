@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType
 from app.models.project_access import AccessorType as ProjectAccessorType
 from app.services.project_role_service import ProjectRoleService
+from app.services.ai_credit_service import ensure_wallet
 import uuid
 from typing import List, Optional
 import re
@@ -51,6 +52,7 @@ class OrganizationService:
 
         OrganizationService.seed_default_roles(db, org.id, owner_id)
         ProjectRoleService.seed_default_roles(db, org.id)
+        ensure_wallet(db, org.id)
         db.commit()
         db.refresh(org)
         return org

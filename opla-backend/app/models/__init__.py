@@ -26,6 +26,7 @@ from app.models.project_broadcast import ProjectBroadcast, ProjectBroadcastDeliv
 from app.models.project_attention import ProjectAttentionHook, ProjectAttentionItem
 from app.models.form_submission_media import FormSubmissionMedia
 from app.models.analytics import SavedQuestion, AnalyticsDashboard, DashboardCard
+from app.models.ai_credits import AiCreditLedgerEntry, OrgAiActionCost, OrgAiCreditBalance
 
 # OrgRole and OrgRoleAssignment are defined in role_template.py according to service imports
 from app.models.role_template import OrgRole, OrgRoleAssignment, AccessorType

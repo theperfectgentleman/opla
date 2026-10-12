@@ -8,6 +8,14 @@ import {
     submissionReviewPath,
     type AttendanceEventPayload,
 } from './opsApi';
+import {
+    aiCreditsActionCostPath,
+    aiCreditsLedgerPath,
+    aiCreditsTopUpPath,
+    aiCreditsWalletPath,
+    type AiCreditLedgerEntry,
+    type AiCreditWallet,
+} from './aiCredits';
 
 // API Base URL from environment
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -755,17 +763,17 @@ export type AiSurveyInterviewQuestion = {
 };
 
 export const aiSurveyAPI = {
-    interview: async (brief: string): Promise<{ questions: AiSurveyInterviewQuestion[] }> => {
-        const response = await apiClient.post('/ai/survey/interview', { brief }, { timeout: 60000 });
+    interview: async (brief: string, organizationId: string): Promise<{ questions: AiSurveyInterviewQuestion[] }> => {
+        const response = await apiClient.post('/ai/survey/interview', { brief, organization_id: organizationId }, { timeout: 60000 });
         return response.data;
     },
-    draft: async (brief: string, answers?: Record<string, string>): Promise<{ title: string; markdown: string }> => {
+    draft: async (brief: string, organizationId: string, answers?: Record<string, string>): Promise<{ title: string; markdown: string }> => {
         // Chunked drafts (e.g. ~50 questions) call the LLM many times.
-        const response = await apiClient.post('/ai/survey/draft', { brief, answers }, { timeout: 300000 });
+        const response = await apiClient.post('/ai/survey/draft', { brief, organization_id: organizationId, answers }, { timeout: 300000 });
         return response.data;
     },
-    revise: async (markdown: string, instruction: string): Promise<{ markdown: string }> => {
-        const response = await apiClient.post('/ai/survey/revise', { markdown, instruction }, { timeout: 180000 });
+    revise: async (markdown: string, instruction: string, organizationId: string): Promise<{ markdown: string }> => {
+        const response = await apiClient.post('/ai/survey/revise', { markdown, instruction, organization_id: organizationId }, { timeout: 180000 });
         return response.data;
     },
     compile: async (markdown: string): Promise<{ title: string; blueprint: any; warnings: string[] }> => {
@@ -774,6 +782,25 @@ export const aiSurveyAPI = {
     },
     generate: async (projectId: string, data: { markdown: string; title?: string }) => {
         const response = await apiClient.post(`/projects/${projectId}/ai-survey/generate`, data, { timeout: 60000 });
+        return response.data;
+    },
+};
+
+export const aiCreditsAPI = {
+    getWallet: async (orgId: string): Promise<AiCreditWallet> => {
+        const response = await apiClient.get(aiCreditsWalletPath(orgId));
+        return response.data;
+    },
+    listLedger: async (orgId: string): Promise<{ entries: AiCreditLedgerEntry[] }> => {
+        const response = await apiClient.get(aiCreditsLedgerPath(orgId));
+        return response.data;
+    },
+    topUp: async (orgId: string, data: { amount: number; note?: string }) => {
+        const response = await apiClient.post(aiCreditsTopUpPath(orgId), data);
+        return response.data;
+    },
+    updateActionCost: async (orgId: string, actionKey: string, creditCost: number) => {
+        const response = await apiClient.patch(aiCreditsActionCostPath(orgId, actionKey), { credit_cost: creditCost });
         return response.data;
     },
 };

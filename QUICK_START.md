@@ -79,6 +79,16 @@ SMS_PROVIDER=fake
 
 Run `poetry run alembic upgrade head` for `032_project_broadcasts`. Only org admins, Project Managers and Field Supervisors (permission `communication.field`) see the compose form.
 
+### AI credits
+
+Studio **Settings** shows the organisation AI credit balance, history, and a manual top-up (org admin or platform admin). The survey wizard spends AI credits on interview, draft, and revise. With a zero balance those buttons stop and show a top-up message; the rest of Studio still works. Compile and generate do not spend credits. Action costs are edited on that Settings card — do not hard-code them.
+
+Local check (API on `:8000`, Studio on `:5173`, repo-root `.env` with `DATABASE_URL`, `JWT_SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`):
+
+1. `cd opla-backend && poetry run alembic upgrade head`
+2. Register, open **Settings**, add AI credits, confirm the history row.
+3. Open a project’s AI survey wizard with balance 0 and confirm the top-up message. Top up, then run an interview only if `GROQ_API_KEY` is set.
+
 ---
 
 ## Test Credentials

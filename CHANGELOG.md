@@ -4,9 +4,21 @@ All notable changes to Opla are documented here. Reconstruct older work from git
 
 ## [Unreleased]
 
+### Messages → Broadcasts (SMS via mNotify)
+
+- Project **Messages** now has two sub-views: **Threads** (unchanged in-app channels) and **Broadcasts** (`?tab=messages&section=broadcasts`).
+- Broadcasts sends one SMS to any mix of org **teams** (members' `users.phone`), a **CSV** (column named phone / number / msisdn / mobile, else the first column; optional name column) and **typed/pasted** numbers.
+- Server-side preview: Ghana numbers normalised to `+233…` (0244…, 233244…, +233 0244…, 9 digits without the 0), international numbers need `+`/`00`; duplicates merged across teams/CSV/manual; invalid, opted-out, out-of-route numbers and team members without a phone are listed and skipped.
+- Character + SMS-part counter (GSM-7 160/153, Unicode 70/67, extension chars count 2), estimated credits = parts × recipients, live mNotify balance, confirm step, optional `{name}` (first name, with fallback), "replace smart punctuation" fix.
+- Sending runs in the background in batches (`SMS_BATCH_SIZE`, default 100; `SMS_BATCH_DELAY_SECONDS`, default 0.5); per-recipient log (queued / sent / failed), retry failed, and an org-wide do-not-text list.
+- Only org admins and holders of `communication.field` (Project Manager, Field Supervisor, legacy `editor`) can see or send broadcasts.
+- Provider is env-selected like JoTurk: `SMS_PROVIDER=mnotify` + `MNOTIFY_API_KEY` + `MNOTIFY_SENDER_ID`; unset = off (UI explains why). `SMS_PROVIDER=fake` for local dev (refused in production).
+- New migration `032_project_broadcasts` (idempotent): `project_broadcasts`, `project_broadcast_deliveries`, `org_message_opt_outs`.
+- Proof: `cd opla-backend && python -m pytest test_sms_broadcast_utils.py test_broadcasts_api.py`; `cd opla-frontend/apps/studio && npm test` (Node 22).
+
 ### AI credits wallet (manual top-up)
 
-- Each organisation has an AI credit balance, a ledger, and per-action costs. Alembic `032_ai_credits`. New organisations start at zero.
+- Each organisation has an AI credit balance, a ledger, and per-action costs. Alembic `033_ai_credits`. New organisations start at zero.
 - Org admins and platform admins can add credits by hand (after MoMo or invoice) and change how many AI credits each survey action spends. Members can see the balance. No Paystack or card charge.
 - Survey wizard interview, draft, and revise call `spend_or_reject`. At zero — or below that action’s cost — the API returns 402 and Studio shows a top-up message instead of calling the model. Compile and “generate into Opla” stay available. A failed model call refunds the spend.
 - AI credits are named and stored separately from any future SMS costs.

@@ -32,6 +32,7 @@ type AnalyticsNavTool = 'lab' | 'prep' | 'dashboard' | 'spatial';
 type DataNavSection = 'directory' | 'datasets' | 'media';
 type DesignNavSection = 'forms' | 'automations';
 type OpsNavSection = 'attendance' | 'review';
+type MessagesNavSection = 'threads' | 'broadcasts';
 
 type NavCounts = {
     projects?: number;
@@ -64,6 +65,8 @@ type StudioLayoutProps = {
     onSelectDesignSection?: (key: DesignNavSection) => void;
     activeOpsSection?: OpsNavSection | null;
     onSelectOpsSection?: (key: OpsNavSection) => void;
+    activeMessagesSection?: MessagesNavSection | null;
+    onSelectMessagesSection?: (key: MessagesNavSection) => void;
     children: React.ReactNode;
     counts?: NavCounts;
     contentClassName?: string;
@@ -104,6 +107,11 @@ const projectOpsSectionSubItems: Array<{ key: OpsNavSection; label: string }> = 
     { key: 'review', label: 'Review' },
 ];
 
+const projectMessagesSectionSubItems: Array<{ key: MessagesNavSection; label: string }> = [
+    { key: 'threads', label: 'Threads' },
+    { key: 'broadcasts', label: 'Broadcasts' },
+];
+
 const analyticsSubItems: Array<{ key: AnalyticsNavTool; label: string }> = [
     { key: 'lab', label: 'Analysis Lab' },
     { key: 'prep', label: 'Data Prep' },
@@ -125,6 +133,8 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
     onSelectDesignSection,
     activeOpsSection,
     onSelectOpsSection,
+    activeMessagesSection,
+    onSelectMessagesSection,
     children,
     counts,
     contentClassName = 'flex-1 overflow-y-auto p-10',
@@ -254,6 +264,8 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                             const showOpsSubmenu = !isSidebarCollapsed && item.key === 'ops' && isActive
                                 && Boolean(onSelectOpsSection)
                                 && opsSectionSubItems.length > 0;
+                            const showMessagesSubmenu = !isSidebarCollapsed && navMode === 'project' && item.key === 'messages' && isActive
+                                && Boolean(onSelectMessagesSection);
 
                             return (
                                 <div key={item.key} className="space-y-1">
@@ -270,6 +282,7 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                             (item.key === 'data' && onSelectAnalyticsTool)
                                             || (item.key === 'design' && onSelectDesignSection)
                                             || (item.key === 'ops' && onSelectOpsSection && opsSectionSubItems.length > 1)
+                                            || (item.key === 'messages' && navMode === 'project' && onSelectMessagesSection)
                                         ) ? (
                                             <ChevronDown className={`h-4 w-4 transition-transform ${isActive ? 'rotate-180 text-white' : 'text-[hsl(var(--text-tertiary))]'}`} />
                                         ) : null}
@@ -289,6 +302,24 @@ const StudioLayout: React.FC<StudioLayoutProps> = ({
                                                         key={subItem.key}
                                                         type="button"
                                                         onClick={() => onSelectOpsSection?.(subItem.key)}
+                                                        className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
+                                                    >
+                                                        <span className="truncate font-medium">{subItem.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : null}
+
+                                    {showMessagesSubmenu ? (
+                                        <div className="ml-4 border-l border-[hsl(var(--border))] pl-3 space-y-0.5">
+                                            {projectMessagesSectionSubItems.map(subItem => {
+                                                const isSubItemActive = activeMessagesSection === subItem.key;
+                                                return (
+                                                    <button
+                                                        key={subItem.key}
+                                                        type="button"
+                                                        onClick={() => onSelectMessagesSection?.(subItem.key)}
                                                         className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-all ${isSubItemActive ? 'bg-emerald-50 text-emerald-800' : 'text-[hsl(var(--text-secondary))] hover:bg-[hsl(var(--surface-elevated))]'}`}
                                                     >
                                                         <span className="truncate font-medium">{subItem.label}</span>

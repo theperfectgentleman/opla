@@ -1,7 +1,7 @@
 """per-organisation AI credit wallet
 
-Revision ID: 032_ai_credits
-Revises: 031_vocab_rename
+Revision ID: 033_ai_credits
+Revises: 032_project_broadcasts
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from sqlalchemy.sql import text
 
 from app.services.ai_credit_catalog import AI_ACTION_CATALOG
 
-revision = "032_ai_credits"
-down_revision = "031_vocab_rename"
+revision = "033_ai_credits"
+down_revision = "032_project_broadcasts"
 branch_labels = None
 depends_on = None
 

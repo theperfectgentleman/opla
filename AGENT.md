@@ -32,6 +32,7 @@ Grounded in code as of 2026-09-14:
 - **Hub:** `ProjectHub` at `/projects/:id/hub` — phases 0–5 in [`docs/Project-Command-Centre-Phases.md`](docs/Project-Command-Centre-Phases.md) marked Done (shell, pinned analytics, Needs Attention, form media, messages, `create_alert`). `/pdemo` redirects to Inbox. **Final cutover** (Hub as default project home) is not done — `/projects/:id` is still `ProjectWorkspace`.
 - **Data / reports:** Form datasets, analytics query API, Graphic Walker lab, dashboard canvas, org-level Reports portfolio (demo bucket init). Spatial Analysis Lab exists but uses Accra **demo** polygons, not live geo.
 - **Automation:** Form automation rules (`create_task`, `create_alert`) wired to Needs Attention.
+- **Messages → Broadcasts (SMS):** project Messages has Threads | Broadcasts. Broadcasts sends SMS through mNotify to teams, CSV imports and typed numbers, with preview, segment/credit estimate, balance, batched background send, per-recipient log + retry, and an org do-not-text list (`routes/broadcasts.py`, `services/sms/`, `MessagesBroadcasts.tsx`). Off unless `SMS_PROVIDER=mnotify` and `MNOTIFY_API_KEY` / `MNOTIFY_SENDER_ID` are set on the API.
 
 Treat early docs (`docs/DEVELOPMENT_CHECKLIST.md`, `docs/DOCUMENTATION_COMPLETE.md`, `QUICK_START.md` “next phase”) as **historical**. They still say Phase 1–5 circa Feb 2026; the tree is far past that.
 
@@ -42,7 +43,7 @@ Treat early docs (`docs/DEVELOPMENT_CHECKLIST.md`, `docs/DOCUMENTATION_COMPLETE.
 - **Audience** nav is a dashed placeholder. Org **Media** tab is a placeholder (project media APIs exist).
 - **Maps in Analysis (Phase 6)** — clarifying questions unanswered; Leaflet lab is demo data.
 - **ProjectHub cutover** — opening a project still lands on ProjectWorkspace, not Hub.
-- **USSD / SMS player** — PRD surface; no gateway.
+- **USSD / SMS player** — PRD surface; no gateway. (Outbound SMS broadcasts exist via mNotify; there is no inbound SMS, delivery-report webhook or WhatsApp yet.)
 - **WatermelonDB + full sync engine** — PRD; mobile uses AsyncStorage queues.
 - Separate **web-player** app — public forms live inside Studio, not `apps/web-player`.
 - Design gaps still open: display/instruction blocks, show-cards, native “Other (specify)”, grouped matrix rows ([`docs/Design Capability — Gap Analysis & Implementation Plan.md`](docs/Design%20Capability%20—%20Gap%20Analysis%20%26%20Implementation%20Plan.md)).

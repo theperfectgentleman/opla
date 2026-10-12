@@ -240,6 +240,63 @@ export const teamAPI = {
 
 // ============= Role API Methods =============
 
+export type BroadcastContactPayload = { phone: string; name?: string; source: 'csv' | 'manual' };
+export type BroadcastAudiencePayload = {
+    team_ids: string[];
+    contacts: BroadcastContactPayload[];
+};
+
+/** Project Messages → Broadcasts (outbound SMS). Separate from in-app thread routes. */
+export const broadcastAPI = {
+    providerStatus: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/provider`);
+        return response.data;
+    },
+    balance: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/balance`);
+        return response.data;
+    },
+    preview: async (
+        orgId: string,
+        projectId: string,
+        data: BroadcastAudiencePayload & { message: string; name_fallback?: string },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts/preview`, data);
+        return response.data;
+    },
+    send: async (
+        orgId: string,
+        projectId: string,
+        data: BroadcastAudiencePayload & { message: string; name_fallback?: string; expected_recipient_count?: number },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts`, data);
+        return response.data;
+    },
+    list: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts`);
+        return response.data;
+    },
+    get: async (orgId: string, projectId: string, broadcastId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/${broadcastId}`);
+        return response.data;
+    },
+    retryFailed: async (orgId: string, projectId: string, broadcastId: string) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts/${broadcastId}/retry`);
+        return response.data;
+    },
+    listOptOuts: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/opt-outs`);
+        return response.data;
+    },
+    addOptOut: async (orgId: string, projectId: string, data: { phone: string; reason?: string }) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts/opt-outs`, data);
+        return response.data;
+    },
+    removeOptOut: async (orgId: string, projectId: string, optOutId: string) => {
+        await apiClient.delete(`/organizations/${orgId}/projects/${projectId}/broadcasts/opt-outs/${optOutId}`);
+    },
+};
+
 export const roleAPI = {
     list: async (orgId: string) => {
         const response = await apiClient.get(`/organizations/${orgId}/roles`);

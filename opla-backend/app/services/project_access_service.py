@@ -159,6 +159,26 @@ class ProjectAccessService:
         )
 
     @staticmethod
+    def can_message_field(db: Session, user_id: uuid.UUID, project: Project) -> bool:
+        """Org admins plus anyone holding ``communication.field`` (Project Manager, Field Supervisor, editor)."""
+        try:
+            permissions = ProjectAccessService._get_effective_permissions(db, project, user_id)
+        except HTTPException:
+            return False
+        return "communication.field" in permissions
+
+    @staticmethod
+    def ensure_can_message_field(db: Session, user_id: uuid.UUID, project_id: uuid.UUID) -> Project:
+        project = ProjectAccessService.get_project_or_404(db, project_id)
+        return ProjectAccessService._ensure_project_permission(
+            db,
+            user_id,
+            project,
+            "communication.field",
+            error_detail="Only organisation admins, project managers and field supervisors can send SMS broadcasts",
+        )
+
+    @staticmethod
     def ensure_can_create_form(db: Session, user_id: uuid.UUID, project_id: uuid.UUID) -> Project:
         project = ProjectAccessService.get_project_or_404(db, project_id)
         project = ProjectAccessService._ensure_project_permission(

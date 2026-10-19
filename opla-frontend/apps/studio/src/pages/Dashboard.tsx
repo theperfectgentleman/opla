@@ -1640,7 +1640,7 @@ const Dashboard: React.FC = () => {
                             <div>
                                 <h2 className="text-3xl font-bold mb-2">Messages</h2>
                                 <p className="text-[hsl(var(--text-secondary))]">
-                                    General + team channels per project. Open a project hub to read and post.
+                                    General + team channels per project. Open a project Overview to read and post.
                                 </p>
                             </div>
                             <div className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-3 text-sm text-[hsl(var(--text-secondary))]">
@@ -1657,7 +1657,7 @@ const Dashboard: React.FC = () => {
                             </div>
                         ) : messageItems.length === 0 ? (
                             <p className="rounded-md border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-4 py-8 text-center text-sm text-[hsl(var(--text-tertiary))]">
-                                No channels yet. Open a project hub to seed General (and team channels when teams are granted).
+                                No channels yet. Open a project Overview to seed General (and team channels when teams are granted).
                             </p>
                         ) : (
                             <div className="grid gap-4 lg:grid-cols-2">
@@ -1692,7 +1692,7 @@ const Dashboard: React.FC = () => {
                                             </span>
                                         </div>
                                         <p className="mt-4 text-xs font-semibold text-[hsl(var(--primary))]">
-                                            Open in ProjectHub →
+                                            Open in Overview →
                                         </p>
                                     </button>
                                 ))}

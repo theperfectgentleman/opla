@@ -84,7 +84,7 @@ export const ORG_SHELL_NAV_LABELS: Record<OrgShellNavKey, string> = {
 };
 
 export const PROJECT_SHELL_NAV_LABELS: Record<ProjectShellNavKey, string> = {
-    hub: 'Hub',
+    hub: 'Overview',
     tasks: 'Tasks',
     ops: 'Ops',
     design: 'Design',
@@ -111,7 +111,7 @@ export function resolveLegacyProjectTab(
     if (raw === 'tasks' || (raw === 'ops' && view === 'tasks')) return { tab: 'tasks' };
     if (raw === 'ops' && (view === 'review' || section === 'review')) return { tab: 'ops', section: 'review' };
     if (raw === 'ops' && section === 'attendance') return { tab: 'ops', section: 'attendance' };
-    // Project workspace: Hub is the programme overview; Ops defaults to Attendance.
+    // Project workspace: Overview (/hub route); Ops defaults to Attendance.
     if (raw === 'ops' && !section) return { tab: 'ops', section: 'attendance' };
 
     if (PROJECT_WORKSPACE_TABS.includes(raw as ProjectWorkspaceTab)) {
@@ -329,7 +329,7 @@ export function buildProjectSearchParams(
     return next;
 }
 
-/** Project-scoped sidebar destinations (Hub is a dedicated route). */
+/** Project-scoped sidebar destinations (Overview is `/projects/:id/hub`). */
 export function projectNavHref(
     projectId: string,
     key: ProjectShellNavKey,

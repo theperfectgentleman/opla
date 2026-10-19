@@ -231,7 +231,7 @@ const ProjectHub: React.FC = () => {
                 setRecentMedia(mediaPayload?.items || []);
             } catch (err: any) {
                 if (!cancelled) {
-                    setError(err?.response?.data?.detail || err?.message || 'Failed to load Hub');
+                    setError(err?.response?.data?.detail || err?.message || 'Failed to load Overview');
                 }
             } finally {
                 if (!cancelled) setLoading(false);
@@ -513,7 +513,7 @@ const ProjectHub: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-sm font-semibold text-[hsl(var(--text-primary))]">
-                                Hub — Phase 4 (live)
+                                Overview — Phase 4 (live)
                             </p>
                             <p className="text-xs text-[hsl(var(--text-secondary))]">
                                 Messages are live (General + team channels). Maps stay hidden until a later phase.
@@ -541,13 +541,13 @@ const ProjectHub: React.FC = () => {
                 {loading ? (
                     <div className="flex h-48 items-center justify-center gap-2 text-[hsl(var(--text-secondary))]">
                         <Loader2 className="h-5 w-5 animate-spin" />
-                        Loading Hub…
+                        Loading Overview…
                     </div>
                 ) : error ? (
                     <div className="rounded-2xl border border-[hsl(var(--error))]/20 bg-[hsl(var(--error))]/10 p-6">
                         <div className="mb-2 flex items-center gap-2 text-[hsl(var(--error))]">
                             <AlertCircle className="h-5 w-5" />
-                            <h2 className="font-semibold">Hub unavailable</h2>
+                            <h2 className="font-semibold">Overview unavailable</h2>
                         </div>
                         <p className="text-sm text-[hsl(var(--text-secondary))]">{error}</p>
                     </div>

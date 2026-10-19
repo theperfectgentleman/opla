@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrg } from '../contexts/OrgContext';
 import ThemeToggle from './ThemeToggle';
+import { PROJECT_SHELL_NAV_LABELS } from '../lib/vocabulary';
 import {
     Layout,
     Folder,
@@ -83,7 +84,7 @@ const orgNavItems: NavItem[] = [
 ];
 
 const projectNavItems: NavItem[] = [
-    { key: 'hub', label: 'Hub', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { key: 'hub', label: PROJECT_SHELL_NAV_LABELS.hub, icon: <LayoutDashboard className="w-5 h-5" /> },
     { key: 'tasks', label: 'Tasks', icon: <CheckSquare className="w-5 h-5" />, countKey: 'tasks' },
     { key: 'ops', label: 'Ops', icon: <CheckCircle2 className="w-5 h-5" /> },
     { key: 'design', label: 'Design', icon: <Layout className="w-5 h-5" />, countKey: 'forms' },

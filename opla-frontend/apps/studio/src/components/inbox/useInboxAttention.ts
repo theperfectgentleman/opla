@@ -57,7 +57,7 @@ export function buildInboxAttentionItems(pulses: ProjectPulse[]): InboxAttention
                 projectId: row.projectId,
                 projectName: row.projectName,
                 title: `${row.openTasks} open task${row.openTasks === 1 ? '' : 's'}`,
-                detail: 'Check programme Hub for today’s work',
+                detail: 'Check programme Overview for today’s work',
                 action: 'hub',
                 weight: row.openTasks,
             });

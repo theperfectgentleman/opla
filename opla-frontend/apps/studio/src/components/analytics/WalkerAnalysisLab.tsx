@@ -492,8 +492,8 @@ export default function WalkerAnalysisLab({
 						</h3>
 						<p className="mt-1 text-xs text-slate-500">
 							{labMode === 'quick'
-								? 'Saves a chart question you can pin on ProjectHub.'
-								: 'Saves a Walker exploration (not used for ProjectHub pins yet).'}
+								? 'Saves a chart question you can pin on the project Overview.'
+								: 'Saves a Walker exploration (not used for Overview pins yet).'}
 						</p>
 						<div className="mt-4">
 							<label className={analyticsLabelClass}>Title</label>

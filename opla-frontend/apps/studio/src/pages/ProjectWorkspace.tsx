@@ -344,7 +344,7 @@ const ProjectWorkspace: React.FC = () => {
         }
     }, [searchParams, setSearchParams]);
 
-    // Org Ops Overview lives on the dashboard; project Ops Overview → Hub.
+    // Org Ops Overview lives on the dashboard; project Ops overview section → project Overview route.
     useEffect(() => {
         if (activeTab === 'ops' && opsView === 'overview' && projectId) {
             navigate(`/projects/${projectId}/hub`, { replace: true });
@@ -1428,7 +1428,7 @@ const ProjectWorkspace: React.FC = () => {
                                                                 </div>
                                                             </div>
                                                             <p className="text-[10px] text-[hsl(var(--text-tertiary))]">
-                                                                Alerts appear in ProjectHub Needs Attention. Provenance shows the automation rule name. Deduped once per rule + submission.
+                                                                Alerts appear in Overview Needs Attention. Provenance shows the automation rule name. Deduped once per rule + submission.
                                                             </p>
                                                         </>
                                                     ) : (
@@ -1778,7 +1778,7 @@ const ProjectWorkspace: React.FC = () => {
                         {/* 4. DATA — section chosen from sidebar */}
                         {activeTab === 'data' && dataSection === 'analysis' && (
                             <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--surface))] p-8 text-center text-sm text-[hsl(var(--text-secondary))]">
-                                Open Analysis from the org Data tab in the sidebar, or use the project hub for spatial insights.
+                                Open Analysis from the org Data tab in the sidebar, or use the project Overview for spatial insights.
                             </div>
                         )}
 

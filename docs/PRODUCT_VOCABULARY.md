@@ -18,7 +18,7 @@ Organisation
 ├── Audience
 ├── Settings
 └── Projects (entered)
-      ├── Hub              (programme day: today, alerts, KPIs)
+      ├── Overview         (programme day: today, alerts, KPIs; route `/hub`)
       ├── Tasks            (+ Today, assignments)
       ├── Ops
       │     ├── Attendance
@@ -32,9 +32,9 @@ Organisation
             └── Media      (files, links, field references; was “assets”)
 ```
 
-**Navigation:** Org sidebar is **Inbox**, Projects, **Reports**, Teams, Audience, Settings. After opening a project, the sidebar is Hub / Tasks / Ops / Design / Data / Messages (field work). Reports stay at org so seniors can combine sources without project Ops access.
+**Navigation:** Org sidebar is **Inbox**, Projects, **Reports**, Teams, Audience, Settings. After opening a project, the sidebar is Overview / Tasks / Ops / Design / Data / Messages (field work). Reports stay at org so seniors can combine sources without project Ops access.
 
-**Inbox vs project Ops:** **Inbox** is person-scoped attention across programmes. **Ops** exists only under a project (Attendance + Review). Project **Hub** is the programme day view.
+**Inbox vs project Ops:** **Inbox** is person-scoped attention across programmes. **Ops** exists only under a project (Attendance + Review). Project **Overview** is the programme day view (nav key and route remain `hub` until a later cutover).
 
 **Reports vs Projects:** **Projects** are for people who *do* the work. **Reports** are stakeholder buckets (Team grants: viewer / commenter / explorer / owner) for people who *watch and steer* — see, comment, ask, explore curated analytics. Membership is independent of project membership.
 
@@ -51,7 +51,7 @@ Organisation
 | **Teams** | Groups of members for assignment and access | Admins, managers |
 | **Inbox** | Personal hub after login (and header bell): cross-project notifications / items that need attention | Managers, supervisors |
 | **Project** | Time-bounded field operation: targets, team, capture, tasks | Managers |
-| **Hub** | Read-oriented project command centre (today, alerts, KPIs) | Managers |
+| **Overview** | Read-oriented project command centre (today, alerts, KPIs) | Managers |
 | **Tasks** | Assigned work; agents use **Today** as the primary queue | Agents, managers |
 | **Ops** | Project-scoped field workflows: attendance and submission review | Agents, supervisors |
 | **Design** | Design-time configuration: forms and automations | Studio admins |
@@ -78,16 +78,16 @@ Organisation
 
 ---
 
-## Hub vs Tasks (Today)
+## Overview vs Tasks (Today)
 
 Both can show “today” — different jobs:
 
 | Surface | Audience | Job |
 |---------|----------|-----|
-| **Hub → Today** | Managers | Pulse: coverage, exceptions, KPIs |
+| **Overview → Today** | Managers | Pulse: coverage, exceptions, KPIs |
 | **Tasks → Today** | Agents | Queue: what to do next |
 
-Same underlying task data; Hub summarizes, Tasks executes.
+Same underlying task data; Overview summarizes, Tasks executes.
 
 ---
 
@@ -103,6 +103,7 @@ Same underlying task data; Hub summarizes, Tasks executes.
 | Assets (user-facing) | Data → Media |
 | Outlet / store (platform-wide) | Directory record label (org-configurable) |
 | Survey / respondent (field-ops positioning) | Agent, capture, record |
+| Hub (user-facing) | Overview |
 
 **Submissions** remain accurate internally and in APIs. Agents complete **tasks**; managers **review** in Ops.
 
@@ -128,7 +129,7 @@ See **[`VOCABULARY_MIGRATION_PLAN.md`](./VOCABULARY_MIGRATION_PLAN.md)** for pha
 
 ## One-line positioning
 
-> Organisations start in **Inbox**. **Projects** are ground work. **Reports** are stakeholder boards (Team grants). Inside a project: Hub, Tasks, Ops, Design, Data, Messages.
+> Organisations start in **Inbox**. **Projects** are ground work. **Reports** are stakeholder boards (Team grants). Inside a project: Overview, Tasks, Ops, Design, Data, Messages.
 
 ---
 

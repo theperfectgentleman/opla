@@ -16,7 +16,8 @@ import {
     isFieldVisibleByRules,
     getFilteredOptionsByRules
 } from '../../../mobile/src/utils/rulesEngine';
-import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
+import { resolveFieldOptions } from '@opla/types';
+import { applyInputMask } from '../../../../packages/logic/src/formFields';
 
 interface UIField {
     type: string;
@@ -116,40 +117,7 @@ const getHtmlInputStep = (rangeType?: string, stepValue?: string, stepUnit?: str
     return undefined;
 };
 
-const applyMask = (value: string, mask: string) => {
-    if (!mask) return value;
-    const rawValue = value.replace(/[^a-zA-Z0-9]/g, '');
-    let formattedValue = '';
-    let rawIndex = 0;
-
-    for (let i = 0; i < mask.length; i++) {
-        if (rawIndex >= rawValue.length) {
-            break;
-        }
-
-        const maskChar = mask[i];
-        const char = rawValue[rawIndex];
-
-        if (maskChar === '9') {
-            if (/[0-9]/.test(char)) { formattedValue += char; rawIndex++; }
-            else { break; }
-        } else if (maskChar === 'A') {
-            if (/[a-zA-Z]/.test(char)) { formattedValue += char.toUpperCase(); rawIndex++; }
-            else { break; }
-        } else if (maskChar === 'a') {
-            if (/[a-zA-Z]/.test(char)) { formattedValue += char.toLowerCase(); rawIndex++; }
-            else { break; }
-        } else if (maskChar === '*') {
-            formattedValue += char; rawIndex++;
-        } else {
-            formattedValue += maskChar;
-            if (/[a-zA-Z0-9]/.test(maskChar) && char.toLowerCase() === maskChar.toLowerCase()) {
-                rawIndex++;
-            }
-        }
-    }
-    return formattedValue;
-};
+const applyMask = (value: string, mask: string) => applyInputMask(value, mask);
 
 const LookupFieldRenderer = ({ field, value, onChange, rulesResult, responses }: any) => {
     const [search, setSearch] = useState('');
@@ -1082,12 +1050,11 @@ const FormSimulator: React.FC = () => {
                                     .filter(field => !activeFieldId || field.bind === activeFieldId)
                                     .map((field, idx) => {
                                         const directoryField = field as import('@opla/types').FormField;
-                                        const baseOptions = fieldUsesDirectoryOptionResolver(directoryField)
-                                            ? resolveDirectoryFormFieldOptions(directoryField, formData)
-                                            : (field.options || []);
+                                        const siblingFields = (blueprint?.ui || []).flatMap((s: any) => s.children || []);
+                                        const baseOptions = resolveFieldOptions(directoryField, formData, siblingFields);
                                         const displayOptions = baseOptions.filter((opt: any) => {
                                             if (rulesResult && formData) {
-                                                const filtered = getFilteredOptionsByRules(field.bind, rulesResult, formData, baseOptions);
+                                                const filtered = getFilteredOptionsByRules(field.bind, rulesResult, formData, baseOptions, siblingFields);
                                                 if (filtered !== null) {
                                                     return filtered.some((fOpt: any) => getOptionValue(fOpt) === getOptionValue(opt));
                                                 }

@@ -150,8 +150,13 @@ interface FormField {
     table_cell_type?: TableCellType;
     table_allow_multiple?: boolean;
     mask?: string;
-    lookup_source_type?: 'preset' | 'custom';
+    lookup_source_type?: 'preset' | 'custom' | 'dataset';
     lookup_preset_id?: string;
+    lookup_dataset_id?: string;
+    lookup_dataset_label_field?: string;
+    lookup_dataset_value_field?: string;
+    lookup_sync_interval_minutes?: number;
+    lookup_allow_stale_cache?: boolean;
     lookup_custom_data?: string;
     lookup_separator?: string;
     lookup_label_column?: number | string;
@@ -478,7 +483,27 @@ const propertyMetaDetails: Record<string, { name: string; description: string }>
     default_value: {
         name: "Default Value",
         description: "Pre-filled value populated automatically on form load, overridable by respondents."
-    }
+    },
+    decimal_places: {
+        name: "Decimal Places",
+        description: "How many digits after the decimal to keep on currency and decimal number fields."
+    },
+    input_prefix: {
+        name: "Input Prefix",
+        description: "Currency or unit shown before the number (e.g. GHS, $)."
+    },
+    input_suffix: {
+        name: "Input Suffix",
+        description: "Unit shown after the number (e.g. kg, %)."
+    },
+    auto_value: {
+        name: "Auto Value",
+        description: "Stamp the field with now(), today(), or current_time() on load or submit."
+    },
+    linked_form_param_map: {
+        name: "Parameter Map",
+        description: "Copy answers from this form into fields on the linked form when the agent taps the card."
+    },
 };
 
 
@@ -1807,7 +1832,7 @@ const FormBuilder: React.FC = () => {
     };
 
     const buildFieldTypeDefaults = (type: FieldType, defaults?: Partial<FormField>): Partial<FormField> => {
-        const isChoice = ['dropdown', 'radio_group', 'checkbox_group'].includes(type);
+        const isChoice = ['dropdown', 'radio_group', 'checkbox_group', 'multi_select_dropdown'].includes(type);
         const defaultOpts: FieldOption[] = isChoice
             ? [{ label: 'Option A', value: 'option_a' }, { label: 'Option B', value: 'option_b' }]
             : [];
@@ -2207,7 +2232,7 @@ const FormBuilder: React.FC = () => {
                 shuffle_options: !!screen.shuffle_options,
             },
             fields: screen.children ? screen.children.map((child: any) => ({
-                id: child.bind,
+                id: child.id || child.bind,
                 type: child.type as FieldType,
                 label: child.label || 'Untitled Field',
                 required: !!child.required,
@@ -2219,6 +2244,7 @@ const FormBuilder: React.FC = () => {
                 max: child.max,
                 minLength: child.minLength,
                 maxLength: child.maxLength,
+                pattern: child.pattern,
                 default_value: child.default_value,
                 is_sensitive: !!child.is_sensitive,
                 exclude_from_export: !!child.exclude_from_export,
@@ -2229,6 +2255,11 @@ const FormBuilder: React.FC = () => {
                 mask: child.mask,
                 lookup_source_type: child.lookup_source_type,
                 lookup_preset_id: child.lookup_preset_id,
+                lookup_dataset_id: child.lookup_dataset_id,
+                lookup_dataset_label_field: child.lookup_dataset_label_field,
+                lookup_dataset_value_field: child.lookup_dataset_value_field,
+                lookup_sync_interval_minutes: child.lookup_sync_interval_minutes,
+                lookup_allow_stale_cache: child.lookup_allow_stale_cache,
                 lookup_custom_data: child.lookup_custom_data,
                 lookup_separator: child.lookup_separator,
                 lookup_label_column: child.lookup_label_column,
@@ -2250,13 +2281,18 @@ const FormBuilder: React.FC = () => {
                 directory_unique_values: !!child.directory_unique_values,
                 directory_cascade_filter_column: child.directory_cascade_filter_column,
                 cascade_parent_field_id: child.cascade_parent_field_id,
+                cascade_options_map: child.cascade_options_map,
+                decimal_places: child.decimal_places,
+                input_prefix: child.input_prefix,
+                input_suffix: child.input_suffix,
+                auto_value: child.auto_value,
+                auto_value_timing: child.auto_value_timing,
+                auto_value_editable: child.auto_value_editable,
                 linked_form_id: child.linked_form_id,
                 linked_form_slug: child.linked_form_slug,
                 linked_form_param_map: child.linked_form_param_map,
-                // Input param annotations
                 is_input_param: child.is_input_param,
                 input_param_readonly: child.input_param_readonly,
-                // Generic Range properties
                 range_type: child.range_type,
                 step_value: child.step_value,
                 step_unit: child.step_unit,
@@ -2576,6 +2612,7 @@ const FormBuilder: React.FC = () => {
 
     const serializeUiField = (field: FormField) => ({
         type: field.type,
+        id: field.id,
         bind: field.id,
         label: field.label,
         required: field.required,
@@ -2587,6 +2624,7 @@ const FormBuilder: React.FC = () => {
         max: field.max,
         minLength: field.minLength,
         maxLength: field.maxLength,
+        pattern: field.pattern,
         default_value: field.default_value,
         is_sensitive: field.is_sensitive,
         exclude_from_export: field.exclude_from_export,
@@ -2597,6 +2635,11 @@ const FormBuilder: React.FC = () => {
         mask: field.mask,
         lookup_source_type: field.lookup_source_type,
         lookup_preset_id: field.lookup_preset_id,
+        lookup_dataset_id: field.lookup_dataset_id,
+        lookup_dataset_label_field: field.lookup_dataset_label_field,
+        lookup_dataset_value_field: field.lookup_dataset_value_field,
+        lookup_sync_interval_minutes: field.lookup_sync_interval_minutes,
+        lookup_allow_stale_cache: field.lookup_allow_stale_cache,
         lookup_custom_data: field.lookup_custom_data,
         lookup_separator: field.lookup_separator,
         lookup_label_column: field.lookup_label_column,
@@ -2618,14 +2661,18 @@ const FormBuilder: React.FC = () => {
         directory_unique_values: field.directory_unique_values,
         directory_cascade_filter_column: field.directory_cascade_filter_column,
         cascade_parent_field_id: field.cascade_parent_field_id,
-        // Form link
+        cascade_options_map: field.cascade_options_map,
+        decimal_places: field.decimal_places,
+        input_prefix: field.input_prefix,
+        input_suffix: field.input_suffix,
+        auto_value: field.auto_value,
+        auto_value_timing: field.auto_value_timing,
+        auto_value_editable: field.auto_value_editable,
         linked_form_id: field.linked_form_id,
         linked_form_slug: field.linked_form_slug,
         linked_form_param_map: field.linked_form_param_map,
-        // Input param annotations
         is_input_param: field.is_input_param,
         input_param_readonly: field.input_param_readonly,
-        // Generic Range properties
         range_type: field.range_type,
         step_value: field.step_value,
         step_unit: field.step_unit,
@@ -5557,6 +5604,116 @@ const FormBuilder: React.FC = () => {
                                                                         },
                                                                         {
                                                                             category: 'Data',
+                                                                            key: 'decimal_places',
+                                                                            label: 'Decimal Places',
+                                                                            metaKey: 'decimal_places',
+                                                                            visible: selectedField.type === 'input_number',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="number"
+                                                                                    min={0}
+                                                                                    max={6}
+                                                                                    value={selectedField.decimal_places ?? ''}
+                                                                                    onChange={(e) => {
+                                                                                        const raw = e.target.value;
+                                                                                        updateField(selectedField.id, { decimal_places: raw === '' ? undefined : Number(raw) });
+                                                                                    }}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="e.g. 2"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.decimal_places)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'input_prefix',
+                                                                            label: 'Prefix',
+                                                                            metaKey: 'input_prefix',
+                                                                            visible: selectedField.type === 'input_number',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.input_prefix || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { input_prefix: e.target.value || undefined })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="GHS"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.input_prefix)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
+                                                                            key: 'input_suffix',
+                                                                            label: 'Suffix',
+                                                                            metaKey: 'input_suffix',
+                                                                            visible: selectedField.type === 'input_number',
+                                                                            render: () => (
+                                                                                <input
+                                                                                    value={selectedField.input_suffix || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { input_suffix: e.target.value || undefined })}
+                                                                                    className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
+                                                                                    placeholder="kg"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.input_suffix)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Behavior',
+                                                                            key: 'auto_value',
+                                                                            label: 'Auto Value',
+                                                                            metaKey: 'auto_value',
+                                                                            visible: ['input_text', 'date_picker', 'time_picker'].includes(selectedField.type),
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.auto_value || ''}
+                                                                                    onChange={(e) => updateField(selectedField.id, { auto_value: e.target.value || undefined })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                    onFocus={() => setHoveredProperty(propertyMetaDetails.auto_value)}
+                                                                                    onBlur={() => setHoveredProperty(null)}
+                                                                                >
+                                                                                    <option value="">None</option>
+                                                                                    <option value="now()">now()</option>
+                                                                                    <option value="today()">today()</option>
+                                                                                    <option value="current_time()">current_time()</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Behavior',
+                                                                            key: 'auto_value_timing',
+                                                                            label: 'Auto Timing',
+                                                                            metaKey: 'auto_value',
+                                                                            visible: Boolean(selectedField.auto_value),
+                                                                            render: () => (
+                                                                                <select
+                                                                                    value={selectedField.auto_value_timing || 'on_load'}
+                                                                                    onChange={(e) => updateField(selectedField.id, { auto_value_timing: e.target.value as 'on_load' | 'on_submit' })}
+                                                                                    className="w-full h-full bg-transparent px-1 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded cursor-pointer text-[hsl(var(--text-primary))]"
+                                                                                >
+                                                                                    <option value="on_load">On load</option>
+                                                                                    <option value="on_submit">On submit</option>
+                                                                                </select>
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Behavior',
+                                                                            key: 'auto_value_editable',
+                                                                            label: 'Auto Editable',
+                                                                            metaKey: 'auto_value',
+                                                                            visible: Boolean(selectedField.auto_value),
+                                                                            render: () => (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedField.auto_value_editable !== false}
+                                                                                    onChange={(e) => updateField(selectedField.id, { auto_value_editable: e.target.checked })}
+                                                                                    className="h-3.5 w-3.5 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/20 cursor-pointer"
+                                                                                />
+                                                                            )
+                                                                        },
+                                                                        {
+                                                                            category: 'Data',
                                                                             key: 'object_schema_key',
                                                                             label: 'Schema ID',
                                                                             metaKey: 'object_schema_key',
@@ -5653,13 +5810,23 @@ const FormBuilder: React.FC = () => {
                                                                             render: () => (
                                                                                 <input
                                                                                     type={selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'number'}
-                                                                                    value={selectedField.min || ''}
+                                                                                    value={selectedField.min === undefined || selectedField.min === null ? '' : selectedField.min}
                                                                                     onChange={(e) => {
-                                                                                        const val = ['date_picker', 'time_picker'].includes(selectedField.type) ? e.target.value : parseInt(e.target.value);
-                                                                                        updateField(selectedField.id, { min: val || undefined });
+                                                                                        const raw = e.target.value;
+                                                                                        if (raw === '') {
+                                                                                            updateField(selectedField.id, { min: undefined });
+                                                                                            return;
+                                                                                        }
+                                                                                        if (['date_picker', 'time_picker'].includes(selectedField.type)) {
+                                                                                            updateField(selectedField.id, { min: raw });
+                                                                                            return;
+                                                                                        }
+                                                                                        const numeric = Number(raw);
+                                                                                        updateField(selectedField.id, { min: Number.isFinite(numeric) ? numeric : undefined });
                                                                                     }}
                                                                                     className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
                                                                                     placeholder="Minimum"
+                                                                                    step={selectedField.type === 'input_number' ? 'any' : undefined}
                                                                                     onFocus={() => setHoveredProperty(propertyMetaDetails.min)}
                                                                                     onBlur={() => setHoveredProperty(null)}
                                                                                 />
@@ -5674,13 +5841,23 @@ const FormBuilder: React.FC = () => {
                                                                             render: () => (
                                                                                 <input
                                                                                     type={selectedField.type === 'date_picker' ? 'date' : selectedField.type === 'time_picker' ? 'time' : 'number'}
-                                                                                    value={selectedField.max || ''}
+                                                                                    value={selectedField.max === undefined || selectedField.max === null ? '' : selectedField.max}
                                                                                     onChange={(e) => {
-                                                                                        const val = ['date_picker', 'time_picker'].includes(selectedField.type) ? e.target.value : parseInt(e.target.value);
-                                                                                        updateField(selectedField.id, { max: val || undefined });
+                                                                                        const raw = e.target.value;
+                                                                                        if (raw === '') {
+                                                                                            updateField(selectedField.id, { max: undefined });
+                                                                                            return;
+                                                                                        }
+                                                                                        if (['date_picker', 'time_picker'].includes(selectedField.type)) {
+                                                                                            updateField(selectedField.id, { max: raw });
+                                                                                            return;
+                                                                                        }
+                                                                                        const numeric = Number(raw);
+                                                                                        updateField(selectedField.id, { max: Number.isFinite(numeric) ? numeric : undefined });
                                                                                     }}
                                                                                     className="w-full h-full bg-transparent px-1.5 py-0 border-0 outline-none text-xs focus:ring-1 focus:ring-[hsl(var(--primary))]/30 rounded text-[hsl(var(--text-primary))]"
                                                                                     placeholder="Maximum"
+                                                                                    step={selectedField.type === 'input_number' ? 'any' : undefined}
                                                                                     onFocus={() => setHoveredProperty(propertyMetaDetails.max)}
                                                                                     onBlur={() => setHoveredProperty(null)}
                                                                                 />
@@ -5757,7 +5934,7 @@ const FormBuilder: React.FC = () => {
                                                                             key: 'mask',
                                                                             label: 'Input Mask',
                                                                             metaKey: 'mask',
-                                                                            visible: selectedField.type === 'input_text',
+                                                                            visible: ['input_text', 'phone_input'].includes(selectedField.type),
                                                                             render: () => {
                                                                                 const presets = [
                                                                                     { label: 'None', val: '' },
@@ -6139,6 +6316,73 @@ const FormBuilder: React.FC = () => {
                                                                                     placeholder="slug of target form"
                                                                                 />
                                                                             )
+                                                                        },
+                                                                        {
+                                                                            category: 'Form Link',
+                                                                            key: 'linked_form_param_map',
+                                                                            label: 'Parameter Map',
+                                                                            metaKey: 'linked_form_param_map',
+                                                                            visible: selectedField.type === 'form_link',
+                                                                            render: () => {
+                                                                                const map = selectedField.linked_form_param_map || {};
+                                                                                const entries = Object.entries(map);
+                                                                                const sourceFields = sections.flatMap((section) => section.fields).filter((field) => field.id !== selectedField.id);
+                                                                                return (
+                                                                                    <div className="w-full space-y-1 py-1">
+                                                                                        {entries.map(([sourceId, targetId], idx) => (
+                                                                                            <div key={`${sourceId}-${idx}`} className="flex gap-1">
+                                                                                                <select
+                                                                                                    value={sourceId}
+                                                                                                    onChange={(e) => {
+                                                                                                        const next = { ...map };
+                                                                                                        delete next[sourceId];
+                                                                                                        if (e.target.value) {
+                                                                                                            next[e.target.value] = targetId;
+                                                                                                        }
+                                                                                                        updateField(selectedField.id, { linked_form_param_map: Object.keys(next).length ? next : undefined });
+                                                                                                    }}
+                                                                                                    className="flex-1 bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded px-1 py-0.5 text-[10px] outline-none text-[hsl(var(--text-primary))]"
+                                                                                                >
+                                                                                                    {sourceFields.map((field) => (
+                                                                                                        <option key={field.id} value={field.id}>{field.label}</option>
+                                                                                                    ))}
+                                                                                                </select>
+                                                                                                <input
+                                                                                                    value={targetId}
+                                                                                                    onChange={(e) => {
+                                                                                                        const next = { ...map, [sourceId]: e.target.value };
+                                                                                                        updateField(selectedField.id, { linked_form_param_map: next });
+                                                                                                    }}
+                                                                                                    className="flex-1 bg-[hsl(var(--surface-elevated))]/40 border border-[hsl(var(--border))]/40 rounded px-1 py-0.5 text-[10px] outline-none text-[hsl(var(--text-primary))]"
+                                                                                                    placeholder="target bind"
+                                                                                                />
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        const next = { ...map };
+                                                                                                        delete next[sourceId];
+                                                                                                        updateField(selectedField.id, { linked_form_param_map: Object.keys(next).length ? next : undefined });
+                                                                                                    }}
+                                                                                                    className="text-[10px] text-red-400 px-1"
+                                                                                >
+                                                                                                    ×
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                const first = sourceFields.find((field) => !map[field.id]);
+                                                                                                if (!first) return;
+                                                                                                updateField(selectedField.id, { linked_form_param_map: { ...map, [first.id]: '' } });
+                                                                                            }}
+                                                                                            className="text-[10px] text-[hsl(var(--primary))] font-semibold"
+                                                                                        >
+                                                                                            + Add mapping
+                                                                                        </button>
+                                                                                    </div>
+                                                                                );
+                                                                            }
                                                                         },
 
                                                                         // --- Input Parameter Settings ---

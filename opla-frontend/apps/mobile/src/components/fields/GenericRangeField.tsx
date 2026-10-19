@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, TextInput, Modal, FlatList, SafeAreaView,
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Calendar, Clock, Sliders } from 'lucide-react-native';
 import { FormField, GenericRangeValue, RangeType } from '@opla/types';
+import { formatLocalDate, parseLocalDate } from '../../utils/formFields';
 
 interface Props {
     field: FormField;
@@ -73,17 +74,19 @@ export function GenericRangeField({ field, value, error, onChange }: Props) {
         }
 
         if (field.range_type === 'DATETIME' && val) {
-            const parsed = new Date(val);
-            if (!isNaN(parsed.getTime())) {
-                return parsed;
+            const parsed = parseLocalDate(val);
+            const timePart = val.split(/[T ]/)[1];
+            if (timePart) {
+                const [h, m] = timePart.substring(0, 5).split(':').map(Number);
+                if (!isNaN(h) && !isNaN(m)) {
+                    parsed.setHours(h, m, 0, 0);
+                }
             }
+            return parsed;
         }
 
         if (field.range_type === 'DATE' && val) {
-            const parsed = new Date(val);
-            if (!isNaN(parsed.getTime())) {
-                return parsed;
-            }
+            return parseLocalDate(val);
         }
 
         return d;
@@ -98,7 +101,7 @@ export function GenericRangeField({ field, value, error, onChange }: Props) {
             const currentVal = which === 'start' ? rangeVal.start_value : rangeVal.end_value;
 
             if (field.range_type === 'DATE') {
-                const formatted = selectedDate.toISOString().split('T')[0];
+                const formatted = formatLocalDate(selectedDate);
                 updateValue({ [which === 'start' ? 'start_value' : 'end_value']: formatted });
             } else if (field.range_type === 'TIME') {
                 const hours = String(selectedDate.getHours()).padStart(2, '0');
@@ -106,7 +109,7 @@ export function GenericRangeField({ field, value, error, onChange }: Props) {
                 updateValue({ [which === 'start' ? 'start_value' : 'end_value']: `${hours}:${minutes}` });
             } else if (field.range_type === 'DATETIME') {
                 // Combine date and time
-                let datePart = selectedDate.toISOString().split('T')[0];
+                let datePart = formatLocalDate(selectedDate);
                 let timePart = '00:00';
                 
                 if (currentVal) {
@@ -116,7 +119,7 @@ export function GenericRangeField({ field, value, error, onChange }: Props) {
                 }
 
                 if (mode === 'date') {
-                    datePart = selectedDate.toISOString().split('T')[0];
+                    datePart = formatLocalDate(selectedDate);
                 } else {
                     const hours = String(selectedDate.getHours()).padStart(2, '0');
                     const minutes = String(selectedDate.getMinutes()).padStart(2, '0');

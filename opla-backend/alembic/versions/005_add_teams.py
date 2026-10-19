@@ -18,6 +18,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 002_add_core_tables already creates teams and team_members (with added_at,
+    # matching TeamMember). Re-running create_table breaks a fresh database.
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing = set(inspector.get_table_names())
+    if "teams" in existing and "team_members" in existing:
+        return
+
     op.create_table(
         'teams',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False),

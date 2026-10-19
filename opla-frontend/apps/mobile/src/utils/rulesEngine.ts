@@ -5,6 +5,7 @@ import type {
   RuleGroupNode,
   RuleAction,
 } from '@opla/types';
+import { lookupResponse, hasParentValue } from '@opla/types';
 
 // ─── Types for evaluation results ───────────────────────────────────────────
 
@@ -28,6 +29,15 @@ export interface RulesEvaluationResult {
 }
 
 // ─── Helper Functions for Label & Range Comparisons ──────────────────────────
+
+function collectBlueprintFields(blueprint: any): Array<{ id?: string; bind?: string }> {
+  if (!blueprint?.ui) return [];
+  return blueprint.ui.flatMap((section: any) => section.children || []);
+}
+
+function readResponse(responses: Record<string, any>, fieldRef: string, blueprint?: any): any {
+  return lookupResponse(responses, fieldRef, collectBlueprintFields(blueprint));
+}
 
 function findFieldInBlueprint(blueprint: any, fieldId: string): any {
   if (!blueprint || !blueprint.ui) return null;
@@ -148,7 +158,7 @@ function evaluateConditionNode(
   responses: Record<string, any>,
   blueprint?: any
 ): boolean {
-  const rawCurrentVal = responses[node.field];
+  const rawCurrentVal = readResponse(responses, node.field, blueprint);
   const currentVal = getComparisonValue(node.field, rawCurrentVal, node.compare_by, blueprint);
   const targetVal = node.value;
 
@@ -164,14 +174,14 @@ function evaluateConditionNode(
 
   // Support comparing generic range fields/values
   const isCurrentRange = currentVal && typeof currentVal === 'object' && currentVal.range_type !== undefined;
-  const targetRangeVal = typeof targetVal === 'string' ? responses[targetVal] : null;
+  const targetRangeVal = typeof targetVal === 'string' ? readResponse(responses, targetVal, blueprint) : null;
   const isTargetRange = targetRangeVal && typeof targetRangeVal === 'object' && targetRangeVal.range_type !== undefined;
   const directTargetRange = targetVal && typeof targetVal === 'object' && targetVal.range_type !== undefined;
 
   const rangeObj = isCurrentRange ? currentVal : (isTargetRange ? targetRangeVal : (directTargetRange ? targetVal : null));
   if (rangeObj) {
     const scalarVal = isCurrentRange 
-      ? (typeof targetVal === 'string' && responses[targetVal] !== undefined ? responses[targetVal] : targetVal)
+      ? (typeof targetVal === 'string' && readResponse(responses, targetVal, blueprint) !== undefined ? readResponse(responses, targetVal, blueprint) : targetVal)
       : currentVal;
     return isValInRangeWithOperator(scalarVal, rangeObj, node.operator);
   }
@@ -315,6 +325,24 @@ export function evaluateAllRules(
 /**
  * Check if a field should be visible based on active rules.
  */
+export function readFieldRuleFlag(
+  field: { id?: string; bind?: string },
+  result: RulesEvaluationResult,
+  reader: (fieldId: string, result: RulesEvaluationResult) => boolean | null,
+): boolean | null {
+  const keys = [...new Set([field.id, field.bind].filter(Boolean) as string[])];
+  let sawTrue = false;
+  for (const key of keys) {
+    const flag = reader(key, result);
+    if (flag === false) return false;
+    if (flag === true) sawTrue = true;
+  }
+  return sawTrue ? true : null;
+}
+
+/**
+ * Check if a field should be visible based on active rules.
+ */
 export function isFieldVisibleByRules(
   fieldId: string,
   result: RulesEvaluationResult
@@ -372,9 +400,14 @@ export function getFilteredOptionsByRules(
   fieldId: string,
   result: RulesEvaluationResult,
   responses: Record<string, any>,
-  options?: any[]
+  options?: any[],
+  fields: Array<{ id?: string; bind?: string }> = [],
 ): any[] | null {
-  const effects = result.fieldEffects[fieldId] || [];
+  const keys = new Set<string>([fieldId]);
+  const match = fields.find((entry) => entry.id === fieldId || entry.bind === fieldId);
+  if (match?.id) keys.add(match.id);
+  if (match?.bind) keys.add(match.bind);
+  const effects = [...keys].flatMap((key) => result.fieldEffects[key] || []);
   const filterEffect = effects.find(e => e.action.effect === 'FILTER_OPTIONS');
   if (!filterEffect) return null;
 
@@ -383,17 +416,20 @@ export function getFilteredOptionsByRules(
 
   // If filter_map is provided, use the parent field's value to look up filtered options
   if (config.filter_map && config.parent_field_id) {
-    const parentValue = responses[config.parent_field_id];
-    if (parentValue && config.filter_map[parentValue]) {
-      return config.filter_map[parentValue];
+    const parentValue = lookupResponse(responses, config.parent_field_id, fields);
+    if (hasParentValue(parentValue)) {
+      const mapped = config.filter_map[String(parentValue)] || config.filter_map[parentValue as string];
+      if (mapped) {
+        return mapped;
+      }
     }
     return []; // Parent not selected yet — show nothing
   }
 
   // Dynamic column filter mapping
   if (config.parent_column && config.parent_field_id && options) {
-    const parentValue = responses[config.parent_field_id];
-    if (parentValue === undefined || parentValue === null || parentValue === '') {
+    const parentValue = lookupResponse(responses, config.parent_field_id, fields);
+    if (!hasParentValue(parentValue)) {
       return []; // Parent not selected yet — show nothing
     }
 

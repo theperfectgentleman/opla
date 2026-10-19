@@ -13,6 +13,7 @@ class InterviewQuestion(BaseModel):
 
 class InterviewRequest(BaseModel):
     brief: str = Field(min_length=1)
+    organization_id: UUID
 
 
 class InterviewResponse(BaseModel):
@@ -21,6 +22,7 @@ class InterviewResponse(BaseModel):
 
 class DraftRequest(BaseModel):
     brief: str = Field(min_length=1)
+    organization_id: UUID
     answers: Optional[Dict[str, str]] = None
 
 
@@ -32,6 +34,7 @@ class DraftResponse(BaseModel):
 class ReviseRequest(BaseModel):
     markdown: str = Field(min_length=1)
     instruction: str = Field(min_length=1)
+    organization_id: UUID
 
 
 class ReviseResponse(BaseModel):

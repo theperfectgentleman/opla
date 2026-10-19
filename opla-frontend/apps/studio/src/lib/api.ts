@@ -1,4 +1,21 @@
 import axios from 'axios';
+import {
+    formSubmissionsPath,
+    projectAttendanceCheckInPath,
+    projectAttendanceCheckOutPath,
+    projectAttendanceCollectionPath,
+    projectAttendanceMyStatusPath,
+    submissionReviewPath,
+    type AttendanceEventPayload,
+} from './opsApi';
+import {
+    aiCreditsActionCostPath,
+    aiCreditsLedgerPath,
+    aiCreditsTopUpPath,
+    aiCreditsWalletPath,
+    type AiCreditLedgerEntry,
+    type AiCreditWallet,
+} from './aiCredits';
 
 // API Base URL from environment
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -223,6 +240,63 @@ export const teamAPI = {
 
 // ============= Role API Methods =============
 
+export type BroadcastContactPayload = { phone: string; name?: string; source: 'csv' | 'manual' };
+export type BroadcastAudiencePayload = {
+    team_ids: string[];
+    contacts: BroadcastContactPayload[];
+};
+
+/** Project Messages → Broadcasts (outbound SMS). Separate from in-app thread routes. */
+export const broadcastAPI = {
+    providerStatus: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/provider`);
+        return response.data;
+    },
+    balance: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/balance`);
+        return response.data;
+    },
+    preview: async (
+        orgId: string,
+        projectId: string,
+        data: BroadcastAudiencePayload & { message: string; name_fallback?: string },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts/preview`, data);
+        return response.data;
+    },
+    send: async (
+        orgId: string,
+        projectId: string,
+        data: BroadcastAudiencePayload & { message: string; name_fallback?: string; expected_recipient_count?: number },
+    ) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts`, data);
+        return response.data;
+    },
+    list: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts`);
+        return response.data;
+    },
+    get: async (orgId: string, projectId: string, broadcastId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/${broadcastId}`);
+        return response.data;
+    },
+    retryFailed: async (orgId: string, projectId: string, broadcastId: string) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts/${broadcastId}/retry`);
+        return response.data;
+    },
+    listOptOuts: async (orgId: string, projectId: string) => {
+        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/broadcasts/opt-outs`);
+        return response.data;
+    },
+    addOptOut: async (orgId: string, projectId: string, data: { phone: string; reason?: string }) => {
+        const response = await apiClient.post(`/organizations/${orgId}/projects/${projectId}/broadcasts/opt-outs`, data);
+        return response.data;
+    },
+    removeOptOut: async (orgId: string, projectId: string, optOutId: string) => {
+        await apiClient.delete(`/organizations/${orgId}/projects/${projectId}/broadcasts/opt-outs/${optOutId}`);
+    },
+};
+
 export const roleAPI = {
     list: async (orgId: string) => {
         const response = await apiClient.get(`/organizations/${orgId}/roles`);
@@ -350,9 +424,23 @@ export const projectAPI = {
         return response.data;
     },
     listAttendance: async (orgId: string, projectId: string, date?: string) => {
-        const response = await apiClient.get(`/organizations/${orgId}/projects/${projectId}/attendance`, {
+        const response = await apiClient.get(projectAttendanceCollectionPath(orgId, projectId), {
             params: date ? { date } : undefined,
         });
+        return response.data;
+    },
+    getMyAttendanceStatus: async (orgId: string, projectId: string, date: string) => {
+        const response = await apiClient.get(projectAttendanceMyStatusPath(orgId, projectId), {
+            params: { date },
+        });
+        return response.data;
+    },
+    checkInAttendance: async (orgId: string, projectId: string, data: AttendanceEventPayload) => {
+        const response = await apiClient.post(projectAttendanceCheckInPath(orgId, projectId), data);
+        return response.data;
+    },
+    checkOutAttendance: async (orgId: string, projectId: string, data: AttendanceEventPayload) => {
+        const response = await apiClient.post(projectAttendanceCheckOutPath(orgId, projectId), data);
         return response.data;
     },
     listPinnedAnalytics: async (orgId: string, projectId: string) => {
@@ -675,17 +763,17 @@ export type AiSurveyInterviewQuestion = {
 };
 
 export const aiSurveyAPI = {
-    interview: async (brief: string): Promise<{ questions: AiSurveyInterviewQuestion[] }> => {
-        const response = await apiClient.post('/ai/survey/interview', { brief }, { timeout: 60000 });
+    interview: async (brief: string, organizationId: string): Promise<{ questions: AiSurveyInterviewQuestion[] }> => {
+        const response = await apiClient.post('/ai/survey/interview', { brief, organization_id: organizationId }, { timeout: 60000 });
         return response.data;
     },
-    draft: async (brief: string, answers?: Record<string, string>): Promise<{ title: string; markdown: string }> => {
+    draft: async (brief: string, organizationId: string, answers?: Record<string, string>): Promise<{ title: string; markdown: string }> => {
         // Chunked drafts (e.g. ~50 questions) call the LLM many times.
-        const response = await apiClient.post('/ai/survey/draft', { brief, answers }, { timeout: 300000 });
+        const response = await apiClient.post('/ai/survey/draft', { brief, organization_id: organizationId, answers }, { timeout: 300000 });
         return response.data;
     },
-    revise: async (markdown: string, instruction: string): Promise<{ markdown: string }> => {
-        const response = await apiClient.post('/ai/survey/revise', { markdown, instruction }, { timeout: 180000 });
+    revise: async (markdown: string, instruction: string, organizationId: string): Promise<{ markdown: string }> => {
+        const response = await apiClient.post('/ai/survey/revise', { markdown, instruction, organization_id: organizationId }, { timeout: 180000 });
         return response.data;
     },
     compile: async (markdown: string): Promise<{ title: string; blueprint: any; warnings: string[] }> => {
@@ -694,6 +782,25 @@ export const aiSurveyAPI = {
     },
     generate: async (projectId: string, data: { markdown: string; title?: string }) => {
         const response = await apiClient.post(`/projects/${projectId}/ai-survey/generate`, data, { timeout: 60000 });
+        return response.data;
+    },
+};
+
+export const aiCreditsAPI = {
+    getWallet: async (orgId: string): Promise<AiCreditWallet> => {
+        const response = await apiClient.get(aiCreditsWalletPath(orgId));
+        return response.data;
+    },
+    listLedger: async (orgId: string): Promise<{ entries: AiCreditLedgerEntry[] }> => {
+        const response = await apiClient.get(aiCreditsLedgerPath(orgId));
+        return response.data;
+    },
+    topUp: async (orgId: string, data: { amount: number; note?: string }) => {
+        const response = await apiClient.post(aiCreditsTopUpPath(orgId), data);
+        return response.data;
+    },
+    updateActionCost: async (orgId: string, actionKey: string, creditCost: number) => {
+        const response = await apiClient.patch(aiCreditsActionCostPath(orgId, actionKey), { credit_cost: creditCost });
         return response.data;
     },
 };
@@ -745,13 +852,13 @@ export const submissionAPI = {
         return response.data;
     },
     listForForm: async (formId: string, reviewStatus?: 'submitted' | 'approved' | 'rejected') => {
-        const response = await apiClient.get(`/forms/${formId}/submissions`, {
+        const response = await apiClient.get(formSubmissionsPath(formId), {
             params: reviewStatus ? { review_status: reviewStatus } : undefined,
         });
         return response.data;
     },
     review: async (submissionId: string, data: { review_status: 'submitted' | 'approved' | 'rejected'; review_comment?: string }) => {
-        const response = await apiClient.patch(`/submissions/${submissionId}/review`, data);
+        const response = await apiClient.patch(submissionReviewPath(submissionId), data);
         return response.data;
     },
     getPublicForm: async (slug: string) => {

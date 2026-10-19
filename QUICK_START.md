@@ -52,6 +52,43 @@ npm run dev
 3. Enter credentials
 4. Click **Sign In**
 
+### Studio Ops (Attendance + Review)
+
+Open a **project** → **Ops** → **Attendance** or **Review**. These screens call the local API (`http://localhost:8000/api/v1`):
+
+- Attendance: `GET/POST /organizations/{orgId}/projects/{projectId}/attendance` (list, `my-status`, `check-in`, `check-out`)
+- Review: `GET /forms/{formId}/submissions` and `PATCH /submissions/{id}/review`
+
+Agents check in from mobile; Studio lists the live roster and reviews submissions. No mock data.
+
+### Messages → Broadcasts (SMS)
+
+Open a **project** → **Messages** → **Broadcasts**. Sending is off until the API has an SMS provider. Repo-root `.env`:
+
+```
+# off when unset; "fake" accepts every send without network (local only, refused when ENVIRONMENT=production)
+SMS_PROVIDER=fake
+# for real sends via mNotify (BMS Africa, Ghana numbers):
+# SMS_PROVIDER=mnotify
+# MNOTIFY_API_KEY=...
+# MNOTIFY_SENDER_ID=Opla        # must already be approved on the mNotify account, max 11 characters
+# SMS_BATCH_SIZE=100            # recipients per mNotify request
+# SMS_BATCH_DELAY_SECONDS=0.5   # pause between requests
+# SMS_MAX_RECIPIENTS=5000       # per broadcast
+```
+
+Run `poetry run alembic upgrade head` for `032_project_broadcasts`. Only org admins, Project Managers and Field Supervisors (permission `communication.field`) see the compose form.
+
+### AI credits
+
+Studio **Settings** shows the organisation AI credit balance, history, and a manual top-up (org admin or platform admin). The survey wizard spends AI credits on interview, draft, and revise. With a zero balance those buttons stop and show a top-up message; the rest of Studio still works. Compile and generate do not spend credits. Action costs are edited on that Settings card — do not hard-code them.
+
+Local check (API on `:8000`, Studio on `:5173`, repo-root `.env` with `DATABASE_URL`, `JWT_SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`):
+
+1. `cd opla-backend && poetry run alembic upgrade head`
+2. Register, open **Settings**, add AI credits, confirm the history row.
+3. Open a project’s AI survey wizard with balance 0 and confirm the top-up message. Top up, then run an interview only if `GROQ_API_KEY` is set.
+
 ---
 
 ## Test Credentials

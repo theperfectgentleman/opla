@@ -1,7 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, SafeAreaView } from 'react-native';
 import { FormField } from '@opla/types';
-import { fieldUsesDirectoryOptionResolver, resolveDirectoryFormFieldOptions } from '@opla/types';
 
 interface Props {
     field: FormField;
@@ -11,25 +10,12 @@ interface Props {
     responses?: Record<string, any>;
 }
 
-export function DropdownField({ field, value, onChange, error, responses = {} }: Props) {
+export function DropdownField({ field, value, onChange, error }: Props) {
     const [modalVisible, setModalVisible] = useState(false);
-
-    const options = useMemo(() => {
-        if (fieldUsesDirectoryOptionResolver(field)) {
-            return resolveDirectoryFormFieldOptions(field, responses);
-        }
-        if (field.cascade_parent_field_id && field.cascade_options_map) {
-            const parentValue = responses[field.cascade_parent_field_id];
-            if (parentValue && field.cascade_options_map[parentValue]) {
-                return field.cascade_options_map[parentValue];
-            }
-            return [];
-        }
-        return field.options || [];
-    }, [field, responses]);
+    const options = field.options || [];
 
     useEffect(() => {
-        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value) {
+        if ((field.cascade_parent_field_id || field.directory_cascade_filter_column) && value !== undefined && value !== null && value !== '') {
             const stillValid = options.some(o => o.value === value);
             if (!stillValid) {
                 onChange('');

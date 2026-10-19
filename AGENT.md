@@ -1,0 +1,89 @@
+# AGENT.md — Opla
+
+## What this is
+
+Opla is the v2 rebuild of Opine: a B2B field-force platform for collecting and analysing data. Organisations design forms in a web Studio, publish JSON **blueprints**, and run them on mobile (agents) and public web (`/s/:slug`). The product is aimed at **FMCG market activation / sales tracking** and the same primitives for other businesses (retail audits, interviews, programmes).
+
+Canonical nouns: Organisation → Inbox / Projects / Reports / Teams / Audience / Settings. Inside a project: Hub, Tasks, Ops, Design, Data, Messages. See [`docs/PRODUCT_VOCABULARY.md`](docs/PRODUCT_VOCABULARY.md).
+
+## Stage
+
+**updating** — targets FMCGs and other businesses. Core Studio + API + Expo player exist; public hosting, billing, and several Ops/Analysis surfaces are still incomplete.
+
+## Repo / hosts
+
+- GitHub: [`theperfectgentleman/opla`](https://github.com/theperfectgentleman/opla)
+- Local Studio: `http://localhost:5173` (`opla-frontend/apps/studio`)
+- Local API: `http://localhost:8000` — docs at `/api/docs` (`opla-backend`)
+- Local mobile: Expo (`opla-frontend/apps/mobile`), bundle `com.opla.app`
+- Planned public hosts (docs / env examples only — **not live in this repo**): `studio.opla.app`, `api.opla.app`, public forms `opla.app/s/{slug}`
+
+## Current status
+
+Grounded in code as of 2026-09-14:
+
+- **Auth & orgs:** Email/password + phone OTP (Redis), JWT access/refresh, orgs, members, teams, invitations, permission catalog (`opla-backend/app/core/permission_catalog.py`).
+- **Studio shell:** Inbox landing, Projects, Reports, Teams, Audience placeholder, Settings (`vocabulary.ts`, `Dashboard.tsx`). Project workspace tabs: Hub / Tasks / Ops / Design / Data / Messages.
+- **Design:** Form builder (~26 field types in `@opla/types`), RulesBuilder, draft vs published versions, simulator, AI survey wizard (Groq). Market-activation field gaps (cascading, phone, time range, multi-select, currency, auto-timestamp, section skip, MSRP formula, centralized rules, form-link, JUMP_TO_SECTION) are marked implemented in [`docs/Gap Analysis — Market Activation Features.md`](docs/Gap%20Analysis%20—%20Market%20Activation%20Features.md).
+- **Players:** Expo agent/pulse/yard routes; SDUI `FormRenderer` + field widgets keyed by `bind`; defaults / min-max / masks / platforms / cascade+directory options / matrix dropdown cells; currency prefix+decimals; auto-value (`now()`/`today()`/`current_time()`); form_link param maps; lookup; AsyncStorage offline queue. Public web form at `/s/:slug` (`PublicForm.tsx`). Shared helpers live in `@opla/logic` (`formFields.ts`, `mobileFieldPass.ts`) and `@opla/types` (`lookupResponse`, `resolveFieldOptions`).
+- **Directory & capture:** Directory items (ex-catalog), directory forms, CSV import, lookups. Submissions with review status. Tasks including `field_visit`.
+- **Ops Attendance + Review (wired):** Studio project Ops → Attendance / Review call the live project attendance and submission review APIs (same contracts as mobile). Check-in/out from Studio uses browser geolocation; agents still check in from Expo. Mocks removed.
+- **AI credits (manual wallet):** Each organisation has an AI credit balance, ledger, and per-action costs (`org_ai_credit_balances`, `org_ai_action_costs`, `ai_credit_ledger`). Studio Settings shows balance, history, and manual top-up for org admins and platform admins. The survey wizard spends credits on interview, draft, and revise; at zero (or below the action cost) those calls return HTTP 402 and Studio shows a top-up message. Compile and form generate stay local. No Paystack. AI credits are separate from any future SMS metering.
+- **Hub:** `ProjectHub` at `/projects/:id/hub` — phases 0–5 in [`docs/Project-Command-Centre-Phases.md`](docs/Project-Command-Centre-Phases.md) marked Done (shell, pinned analytics, Needs Attention, form media, messages, `create_alert`). `/pdemo` redirects to Inbox. **Final cutover** (Hub as default project home) is not done — `/projects/:id` is still `ProjectWorkspace`.
+- **Data / reports:** Form datasets, analytics query API, Graphic Walker lab, dashboard canvas, org-level Reports portfolio (demo bucket init). Spatial Analysis Lab exists but uses Accra **demo** polygons, not live geo.
+- **Automation:** Form automation rules (`create_task`, `create_alert`) wired to Needs Attention.
+- **Messages → Broadcasts (SMS):** project Messages has Threads | Broadcasts. Broadcasts sends SMS through mNotify to teams, CSV imports and typed numbers, with preview, segment/credit estimate, balance, batched background send, per-recipient log + retry, and an org do-not-text list (`routes/broadcasts.py`, `services/sms/`, `MessagesBroadcasts.tsx`). Off unless `SMS_PROVIDER=mnotify` and `MNOTIFY_API_KEY` / `MNOTIFY_SENDER_ID` are set on the API.
+
+Treat early docs (`docs/DEVELOPMENT_CHECKLIST.md`, `docs/DOCUMENTATION_COMPLETE.md`, `QUICK_START.md` “next phase”) as **historical**. They still say Phase 1–5 circa Feb 2026; the tree is far past that.
+
+## Not yet / blockers
+
+- **No public deploy** in-repo; planned `*.opla.app` hosts are placeholders.
+- **No subscriptions or card billing.** AI credits are a manual wallet only (MoMo or invoice, then an admin top-up). Paystack, Stripe, and SMS metering are not implemented. Do not fold SMS into `ai_credits`.
+- **Audience** nav is a dashed placeholder. Org **Media** tab is a placeholder (project media APIs exist).
+- **Maps in Analysis (Phase 6)** — clarifying questions unanswered; Leaflet lab is demo data.
+- **ProjectHub cutover** — opening a project still lands on ProjectWorkspace, not Hub.
+- **USSD / SMS player** — PRD surface; no gateway. (Outbound SMS broadcasts exist via mNotify; there is no inbound SMS, delivery-report webhook or WhatsApp yet.)
+- **WatermelonDB + full sync engine** — PRD; mobile uses AsyncStorage queues.
+- Separate **web-player** app — public forms live inside Studio, not `apps/web-player`.
+- Design gaps still open: display/instruction blocks, show-cards, native “Other (specify)”, grouped matrix rows ([`docs/Design Capability — Gap Analysis & Implementation Plan.md`](docs/Design%20Capability%20—%20Gap%20Analysis%20%26%20Implementation%20Plan.md)).
+- Three renderers (mobile, Simulator, PublicForm) can diverge — new widgets must land in all three.
+- Ignore leftover root `apps/studio` (legacy empty scaffold). Active Studio is `opla-frontend/apps/studio`.
+
+## Monetization / positioning
+
+- **B2B only.** Buyers are FMCGs and other organisations (field programmes, market activation, retail / interview studies). Agents and public respondents are not the customer.
+- **No prices in this repo.** Do not invent SKUs, seat fees, or “live” pricing.
+- Default hypothesis (not implemented): org subscription or programme fee for Studio + agent seats; Reports as the stakeholder upsell; analytics / directory scale as expansion. Money from brands and operators, not from field agents.
+
+## Architecture pointers
+
+```
+opla-backend/          FastAPI “Intelligence Layer” — Poetry, Alembic, PostgreSQL (+ JSONB blueprints/submissions), Redis OTP
+  app/main.py          Routers: auth, orgs, projects, forms, submissions, roles, teams, reports, assets, messages, analytics, walker_compute, ai_survey, ai_credits
+opla-frontend/         TurboRepo (Node ≥18)
+  apps/studio          Vite + React 19 — builder, hub, analytics, reports
+  apps/mobile          Expo 54 / RN 0.81 — agent capture, pulse public forms, attendance
+  packages/types       Canonical FormBlueprint + field types (`@opla/types`)
+  packages/logic       Shared validation helpers (thin today)
+  packages/ui, config
+docs/                  Product + build docs (vocabulary is the source of truth for names)
+```
+
+Blueprint shape: `meta` + `schema` + `ui` (sections/fields) + `logic` (legacy) + `rules` (nested engine). Evaluate both `logic` and `rules`. Local run: [`QUICK_START.md`](QUICK_START.md) or `./deploy.sh` (Studio :5173, API :8000, Expo).
+
+## How to continue
+
+1. Answer Phase 6 map questions in `docs/Project-Command-Centre-Phases.md`, then plot real attendance/submission geo.
+2. Cut over project home to `ProjectHub` (Ops Attendance + Review are live).
+3. Close remaining Design gaps only if a real FMCG/interview form is blocked (display/instruction blocks, show-cards, native Other-specify, grouped matrix rows). PublicForm still lags Simulator/mobile on matrix, lookup, object collection, multi-select, and form_link. Expo phone-path field pass after PR #2 is covered by `@opla/logic` `runMobileFieldPass` tests.
+4. Keep product nouns from `docs/PRODUCT_VOCABULARY.md` — do not revive Catalog / Journey / Assets in UI copy.
+5. AI credit costs live in `org_ai_action_costs` (seeded from `ai_credit_catalog.py`, edited in Settings). New model-backed AI routes should call `spend_or_reject` and refund if the provider call fails. Do not hard-code a second cost table, and do not invent prices.
+
+## Rules for agents
+
+- Update `CHANGELOG.md` on every meaningful PR
+- Keep this file **Current status** + **How to continue** fresh
+- Do not invent prices or fake live hosts
+- Prefer Grok / Composer for cloud agents
+- Ground claims in files; older `/docs` phase checklists are stale
